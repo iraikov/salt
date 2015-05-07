@@ -1,0 +1,37 @@
+;;;; -*- Hen -*-
+
+(define (dynld-name fn)		
+  (make-pathname #f fn ##sys#load-dynamic-extension))	
+
+(define version 1.0)
+
+(use make)
+
+(make (
+       ("expr.grm.scm" ("expr.grm")
+	(run (csi -s expr.grm)))
+
+       ((dynld-name "salt") ("salt.scm" "parser.scm" "expr.grm.scm")
+	(compile -O -d2 -S -s salt.scm -j salt))
+
+       ((dynld-name "salt.import") ("salt.import.scm")
+	(compile -O -d2 -S -s salt.import.scm))
+       )
+
+  (list (dynld-name "salt")
+	(dynld-name "salt.import"))
+  )
+
+
+(install-extension
+
+  ; Name of your extension:
+  'salt
+
+  ; Files to install for your extension:
+  `(,(dynld-name "salt") ,(dynld-name "salt.import") )
+
+  ; Assoc list with properties for your extension:
+  `((version ,version)
+    ))
+
