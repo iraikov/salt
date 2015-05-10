@@ -26,7 +26,6 @@
          elaborate simcreate
          ;parameter unknown der ev reinit 
 
-	 function? make-function function-formals function-body
 	 )
 
 	(import scheme chicken)
@@ -37,7 +36,7 @@
                 (only srfi-13 string-null? string-concatenate string<)
 		(only data-structures ->string alist-ref conc)
                 (only extras pp)
-                (only with-output-to-port ports)
+                (only ports with-output-to-port)
 		)
 
 
@@ -53,7 +52,7 @@
 	(begin
 	  (newline port)
 	  (print-error-message (get-output-string port) 
-			       (current-error-port) "nemo warning"))
+			       (current-error-port) "salt warning"))
 	(begin (display (car objs) port)
 	       (display " " port)
 	       (loop port (cdr objs))))))
@@ -70,7 +69,7 @@
       (if (null? objs)
 	  (begin
 	    (newline port)
-	    (error 'nemo (get-output-string port)))
+	    (error 'salt (get-output-string port)))
 	  (let ((obj (car objs)))
 	    (if (procedure? obj) 
 		(with-output-to-port port obj)
@@ -125,6 +124,12 @@
   (make-definition (gensym 'u) value label #t))
 
 
+(define-record-type free-variable
+  (make-free-variable name)
+  free-variable?
+  (name free-variable-name)
+  )
+
 (define-record-type derivative-variable
   (make-derivative-variable parent)
   derivative-variable?
@@ -156,7 +161,6 @@
   )
 
 
-
 (define-record-type leftvar
   (leftvar u )
   leftvar?
@@ -172,9 +176,37 @@
   )
 
 
+(define-record-type pair-arg
+  (make-pair-arg  fst snd )
+  pair-arg?
+  (fst      pair-arg-fst)
+  (snd      pair-arg-snd)
+  )
+
+(define-record-type pair-formal
+  (make-pair-formal  fst snd )
+  pair-formal?
+  (fst      pair-formal-fst)
+  (snd      pair-formal-snd)
+  )
+
+(define-record-type null-formal
+  (make-null-formal )
+  null-formal?
+  )
+
+
+(define-record-type var-def
+  (make-var-def sym )
+  var-def?
+  (sym      var-def-sym)
+  )
+
+
 (define-record-type function
-  (make-function formals body)
+  (function name formals body)
   function?
+  (name    function-name)
   (formals function-formals)
   (body    function-body))
 
@@ -234,7 +266,7 @@
 
 
 
-;;(define (ifelse x y z)  `(variable.ifelse ,x ,y ,z))
+;;(define (ifelse x y z)  `(signal.ifelse ,x ,y ,z))
 
 
 ;; A representation of a flattened model, normally created with
@@ -247,9 +279,11 @@
 
 
 (define-record-type equation-set
-  (make-equation-set model equations initial events pos-reponses neg-responses functions nodemap)
+  (make-equation-set model definitions parameters equations initial events pos-reponses neg-responses functions nodemap)
   equation-set?
   (model equation-set-model)
+  (definitions equation-set-definitions)
+  (parameters equation-set-parameters)
   (equations equation-set-equations)
   (initial equation-set-initial)
   (events equation-set-events)
@@ -309,6 +343,7 @@
 
   (let recur ((entries model)
               (definitions '())
+              (parameters '())
               (equations '())
               (initial  '())
               (events   '())
@@ -322,6 +357,7 @@
 
         (make-equation-set model
                            definitions
+                           parameters
                            equations
                            (map-equations replace-fixed initial)
                            events
@@ -335,33 +371,42 @@
           (if (pair? en)
 
               (recur (append en (cdr entries))
-                     definitions equations
+                     definitions parameters equations
                      initial events pos-responses neg-responses 
                      functions nodemap)
 
               (match en  
-                     (($ definition s expr)
+                     (($ definition name value label has-history)
                       (recur (cdr entries)
-                             (cons def definitions)
+                             (cons (cons name value) definitions) parameters
                              equations initial events pos-responses neg-responses 
                              functions
-                             (env-enter s (freevars expr) nodemap)))
+                             (extend-env-with-binding nodemap (gen-binding name en)))
+                      )
+                     (($ parameter name value )
+                      (recur (cdr entries)
+                             definitions (cons (cons name value) parameters) 
+                             equations initial events pos-responses neg-responses 
+                             functions
+                             (extend-env-with-binding nodemap (gen-binding name en)))
+                      )
                      (($ equation s expr)
                       (recur (cdr entries)
-                             definitions
-                             (cons eq equations)
+                             definitions parameters
+                             (cons (list s expr) equations)
                              initial events pos-responses neg-responses 
                              functions
-                             (env-enter s (freevars expr) nodemap)))
+                             (extend-env-with-binding nodemap (gen-binding s en)))
+                      )
                      (($ initial-equation s expr)
                       (recur (cdr entries)
-                             definitions
-                             equations (cons eq initial) events pos-responses neg-responses 
+                             definitions parameters
+                             equations (cons (cons s expr) initial) events pos-responses neg-responses 
                              functions
                              nodemap))
                      (($ structural-event left-condition left right-condition right)
                       (recur (cdr entries)
-                             definitions
+                             definitions parameters
                              equations initial  ;; todo: generate conditional equations
                              (cons left-condition (cons right-condition events) )
                              pos-responses ;; todo: generate discrete equation
@@ -370,18 +415,18 @@
                              nodemap))
                      (($ event condition pos neg)
                       (recur (cdr entries)
-                             definitions
+                             definitions parameters
                              equations initial 
                              (cons en events) 
                              (cons pos pos-responses)
                              (or (and neg (cons neg neg-responses)) neg-responses)
                              functions
                              nodemap))
-                     (($ function formals expr)
+                     (($ function name formals expr)
                       (recur (cdr entries)
-                             definitions
+                             definitions parameters
                              equations initial events pos-responses neg-responses 
-                             (cons fn functions)
+                             (cons (list name formals expr) functions)
                              nodemap))
                      (else
                       (error 'elaborate "unknown equation type" eq))
@@ -395,7 +440,7 @@
   (let ((indexmap 
          (let recur ((nodemap (equation-set-nodemap eqset))
                      (indexmap '())
-                     (index 1))
+                     (index    1))
            (if (null? nodemap)
                indexmap
                (recur (cdr nodemap)

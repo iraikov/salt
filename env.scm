@@ -54,6 +54,12 @@
 
 (define (extend-env-with-binding env binding)
   ; extends env with a binding, which hides any other binding in env
+  ; for the same key
+  ; returns the extended environment
+  (cons binding env))
+
+(define (extend-env-with-binding env binding)
+  ; extends env with a binding, which hides any other binding in env
   ; for the same key (see dynamic-lookup)
   ; returns the extended environment
   (cons binding env))

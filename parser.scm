@@ -348,12 +348,12 @@
    ((pair? e)
     (let ((op (car e)) (args (cdr e)))
       (case op
-        ((if) (parse-if env args))
+        ((if)   (parse-if env args))
         ((cond) (parse-cond env args))
-        ((and) (parse-and env args))
-        ((or) (parse-or env args))
-        ((let) (parse-let env args))
-        (else (parse-function-call env op args)))))
+        ((and)  (parse-and env args))
+        ((or)   (parse-or env args))
+        ((let)  (parse-let env args))
+        (else   (parse-function-call env op args)))))
    (else (parse-datum e))))
 
 
@@ -404,31 +404,31 @@
 
 
 (define (parse-function-call env op args)
-  (make-call
-   (parse-expression env op)
-   (parse-expressions env args)))
+  `(signal.call
+    ,(parse-expression env op)
+    ,(parse-expressions env args)))
 
 
 (define (parse-if env args)
   (cond
    ((list-of-3? args)
-    (conditional
-     (parse-expression env (car args))
-     (parse-expression env (cadr args))
-     (parse-expression env (caddr args))))
+    `(signal.ifelse
+      ,(parse-expression env (car args))
+      ,(parse-expression env (cadr args))
+      ,(parse-expression env (caddr args))))
    ((list-of-2? args)
-    (conditional
-     (parse-expression env (car args))
-     (parse-expression env (cadr args))
-     '(empty)))
+    `(signal.if
+      ,(parse-expression env (car args))
+      ,(parse-expression env (cadr args))
+      ))
    (else (error 'parse-if "Not an if-expression: ~s" args))))
 
 
 (define (parse-cond env args)
   (if (and (pair? args) (list? args))
-      (make-cond-expression (map (lambda (e)
-                                   (parse-cond-clause env e))
-                                 args))
+      `(signal.cond . ,(map (lambda (e)
+                              (parse-cond-clause env e))
+                            args))
       (error 'parse-cond "Not a list of cond-clauses: ~s" args)))
 
 
@@ -445,13 +445,13 @@
 
 (define (parse-and env args)
   (if (list? args)
-      (make-and-expression (parse-expression* env args))
+      `(signal-and . ,(parse-expression* env args))
       (error 'parse-and "Not a list of arguments: ~s" args)))
 
 
 (define (parse-or env args)
   (if (list? args)
-      (make-or-expression (parse-expression* env args))
+      `(signal-or . ,(parse-expression* env args))
       (error 'parse-or "Not a list of arguments: ~s" args)))
 
 
@@ -462,9 +462,7 @@
              (env-ast (parse-sequential-bindings env bindings))
              (nenv (car env-ast))
              (bresults (cdr env-ast)))
-        (make-let-expression
-         bresults
-         (parse-body (extend-env-with-env env nenv) body)))
+        `(signal-let ,bresults ,(parse-expression (extend-env-with-env env nenv) body)))
       (error 'parse-let* "Illegal bindings/body: ~s" args)))
 
 
@@ -519,10 +517,10 @@
                  (env-ast (parse-formals function-arg-names))
                  (formals-env (car env-ast))
                  (formals-ast (cdr env-ast)))
-            (make-function-definition
+            (function
              (parse-variable env function-name)
              formals-ast
-             (parse-body (extend-env-with-env env formals-env) exp-or-body))))
+             (parse-expression (extend-env-with-env env formals-env) exp-or-body))))
          (else (error 'parse-function "Not a valid pattern: ~s" pattern))))
       (error 'parse-function "Not a valid definition: ~s" args)))
 
@@ -554,9 +552,8 @@
       (let ((pattern (car args))
             (rhs (cdr args)))
         (if (list-of-1? rhs)
-            (make-equation
-             (parse-variable env pattern)
-             (parse-expression env (car rhs)))
+            (eq (parse-variable env pattern)
+                (parse-expression env (car rhs)))
             (error 'parse-equation "Not a single expression: ~s" rhs)))
       (error 'parse-equation "Not a valid definition: ~s" args)))
 
