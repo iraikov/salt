@@ -200,12 +200,12 @@
     column))
 
 
-(define (parse-string-expr s #!optional loc)
+(define (parse-string-infix-expr s #!optional loc)
   (or (and (string? s) (string-null? s) '())
       (let ((port
 	     (cond ((string? s)  (open-input-string s))
 		   ((port? s)    s)
-		   (else (error 'parse-string-expr "bad argument type: not a string or a port: " s)))))
+		   (else (salt:error 'parse-string-expr "bad argument type: not a string or a port: " s)))))
 	(expr-parser  (let ((ll (make-char-lexer port (make-parse-error loc) (make-source-location loc (port-line port) (port-column port) -1 -1))))
 			(lambda ()
 			  (let ((t (ll)))
@@ -243,7 +243,7 @@
 	    
   
 
-(define (parse-sym-expr lst #!optional loc)
+(define (parse-sym-infix-expr lst #!optional loc)
   (let ((ret (cond ((number? lst)  lst)
 		   ((symbol? lst)  lst)
 		   ((and (list? lst) (null? lst) '()))
@@ -262,7 +262,7 @@
    ((number? e)  (constant 'number e))
    ((symbol? e)  (constant 'symbol e))
    ((vector? e)  (constant 'vector (vector->list e)))
-   (else (error 'parse-datum "Unknown datum: ~s" e))))
+   (else (salt:error 'parse-datum "Unknown datum: " e))))
 
 
 
@@ -273,12 +273,12 @@
   (if (symbol? e)
       (cond
        ((memq e syntactic-keywords)
-        (error 'parse-formal "Illegal identifier (keyword): ~s" e))
+        (salt:error 'parse-formal "Illegal identifier (keyword): " e))
        ((env-lookup e f-env)
-        (error 'parse-formal "Duplicate variable definition: ~s" e))
+        (salt:error 'parse-formal "Duplicate variable definition: " e))
        (else (let ((result (make-var-def e)))
                (cons (gen-binding e result) result))))
-      (error 'parse-formal "Not an identifier: ~s" e)))
+      (salt:error 'parse-formal "Not an identifier: " e)))
 
 
 
@@ -304,7 +304,7 @@
                (extend-env-with-binding f-env binding)
                (cons var-result results)
                (cdr formals))))
-           (else (error 'parse-formal* "Illegal formals: ~s" formals))))))
+           (else (salt:error 'parse-formal* "Illegal formals: " formals))))))
     (let ((renv-rres (pf* empty-env '() formals)))
       (cons (car renv-rres) (reverse (cdr renv-rres))))))
 
@@ -342,19 +342,21 @@
 ; Expr
 
 (define (parse-expression env e)
-  (cond
-   ((symbol? e)
-    (parse-variable env e))
-   ((pair? e)
-    (let ((op (car e)) (args (cdr e)))
-      (case op
-        ((if)   (parse-if env args))
-        ((cond) (parse-cond env args))
-        ((and)  (parse-and env args))
-        ((or)   (parse-or env args))
-        ((let)  (parse-let env args))
-        (else   (parse-function-call env op args)))))
-   (else (parse-datum e))))
+  (let ((e1 (parse-sym-infix-expr e)))
+    (cond
+     ((symbol? e1)
+      (parse-variable env e1))
+     ((pair? e1)
+      (let ((op (car e1)) (args (cdr e1)))
+        (case op
+          ((if)   (parse-if env args))
+          ((cond) (parse-cond env args))
+          ((and)  (parse-and env args))
+          ((or)   (parse-or env args))
+          ((let)  (parse-let env args))
+          (else   (parse-function-call env op args)))))
+     (else (parse-datum e1)))
+    ))
 
 
 (define (parse-expression* env exprs)
@@ -364,7 +366,7 @@
               (cond
                ((null? es) results)
                ((pair? es) (pe* (cons (parse-expression env (car es)) results) (cdr es)))
-               (else (error 'parse-expression* "Not a list of expressions: ~s" es))))))
+               (else (salt:error 'parse-expression* "Not a list of expressions: " es))))))
     (reverse (pe* '() exprs))))
 
 
@@ -373,13 +375,13 @@
 (define (parse-expressions env exprs)
   ;; parses lists of arguments of a procedure call
   (cond
-   ((null? exprs) '(null-arg))
+   ((null? exprs) (make-null-arg))
    ((pair? exprs) (let* ((fst-expr (car exprs))
                          (rem-exprs (cdr exprs))
                          (fst-res (parse-expression env fst-expr))
                          (rem-res (parse-expressions env rem-exprs)))
                     (make-pair-arg fst-res rem-res)))
-   (else (error 'parse-expressions "Illegal expression list: ~s"
+   (else (salt:error 'parse-expressions "Illegal expression list: "
                 exprs))))
 
 
@@ -387,19 +389,19 @@
 (define (parse-variable env e)
   (if (symbol? e)
       (if (memq e syntactic-keywords)
-          (error 'parse-variable "Illegal identifier (keyword): ~s" e)
+          (salt:error 'parse-variable "Illegal identifier (keyword): " e)
           (let ((assoc-var-def (env-lookup e env)))
             (if assoc-var-def
                 (binding-value assoc-var-def)
                 (make-free-variable e))))
       (match e
              (('der ((and x (? symbol?)))) 
-              (let ((assoc-var-def (env-lookup e env)))
+              (let ((assoc-var-def (env-lookup x env)))
                 (make-derivative-variable
                  (if assoc-var-def
                      (binding-value assoc-var-def)
-                     (make-free-variable e)))))
-             (else (error 'parse-variable "Not an identifier: ~s" e)))
+                     (make-free-variable x)))))
+             (else (salt:error 'parse-variable "Not an identifier: " e)))
       ))
 
 
@@ -421,7 +423,7 @@
       ,(parse-expression env (car args))
       ,(parse-expression env (cadr args))
       ))
-   (else (error 'parse-if "Not an if-expression: ~s" args))))
+   (else (salt:error 'parse-if "Not an if-expression: " args))))
 
 
 (define (parse-cond env args)
@@ -429,7 +431,7 @@
       `(signal.cond . ,(map (lambda (e)
                               (parse-cond-clause env e))
                             args))
-      (error 'parse-cond "Not a list of cond-clauses: ~s" args)))
+      (salt:error 'parse-cond "Not a list of cond-clauses: " args)))
 
 
 (define (parse-cond-clause env e)
@@ -440,19 +442,19 @@
            '(empty)
            (parse-expression env (car e)))
        (parse-expression env (cdr e)))
-      (error 'parse-cond-clause "Not a cond-clause: ~s" e)))
+      (salt:error 'parse-cond-clause "Not a cond-clause: " e)))
 
 
 (define (parse-and env args)
   (if (list? args)
-      `(signal-and . ,(parse-expression* env args))
-      (error 'parse-and "Not a list of arguments: ~s" args)))
+      `(signal.and . ,(parse-expression* env args))
+      (salt:error 'parse-and "Not a list of arguments: " args)))
 
 
 (define (parse-or env args)
   (if (list? args)
-      `(signal-or . ,(parse-expression* env args))
-      (error 'parse-or "Not a list of arguments: ~s" args)))
+      `(signal.or . ,(parse-expression* env args))
+      (salt:error 'parse-or "Not a list of arguments: " args)))
 
 
 (define (parse-let env args)
@@ -462,8 +464,8 @@
              (env-ast (parse-sequential-bindings env bindings))
              (nenv (car env-ast))
              (bresults (cdr env-ast)))
-        `(signal-let ,bresults ,(parse-expression (extend-env-with-env env nenv) body)))
-      (error 'parse-let* "Illegal bindings/body: ~s" args)))
+        `(signal.let ,bresults ,(parse-expression (extend-env-with-env env nenv) body)))
+      (salt:error 'parse-let* "Illegal bindings/body: " args)))
 
 
 (define (parse-sequential-bindings env bindings)
@@ -496,10 +498,10 @@
                      (cons bres var-defs)
                      (cons new-expr-asg expr-asgs)
                      (cdr binds)))
-                  (error 'parse-sequential-bindings
-                         "Illegal binding: ~s" fst-bind))))
-           (else (error 'parse-sequential-bindings
-                        "Illegal bindings: ~s" binds))))))
+                  (salt:error 'parse-sequential-bindings
+                         "Illegal binding: " fst-bind))))
+           (else (salt:error 'parse-sequential-bindings
+                        "Illegal bindings: " binds))))))
     (let ((env-vdefs-easgs (psb empty-env env '() '() bindings)))
       (cons (car env-vdefs-easgs)
             (cons (reverse (cadr env-vdefs-easgs))
@@ -517,12 +519,14 @@
                  (env-ast (parse-formals function-arg-names))
                  (formals-env (car env-ast))
                  (formals-ast (cdr env-ast)))
+            (d 'parse-function "formals-ast = ~A formals-env = ~A~%" formals-ast formals-env)
             (function
-             (parse-variable env function-name)
+             (free-variable-name 
+              (parse-variable env function-name))
              formals-ast
              (parse-expression (extend-env-with-env env formals-env) exp-or-body))))
-         (else (error 'parse-function "Not a valid pattern: ~s" pattern))))
-      (error 'parse-function "Not a valid definition: ~s" args)))
+         (else (salt:error 'parse-function "Not a valid pattern: " pattern))))
+      (salt:error 'parse-function "Not a valid definition: " args)))
 
 
 (define (parse-definition env args)
@@ -532,36 +536,49 @@
         (cond
          ((symbol? pattern)
           (match exp-or-body
-                 (('unknown expr)
+                 (('= 'unknown expr)
                   (unknown
                    (parse-expression env expr)
-                   (parse-variable env pattern)))
-                 (('parameter expr)
+                   (free-variable-name 
+                    (parse-variable env pattern))))
+                 (('= 'parameter expr)
                   (parameter
-                   (parse-variable env pattern)
+                   (free-variable-name 
+                    (parse-variable env pattern))
                    (parse-expression env expr)
                    ))
-                  (else (error 'parse-define "Not a valid definition expression: ~s" exp-or-body))
+                 (('= 'constant expr)
+                  (constant
+                   (free-variable-name
+                    (parse-variable env pattern))
+                   (parse-expression env expr)
+                   ))
+                  (else (salt:error 'parse-define "Not a valid definition expression: " exp-or-body))
                  ))
-         (else (error 'parse-define "Not a valid pattern: ~s" pattern))))
-      (error 'parse-define "Not a valid definition: ~s" args)))
+         (else (salt:error 'parse-define "Not a valid pattern: " pattern))))
+      (salt:error 'parse-define "Not a valid definition: " args)))
 
 
 (define (parse-equation env args)
   (if (pair? args)
       (let ((pattern (car args))
             (rhs (cdr args)))
-        (if (list-of-1? rhs)
-            (eq (parse-variable env pattern)
-                (parse-expression env (car rhs)))
-            (error 'parse-equation "Not a single expression: ~s" rhs)))
-      (error 'parse-equation "Not a valid definition: ~s" args)))
+        (match rhs 
+               (('= . rhs)
+                (eq (parse-variable env pattern)
+                    (parse-expression env rhs)))
+               (else
+                (salt:error 'parse-equation "Not a valid rhs: " rhs))
+               ))
+      (salt:error 'parse-equation "Not a valid equation: " args)))
 
 
 (define (parse-declaration env c)
+  (d 'parse-declaration "c = ~A~%" c)
   (if (pair? c)
       (let ((op (car c))
             (args (cdr c)))
+        (d 'parse-declaration "op = ~A args = ~A~%" op args)
         (case op
          ((function) (parse-function env args))
          ((define)   (parse-definition env args))
