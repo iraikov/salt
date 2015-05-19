@@ -4,6 +4,20 @@
 ;;
 ;; Copyright 2015 Ivan Raikov.
 ;;
+;; This implementation follows the work of Tom Short and his Julia
+;; Sims.jl library, which is in turn based on David Broman's MKL
+;; simulator and the work of George Giorgidze and Henrik Nilsson in in
+;; functional hybrid modeling.
+;;
+;; Following Sims.jl, a nodal formulation is used based on David
+;; Broman's thesis:
+;; 
+;;   David Broman. Meta-Languages and Semantics for Equation-Based
+;;   Modeling and Simulation. PhD thesis, Thesis No 1333. Department of
+;;   Computer and Information Science, Linköping University, Sweden,
+;;   2010.
+;;   http://www.bromans.com/david/publ/thesis-2010-david-broman.pdf
+;;
 ;; This program is free software: you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
 ;; published by the Free Software Foundation, either version 3 of the
@@ -25,7 +39,6 @@
 
          parse elaborate simcreate
          verbose
-         ;parameter unknown der ev reinit 
 
 	 )
 
@@ -89,6 +102,7 @@
           (fprintf port "~A: " loc)
           (apply fprintf port fstr args)
           (flush-output port) ) )))
+
 
 ;; based on SRV:send-reply by Oleg Kiselyov
 (define (print-fragments b)
@@ -434,7 +448,7 @@
 ;;
 ;; Contains the hierarchical equations, flattened equations, flattened
 ;; initial equations, events, event response functions, and a map of
-;; Unknown nodes.
+;; nodes.
 
 
 (define-record-type equation-set
@@ -451,6 +465,7 @@
   (functions equation-set-functions)
   (nodemap equation-set-nodemap)
   )
+
 
 (define-record-printer (equation-set x out)
   (fprintf out "#(equation-set: ~%    definitions = ~A~%    parameters = ~A~%    equations = ~A~%    functions = ~A~%    events = ~A~%)"
@@ -520,10 +535,23 @@
      
      ((free-variable? e)
       (let ((assoc-var-def (env-lookup (free-variable-name e) env)))
-        (d 'resolve "e = ~A assoc = ~A~%" (free-variable-name e) assoc-var-def)
+        (d 'resolve "free-var: e = ~A assoc = ~A~%" (free-variable-name e) assoc-var-def)
         (if assoc-var-def
             (binding-value assoc-var-def)
             e)))
+
+     ((pair-arg? e)
+      (let ((x (pair-arg-fst e)))
+        (let ((x1
+               (if (free-variable? x)
+                   (let ((assoc-var-def (env-lookup (free-variable-name x) env)))
+                     (d 'resolve "pair-arg: e = ~A assoc = ~A~%" (free-variable-name x) assoc-var-def)
+                     (if assoc-var-def
+                         (binding-value assoc-var-def)
+                         x))
+                   x)))
+          (make-pair-arg x1 (recur (pair-arg-snd e)))
+          )))
 
      ((pair? e)
       (let ((op (car e)) (args (cdr e)))
@@ -554,7 +582,7 @@
 ;; Flattens models and populates equation, definition, function lists.
 ;; Pulls out initial equations and populate initial list.
 ;; Pulls out event definitions and populates event list.
-;; Handle StructuralEvents.
+;; Handle structural events.
 ;;
 
 
@@ -662,11 +690,12 @@
                        (($ structural-event left-condition left right-condition right)
                         (recur (cdr entries)
                                definitions parameters
-                               equations initial  ;; todo: generate conditional equations
+                               equations initial
                                (cons (resolve left-condition nodemap) (cons (resolve right-condition nodemap) events) )
-                               pos-responses ;; todo: generate discrete equation
+                               pos-responses 
                                neg-responses
                                functions
+                               ;; TODO: generate equations for new regimes
                                ))
                        (($ event condition pos neg)
                         (recur (cdr entries)
