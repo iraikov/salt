@@ -2,11 +2,11 @@
 ;;
 ;; Hybrid dynamical systems modeling.
 ;;
-;; Copyright 2015 Ivan Raikov.
+;; Copyright 2015 Ivan Raikov and the University of California, Irvine.
 ;;
 ;; This implementation follows the work of Tom Short and his Julia
 ;; Sims.jl library, which is in turn based on David Broman's MKL
-;; simulator and the work of George Giorgidze and Henrik Nilsson in in
+;; simulator and the work of George Giorgidze and Henrik Nilsson in
 ;; functional hybrid modeling.
 ;;
 ;; Following Sims.jl, a nodal formulation is used based on David
@@ -588,9 +588,9 @@
 
 (define (elaborate model)
 
-  (define (model-env decls)
+  (define (model-env decls #!key (env empty-env))
 
-    (let recur ((decls decls) (env empty-env))
+    (let recur ((decls decls) (env env))
 
       (if (null? decls) env
 
@@ -619,106 +619,117 @@
       ))
 
 
-  (let ((nodemap (model-env model)))
-
-    (let recur (
-                (entries model)
-                (definitions '())
-                (parameters '())
-                (equations '())
-                (initial  '())
-                (events   '())
-                (pos-responses '())
-                (neg-responses  '())
-                (functions  '())
-                )
+  (let recur (
+              (entries        (stack-push model (stack-empty)))
+              (nodemap        (env-stack-push (model-env model) (env-stack-empty)))
+              (definitions    '())
+              (parameters     '())
+              (equations      '())
+              (initial        '())
+              (events         '())
+              (pos-responses  '())
+              (neg-responses  '())
+              (functions      '())
+              )
       
-      (if (null? entries)
+    (cond ((and (= (stack-depth entries) 1) 
+                (null? (stack-peek entries)))
             
-            (make-equation-set model
-                               definitions
-                               parameters
-                               equations
-                               (map-equations replace-fixed initial)
-                               events
-                               pos-responses
-                               neg-responses
-                               functions
-                               nodemap
-                               )
+           (make-equation-set model
+                              definitions
+                              parameters
+                              equations
+                              (map-equations replace-fixed initial)
+                              events
+                              pos-responses
+                              neg-responses
+                              functions
+                              nodemap
+                              ))
           
-          (let ((en (car entries)))
+          ((null? (stack-peek entries))
+           
+           (recur (stack-pop entries) (env-stack-pop nodemap)
+                  definitions parameters equations
+                  initial events pos-responses neg-responses 
+                  functions))
 
-            (if (pair? en)
+          (else
+           
+           (let ((en (car entries)))
 
-                (recur (append en (cdr entries))
-                       definitions parameters equations
-                       initial events pos-responses neg-responses 
-                       functions)
+                 (if (pair? en)
+                     
+                     (recur (append en (cdr entries))
+                            (model-env en env: nodemap)
+                            definitions parameters equations
+                            initial events pos-responses neg-responses 
+                            functions)
 
-                (match en  
-                       (($ variable name value label has-history)
-                        (recur (cdr entries)
-                               (cons (cons name (resolve value nodemap)) definitions)
-                               parameters equations initial events pos-responses 
-                               neg-responses functions
-                               )
-                        )
-                       (($ parameter name value )
-                        (recur (cdr entries)
-                               definitions (cons (cons name (resolve value nodemap)) parameters) 
-                               equations initial events pos-responses neg-responses 
-                               functions
-                               )
-                        )
-                       (($ equation s expr)
-                        (d 'elaborate "equation: unresolved rhs = ~A~%" expr)
-                        (d 'elaborate "equation: rhs = ~A~%" (resolve expr nodemap))
-                        (recur (cdr entries)
-                               definitions parameters
-                               (cons (list s (resolve expr nodemap)) equations)
-                               initial events pos-responses neg-responses 
-                               functions
-                               )
-                        )
-                       (($ initial-equation s expr)
-                        (recur (cdr entries)
-                               definitions parameters
-                               equations (cons (cons s (resolve expr nodemap)) initial) events pos-responses neg-responses 
-                               functions
-                               ))
-                       (($ structural-event left-condition left right-condition right)
-                        (recur (cdr entries)
-                               definitions parameters
-                               equations initial
-                               (cons (resolve left-condition nodemap) (cons (resolve right-condition nodemap) events) )
-                               pos-responses 
-                               neg-responses
-                               functions
-                               ;; TODO: generate equations for new regimes
-                               ))
-                       (($ event condition pos neg)
-                        (recur (cdr entries)
-                               definitions parameters
-                               equations initial 
-                               (cons (resolve condition nodemap) events) 
-                               (cons (resolve pos nodemap) pos-responses)
-                               (or (and neg (cons (resolve neg nodemap) neg-responses)) neg-responses)
-                               functions
-                               ))
-                       (($ function name formals expr)
-                        (recur (cdr entries)
-                               definitions parameters
-                               equations initial events pos-responses neg-responses 
-                               (cons (list name formals (resolve expr nodemap)) functions)
-                               ))
-                       (else
-                        (error 'elaborate "unknown equation type" eq))
-                       ))
-            ))
-      ))
+                     (match en  
+                            (($ variable name value label has-history)
+                             (recur (cdr entries) nodemap
+                                    (cons (cons name (resolve value nodemap)) definitions)
+                                    parameters equations initial events pos-responses 
+                                    neg-responses functions
+                                    )
+                             )
+
+                            (($ parameter name value )
+                             (recur (cdr entries) nodemap
+                                    definitions (cons (cons name (resolve value nodemap)) parameters) 
+                                    equations initial events pos-responses neg-responses 
+                                    functions
+                                    )
+                             )
+                            (($ equation s expr)
+                             (d 'elaborate "equation: unresolved rhs = ~A~%" expr)
+                             (d 'elaborate "equation: rhs = ~A~%" (resolve expr nodemap))
+                             (recur (cdr entries) nodemap
+                                    definitions parameters
+                                    (cons (list s (resolve expr nodemap)) equations)
+                                    initial events pos-responses neg-responses 
+                                    functions
+                                    )
+                             )
+                            (($ initial-equation s expr)
+                             (recur (cdr entries) nodemap
+                                    definitions parameters
+                                    equations (cons (cons s (resolve expr nodemap)) initial) events pos-responses neg-responses 
+                                    functions
+                                    ))
+                            (($ structural-event left-condition left right-condition right)
+                             (recur (cdr entries) nodemap
+                                    definitions parameters
+                                    equations initial
+                                    (cons (resolve left-condition nodemap) (cons (resolve right-condition nodemap) events) )
+                                    pos-responses 
+                                    neg-responses
+                                    functions
+                                    ;; TODO: generate equations for new regimes
+                                    ))
+                            (($ event condition pos neg)
+                             (recur (cdr entries) nodemap
+                                    definitions parameters
+                                    equations initial 
+                                    (cons (resolve condition nodemap) events) 
+                                    (cons (resolve pos nodemap) pos-responses)
+                                    (or (and neg (cons (resolve neg nodemap) neg-responses)) neg-responses)
+                                    functions
+                                    ))
+                            (($ function name formals expr)
+                             (recur (cdr entries) nodemap
+                                    definitions parameters
+                                    equations initial events pos-responses neg-responses 
+                                    (cons (list name formals (resolve expr nodemap)) functions)
+                                    ))
+                            (else
+                             (error 'elaborate "unknown equation type" eq))
+                            ))
+                 ))
+          ))
   
-)
+  )
 
 (define (simcreate eqset)
   
