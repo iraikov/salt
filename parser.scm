@@ -222,6 +222,7 @@
       (if (stack-empty? is)  '*eoi*
 	  (let* ((p     (stack-pop! is))
 		 (x     (and (not (null? p)) (car p)))
+                 (dd (print "x = " x))
 		 (t     (if x
 			    (begin (stack-push! is (cdr p))
 				   (match x
@@ -239,11 +240,11 @@
                                                           (tok loc LPAREN)))
 					  (else (errorp "invalid input: " x))))
 			    (if (not (stack-empty? is)) (tok loc RPAREN) '*eoi*))))
+            (print "t = " (if (lexical-token? t) (lexical-token-category t) t))
 	    t)))))
-	    
-  
 
 (define (parse-sym-infix-expr lst #!optional loc)
+  (print "parse-sym-infix-expr: lst = " lst)
   (let ((ret (cond ((number? lst)  lst)
 		   ((symbol? lst)  lst)
 		   ((and (list? lst) (null? lst) '()))
@@ -342,21 +343,20 @@
 ; Expr
 
 (define (parse-expression env e)
-  (let ((e1 (parse-sym-infix-expr e)))
-    (cond
-     ((symbol? e1)
-      (parse-variable env e1))
-     ((pair? e1)
-      (let ((op (car e1)) (args (cdr e1)))
-        (case op
-          ((if)   (parse-if env args))
-          ((cond) (parse-cond env args))
-          ((and)  (parse-and env args))
-          ((or)   (parse-or env args))
-          ((let)  (parse-let env args))
-          (else   (parse-function-call env op args)))))
-     (else (parse-datum e1)))
-    ))
+  (cond
+   ((symbol? e)
+    (parse-variable env e))
+   ((pair? e)
+    (let ((op (car e)) (args (cdr e)))
+      (case op
+        ((if)   (parse-if env args))
+        ((cond) (parse-cond env args))
+        ((and)  (parse-and env args))
+        ((or)   (parse-or env args))
+        ((let)  (parse-let env args))
+        (else   (parse-function-call env op args)))))
+   (else (parse-datum e))
+  ))
 
 
 (define (parse-expression* env exprs)
@@ -524,7 +524,7 @@
              (free-variable-name 
               (parse-variable env function-name))
              formals-ast
-             (parse-expression (extend-env-with-env env formals-env) exp-or-body))))
+             (parse-expression (extend-env-with-env env formals-env) (parse-sym-infix-expr exp-or-body)))))
          (else (salt:error 'parse-function "Not a valid pattern: " pattern))))
       (salt:error 'parse-function "Not a valid definition: " args)))
 
@@ -538,20 +538,21 @@
           (match exp-or-body
                  (('= 'unknown expr)
                   (unknown
-                   (parse-expression env expr)
+                   (parse-expression env (parse-sym-infix-expr expr))
                    (free-variable-name 
                     (parse-variable env pattern))))
                  (('= 'parameter expr)
                   (parameter
+                   (gensym 'p)
                    (free-variable-name 
                     (parse-variable env pattern))
-                   (parse-expression env expr)
+                   (parse-expression env (parse-sym-infix-expr expr))
                    ))
                  (('= 'constant expr)
                   (constant
                    (free-variable-name
                     (parse-variable env pattern))
-                   (parse-expression env expr)
+                   (parse-expression env (parse-sym-infix-expr expr))
                    ))
                   (else (salt:error 'parse-define "Not a valid definition expression: " exp-or-body))
                  ))
@@ -566,7 +567,7 @@
         (match rhs 
                (('= . rhs)
                 (eq (parse-variable env pattern)
-                    (parse-expression env rhs)))
+                    (parse-expression env (parse-sym-infix-expr rhs))))
                (else
                 (salt:error 'parse-equation "Not a valid rhs: " rhs))
                ))

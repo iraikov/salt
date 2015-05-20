@@ -6,9 +6,9 @@
 ; Environment management
 ;----------------------------------------------------------------------------
 
-;; environments are lists of pairs, the first component being the key
+;; Environments are lists of pairs, the first component being the key
 
-;; general environment operations
+;; General environment operations:
 ;;
 ;; empty-env: Env
 ;; gen-binding: Key x Value -> Binding
@@ -20,6 +20,19 @@
 ;; env-lookup: Key x Env -> (Binding + False)
 ;; env->list: Env -> Binding*
 ;; env-show: Env -> Symbol*
+
+;; Environments stacks are lists of environments, the first element in
+;; the list being the current environment.  The lookup operation
+;; traverses the entire stack until a key is found or the last element
+;; in the stack is reached. All other operations apply to the current
+;; environment.
+;;
+;; make-env-stack: Env -> Stack Env
+;; extend-env-stack-with-binding: Stack Env x Binding -> Stack Env
+;; extend-env-stack-with-env: Stack Env x Env -> Stack Env
+;; pop-env-stack: Stack Env -> Stack Env
+;; push-env-stack: Stack Env x Env -> Stack Env
+;; env-stack-lookup: Key x Env -> (Binding + False)
 
 
 ; bindings
@@ -82,3 +95,27 @@
 (define (env-show env)
   ; returns a printable list representation of an environment
   (map binding-show env))
+
+; stacks of environments
+
+(define (make-env-stack env) (list env))
+
+(define (extend-env-stack-with-binding env-stack binding)
+  (cons (extend-env-with-binding (car env-stack) binding) (cdr env-stack)))
+  
+(define (extend-env-stack-with-env env-stack env)
+  (cons (extend-env-with-env (car env-stack) env) (cdr env-stack)))
+  
+(define (pop-env-stack env-stack) (cdr env-stack))
+
+(define (push-env-stack env-stack env) (cons env env-stack))
+
+;; env-stack-lookup: Key x Env -> (Binding + False)
+
+(define (env-stack-lookup x env-stack) 
+  (if (null? env-stack) #f
+      (begin
+        (or (env-lookup x (car env-stack))
+            (env-stack-lookup x (cdr env-stack)))
+        )))
+      

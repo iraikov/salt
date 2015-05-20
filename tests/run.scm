@@ -1,21 +1,21 @@
 (use extras salt)
 
 
-(define ast 
+(define vdp 
   (parse 
-   `((define k = parameter 1)
-     (define a = unknown 0.0)
-     (define b = unknown 0.0)
-     (function (plus a b) a + b)
-     (a = plus(a ~ k))
-     ((der(b)) = a)
+   `(
+     (define x = unknown 0.0)
+     (define y = unknown 1.0)
+     ((der(x)) = (1 - y ^ 2) * x - y )
+     ((der(y)) = x)
      )
    ))
 
-(pp ast)
+(pp vdp)
 
-(define elab (elaborate ast))
+(define elab (elaborate vdp))
 
 (pp elab)
+(simcreate elab)
 
 
