@@ -1,0 +1,13 @@
+(* import libraries *)
+
+$(SML_LIB)/basis/basis.mlb
+
+local
+	rk.sml
+(*	rktest.sml*)
+in
+	structure RungeKutta
+(*	structure RungeKuttaTest*)
+end
+
+

@@ -44,7 +44,7 @@
 
 	(import scheme chicken)
         
-	(require-extension matchable lalr-driver mathh)
+	(require-extension matchable datatype lalr-driver mathh)
 	(require-library data-structures extras srfi-1 srfi-13)
 	(import (only srfi-1 first second zip fold)
                 (only srfi-13 string-null? string-concatenate string<)
@@ -57,6 +57,7 @@
 (include "mathh-constants.scm")
 (include "parser.scm")
 (include "env.scm")
+(include "codegen.scm")
 
 (define nl "\n")
 (define (s+ . rst) (string-concatenate (map ->string rst)))
@@ -123,6 +124,9 @@
        (display (car fragments))
        (loop (cdr fragments) #t)))))
 
+
+;(define-record-type SI-quantity  
+;{T,m,kg,s,A,K,mol,cd,rad,sr}
 
 
 (define syntactic-keywords
@@ -400,8 +404,8 @@
      
 
 (define math-binop-env
-  (let ((function-names `(+ - * / max min))
-        (op-names `(signal.fadd signal.fsub signal.fmul signal.fdiv signal.max signal.min)))
+  (let ((function-names `(+ - * / pow max min))
+        (op-names `(signal.add signal.sub signal.mul signal.div signal.pow signal.max signal.min)))
     (fold (lambda (k v env)
             (let ((binding (gen-binding k v)))
               (extend-env-with-binding env binding)))
@@ -410,7 +414,7 @@
           (map (lambda (f fn)
                  (function (make-free-variable f)
                            (make-pair-formal (make-var-def 'a) (make-pair-formal (make-var-def 'b) (make-null-formal)))
-                           `(signal.call ,fn (make-pair-arg (make-var-def 'a) (make-pair-arg (make-var-def 'b) (make-null-arg))))
+                           `(signal.call ,fn ,(make-pair-arg (make-var-def 'a) (make-pair-arg (make-var-def 'b) (make-null-arg))))
                            ))
                function-names 
                op-names))
@@ -419,11 +423,11 @@
 
 (define math-unop-env
   (let ((function-names
-         `(pow neg abs atan asin acos sin cos exp ln
+         `(neg abs atan asin acos sin cos exp ln
                sqrt tan cosh sinh tanh hypot gamma lgamma log10 log2 log1p ldexp cube
                round ceiling floor))
         (op-names
-         `(signal.pow signal.neg signal.abs signal.atan signal.asin signal.acos signal.sin signal.cos signal.exp signal.ln
+         `(signal.neg signal.abs signal.atan signal.asin signal.acos signal.sin signal.cos signal.exp signal.ln
                       signal.sqrt signal.tan signal.cosh signal.sinh signal.tanh signal.hypot signal.gamma signal.lgamma signal.log10
                       signal.log2 signal.log1p signal.ldexp signal.cube
                       signal.round signal.ceiling signal.floor)))
@@ -484,11 +488,26 @@
 
 ;; runtime representation of a simulation object
 (define-record-type simruntime
-  (make-simruntime indexmap eqset)
+  (make-simruntime indexmap defs eqblock)
   simruntime?
   (indexmap simruntime-indexmap)
-  (eqset simruntime-eqset)
+  (defs simruntime-definitions)
+  (eqblock simruntime-eqblock)
   )
+
+
+(define-record-printer (simruntime x out)
+    (fprintf out "#")
+    (pp `(simruntime 
+          (indexmap=,(simruntime-indexmap x))
+          (defs=,(simruntime-definitions x))
+          (eqblock=,(simruntime-eqblock x)))
+        out)
+    )
+    
+
+
+(define MTime (unknown 0.0 't))
 
 
 (define (map-equations f eqs)
@@ -523,7 +542,8 @@
                empty-env
                (list math-constant-env
                      math-binop-env
-                     math-unop-env))))
+                     math-unop-env
+                     ))))
     (map (lambda (x) (parse-declaration initial-env x)) decls)
     ))
 
@@ -532,12 +552,18 @@
 
 (define (resolve expr env-stack)
 
-  (d 'resolve "env-stack: ~A~%" (map (lambda (x) (map car x)) env-stack))
+  (d 'resolve "expr: ~A env-stack: ~A~%" 
+     expr (map (lambda (x) (map car x)) env-stack))
 
   (let recur ((e expr))
 
+    (d 'resolve "e: ~A~%" e)
+
     (cond
      
+     ((derivative-variable? e)
+      (make-derivative-variable (resolve (derivative-variable-parent e) env-stack)))
+
      ((free-variable? e)
       (let ((assoc-var-def (env-stack-lookup (free-variable-name e) env-stack)))
         (d 'resolve "free-var: e = ~A assoc-var-def = ~A~%" (free-variable-name e) assoc-var-def)
@@ -546,21 +572,13 @@
             e)))
 
      ((pair-arg? e)
-      (let ((x (pair-arg-fst e)))
-        (let ((x1
-               (if (free-variable? x)
-                   (let ((assoc-var-def (env-stack-lookup (free-variable-name x) env-stack)))
-                     (d 'resolve "pair-arg: e = ~A assoc = ~A~%" (free-variable-name x) assoc-var-def)
-                     (if assoc-var-def
-                         (binding-value assoc-var-def)
-                         x))
-                   x)))
-          (make-pair-arg x1 (recur (pair-arg-snd e)))
-          )))
+      (make-pair-arg (recur (pair-arg-fst e))
+                     (recur (pair-arg-snd e))))
 
      ((pair? e)
       (let ((op (car e)) (args (cdr e)))
         (d 'resolve "op = ~A~%" op)
+        (d 'resolve "args = ~A~%" args)
         (case op
           ((signal.if)   `(,op . ,(map recur args)))
           ((signal.cond) `(,op . ,(map recur args)))
@@ -568,7 +586,7 @@
           ((signal.or)   `(,op . ,(map recur args)))
           ((signal.let)  `(,op ,(map (lambda (b) (cons (car b) (recur (cdr b)))) (car args))
                                ,(recur (cadr args))))
-          ((signal.call)  `(,op . ,(map recur args)))
+          ((signal.call) `(,op . ,(map recur args)))
           (else   (map recur e)))))
 
      (else e)
@@ -626,7 +644,10 @@
 
   (let recur (
               (entries        model)
-              (env-stack      (make-env-stack (model-env model)))
+              (env-stack      (extend-env-stack-with-binding
+                               (make-env-stack (model-env model))
+                               (gen-binding (variable-name MTime) MTime)
+                               ))
               (definitions    '())
               (parameters     '())
               (equations      '())
@@ -635,7 +656,10 @@
               (pos-responses  '())
               (neg-responses  '())
               (functions      '())
-              (nodemap        empty-env)
+              (nodemap        (extend-env-with-binding
+                               empty-env
+                               (gen-binding (variable-name MTime) MTime)
+                               ))
               )
       
     (if (null? entries)
@@ -649,7 +673,7 @@
                            pos-responses
                            neg-responses
                            functions
-                           nodemap
+                           (reverse nodemap)
                            )
           
         (let ((en (car entries)))
@@ -694,7 +718,7 @@
                       (d 'elaborate "equation: rhs = ~A~%" (resolve expr env-stack))
                       (recur (cdr entries) env-stack
                              definitions parameters
-                             (cons (list s (resolve expr env-stack)) equations)
+                             (cons (list (resolve s env-stack) (resolve expr env-stack)) equations)
                              initial events pos-responses neg-responses 
                              functions nodemap
                              )
@@ -739,26 +763,205 @@
     ))
 
 
+(define (function-call-env formals args env)
+  (d 'function-call-env "formals = ~A args = ~A~%" formals args)
+  (match formals
+         (($ pair-formal x frst)
+          (match args
+                 (($ pair-arg xv arst)
+                  (let ((b (gen-binding (var-def-sym x) xv)))
+                    (function-call-env frst arst (extend-env-with-binding env b))))
+                 (($ null-arg)
+                  (error 'function-call-env
+                         "function arity mismatch"))
+                 ))
+         (($ null-formal)
+          (match args
+                 (($ null-arg) env)
+                 (else 
+                  (error 'function-call-env
+                         "function arity mismatch"))
+                 ))
+         ))
+
+
+(define (subst-symbol sym env-stack)
+  (let ((assoc-var-def (env-stack-lookup sym env-stack)))
+    (if assoc-var-def
+        (binding-value assoc-var-def) sym)))
+
+(define (subst-if args env-stack)
+  (map (lambda (x) (subst-expr x env-stack)) args))
+
+(define (subst-cond args env-stack)
+  (map (lambda (x) (subst-expr x env-stack)) args))
+
+(define (subst-and args env-stack)
+  (map (lambda (x) (subst-expr x env-stack)) args))
+
+(define (subst-or args env-stack)
+  (map (lambda (x) (subst-expr x env-stack)) args))
+
+(define (subst-let args env-stack)
+  (let ((lbnds (car args))
+        (body (cadr args)))
+    (list (map (lambda (lb) (cons (car lb) (subst-expr (cdr lb) env-stack))) lbnds)
+          (subst-expr body env-stack))))
+
+(define (subst-pair-arg arg env-stack)
+  (match arg
+         (($ pair-arg fst snd)
+          (cons (subst-expr fst env-stack)
+                (subst-pair-arg snd env-stack)))
+         (($ null-arg)
+          (list))))
+
+(define (subst-function-call f arg env-stack)
+  (d 'subst-function-call "f = ~A arg=~A~%" f arg)
+  (if (symbol? f)
+      (let ((args (subst-pair-arg arg env-stack)))
+        `(primop ,f . ,args))
+      (match-let ((($ function name formals body) f))
+                 (let ((fenv (function-call-env formals arg empty-env)))
+                   (d 'subst-function-call "fenv = ~A~%" fenv)
+                   (subst-expr body (push-env-stack env-stack fenv)))
+                 ))
+  )
+
+(define (subst-expr e env-stack)
+  (cond ((symbol? e)
+         (subst-symbol e env-stack))
+        ((pair? e)
+         (let ((op (car e)) (args (cdr e)))
+           (d 'subst-expr "op = ~A args = ~A~%" op args)
+           (case op
+             ((signal.if)    (cons 'signal.if (subst-if args env-stack)))
+             ((signal.cond)  (cons 'signal.cond (subst-cond args env-stack)))
+             ((signal.and)   (cons 'signal.and (subst-and args env-stack)))
+             ((signal.or)    (cons 'signal.or (subst-or args env-stack)))
+             ((signal.let)   (cons 'signal.let (subst-let args env-stack)))
+             ((signal.call)  
+              (let ((f (car args))
+                    (fargs (cadr args)))
+                (d 'subst-expr "f = ~A fargs = ~A~%" f args)
+                (subst-function-call f fargs env-stack)
+                ))
+             )))
+        ((var-def? e)
+         (subst-symbol (var-def-sym e) env-stack))
+        ((free-variable? e)
+         (subst-symbol (free-variable-name e) env-stack))
+        (else e)))
+         
+
+(define (reduce-expr expr indexmap)
+  (d 'reduce-expr "expr = ~A~%" expr)
+  (match expr
+
+         (($ pair-arg fst snd)
+          (make-pair-arg
+           (reduce-expr fst indexmap)
+           (reduce-expr snd indexmap)))
+
+         (($ derivative-variable y)
+          (let ((yindex (assv (variable-name y) indexmap)))
+            (if (not yindex)
+                (error 'reduce-expr "variable not in index" y)
+                `(getindex dy ,(cdr yindex)))
+            ))
+         
+         (($ variable name value label has-history)
+          (let ((yindex (assv name indexmap)))
+            (if (not yindex)
+                (error 'reduce-expr "variable not in index" name)
+                `(getindex y ,(cdr yindex)))
+            ))
+
+         (('signal.let lbnds body)
+          (subst-expr
+           `(signal.let 
+             ,(map (lambda (lb) (cons (car lb) (reduce-expr (cdr lb) indexmap))) lbnds)
+             ,(reduce-expr body indexmap))
+           empty-env-stack))
+
+         (('signal.call f args)
+          (subst-expr 
+           `(signal.call ,f ,(reduce-expr args indexmap))
+           empty-env-stack))
+
+         ((op . args)
+          (subst-expr
+           (cons op (map (lambda (x) (reduce-expr x indexmap)) args))
+           empty-env-stack))
+
+         (else expr)
+         ))
+
+
+(define (reduce-eq eq indexmap)
+
+  (match eq
+
+         ((($ derivative-variable y) rhs)
+          (let ((yindex (assv (variable-name y) indexmap)))
+            (if (not yindex)
+                (error 'reduce-eq "variable not in index" y)
+                `(setindex dy ,(cdr yindex) ,(reduce-expr rhs indexmap)))
+            ))
+         
+         ((($ variable name value label has-history) rhs)
+          (let ((yindex (assv name indexmap)))
+            (if (not yindex)
+                (error 'reduce-eq "variable not in index" name)
+                `(setindex y ,(cdr yindex) ,(reduce-expr rhs indexmap)))
+            ))
+         
+         (else eq)))
+          
+                
 
 (define (simcreate eqset)
-  
-  (let ((indexmap 
-         (let recur ((nodemap   (equation-set-nodemap eqset))
-                     (indexmap  '())
-                     (index     1))
-           (if (null? nodemap)
-               indexmap
-               (recur (cdr nodemap)
-                      (cons (cons (car (car nodemap)) index) indexmap)
-                      (+ 1 index)))
-           ))
-        )
 
-    (pp indexmap)
+  (let* ((nodemap (equation-set-nodemap eqset))
+
+         (indexmap 
+           (let recur ((nodemap nodemap)
+                       (indexmap  '())
+                       (index     0))
+             (if (null? nodemap)
+                 indexmap
+                 (recur (cdr nodemap)
+                        (cons (cons (car (car nodemap)) index) indexmap)
+                        (+ 1 index)))
+             ))
+          
+         (eq-block
+          (map (lambda (x) (reduce-eq x indexmap)) (equation-set-equations eqset)))
+         
+         )
+
+    (make-simruntime 
+     indexmap
+     (equation-set-definitions eqset)
+     eq-block)
+
+    )
+  )
+
+(define (codegen sim)
+  (let ((indexmap (simruntime-codegen sim))
+        (defs (simruntime-definitions sim))
+        (eqblock (simruntime-eqblock sim)))
+    
+    (let (
+          (initfun (V:Fn '() (V:Vec (map cdr defs))))
+          (eqfun   (V:Fn '(dy y) (E:Begin (map codegen-eq eqblock))))
+          )
+
+      (list initfun eqfun))
 
     ))
-
-
+        
 
 )
 

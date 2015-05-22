@@ -16,6 +16,6 @@
 (define elab (elaborate vdp))
 
 (pp elab)
-(simcreate elab)
+(pp (simcreate elab))
 
 

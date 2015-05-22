@@ -98,6 +98,8 @@
 
 ; stacks of environments
 
+(define empty-env-stack '())
+
 (define (make-env-stack env) (list env))
 
 (define (extend-env-stack-with-binding env-stack binding)

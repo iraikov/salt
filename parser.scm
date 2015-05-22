@@ -222,7 +222,6 @@
       (if (stack-empty? is)  '*eoi*
 	  (let* ((p     (stack-pop! is))
 		 (x     (and (not (null? p)) (car p)))
-                 (dd (print "x = " x))
 		 (t     (if x
 			    (begin (stack-push! is (cdr p))
 				   (match x
@@ -240,11 +239,9 @@
                                                           (tok loc LPAREN)))
 					  (else (errorp "invalid input: " x))))
 			    (if (not (stack-empty? is)) (tok loc RPAREN) '*eoi*))))
-            (print "t = " (if (lexical-token? t) (lexical-token-category t) t))
 	    t)))))
 
 (define (parse-sym-infix-expr lst #!optional loc)
-  (print "parse-sym-infix-expr: lst = " lst)
   (let ((ret (cond ((number? lst)  lst)
 		   ((symbol? lst)  lst)
 		   ((and (list? lst) (null? lst) '()))
