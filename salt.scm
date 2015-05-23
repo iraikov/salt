@@ -37,7 +37,7 @@
 
 	(
 
-         parse elaborate simcreate
+         parse elaborate simcreate codegen codegen/ML
          verbose
 
 	 )
@@ -46,9 +46,9 @@
         
 	(require-extension matchable datatype lalr-driver mathh)
 	(require-library data-structures extras srfi-1 srfi-13)
-	(import (only srfi-1 first second zip fold)
+	(import (only srfi-1 first second zip fold fold-right every)
                 (only srfi-13 string-null? string-concatenate string<)
-		(only data-structures ->string alist-ref conc)
+		(only data-structures ->string alist-ref conc intersperse compose sort)
                 (only extras pp fprintf)
                 (only ports with-output-to-port)
 		)
@@ -106,23 +106,6 @@
           (apply fprintf port fstr args)
           (flush-output port) ) )))
 
-
-;; based on SRV:send-reply by Oleg Kiselyov
-(define (print-fragments b)
-  (let loop ((fragments b) (result #f))
-    (cond
-      ((null? fragments) result)
-      ((not (car fragments)) (loop (cdr fragments) result))
-      ((null? (car fragments)) (loop (cdr fragments) result))
-      ((eq? #t (car fragments)) (loop (cdr fragments) #t))
-      ((pair? (car fragments))
-        (loop (cdr fragments) (loop (car fragments) result)))
-      ((procedure? (car fragments))
-        ((car fragments))
-        (loop (cdr fragments) #t))
-      (else
-       (display (car fragments))
-       (loop (cdr fragments) #t)))))
 
 
 ;(define-record-type SI-quantity  
@@ -507,7 +490,7 @@
     
 
 
-(define MTime (unknown 0.0 't))
+(define MTime (unknown 't (constant 'number 0.0)))
 
 
 (define (map-equations f eqs)
@@ -646,9 +629,9 @@
               (entries        model)
               (env-stack      (extend-env-stack-with-binding
                                (make-env-stack (model-env model))
-                               (gen-binding (variable-name MTime) MTime)
+                               (gen-binding (variable-label MTime) MTime)
                                ))
-              (definitions    '())
+              (definitions    '()) ;;(list (cons (variable-name MTime) (variable-value MTime))))
               (parameters     '())
               (equations      '())
               (initial        '())
@@ -656,16 +639,17 @@
               (pos-responses  '())
               (neg-responses  '())
               (functions      '())
-              (nodemap        (extend-env-with-binding
-                               empty-env
-                               (gen-binding (variable-name MTime) MTime)
-                               ))
+              (nodemap        empty-env)
+                              ;(extend-env-with-binding
+                              ; empty-env
+                              ; (gen-binding (variable-name MTime) MTime)
+                               
               )
       
     (if (null? entries)
         
         (make-equation-set model
-                           definitions
+                           (reverse definitions)
                            parameters
                            equations
                            (map-equations replace-fixed initial)
@@ -873,7 +857,9 @@
          (($ variable name value label has-history)
           (let ((yindex (assv name indexmap)))
             (if (not yindex)
-                (error 'reduce-expr "variable not in index" name)
+                (if (equal? name (variable-name MTime))
+                    label
+                    (error 'reduce-expr "variable not in index" name))
                 `(getindex y ,(cdr yindex)))
             ))
 
@@ -948,19 +934,8 @@
     )
   )
 
-(define (codegen sim)
-  (let ((indexmap (simruntime-codegen sim))
-        (defs (simruntime-definitions sim))
-        (eqblock (simruntime-eqblock sim)))
-    
-    (let (
-          (initfun (V:Fn '() (V:Vec (map cdr defs))))
-          (eqfun   (V:Fn '(dy y) (E:Begin (map codegen-eq eqblock))))
-          )
 
-      (list initfun eqfun))
 
-    ))
         
 
 )

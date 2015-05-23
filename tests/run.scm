@@ -14,8 +14,12 @@
 (pp vdp)
 
 (define elab (elaborate vdp))
+(define sim (simcreate elab))
 
 (pp elab)
-(pp (simcreate elab))
+(pp sim)
+(pp (codegen sim))
+(codegen/ML sim)
+
 
 

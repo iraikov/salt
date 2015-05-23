@@ -11,7 +11,7 @@
        ("expr.grm.scm" ("expr.grm")
 	(run (csi -s expr.grm)))
 
-       ((dynld-name "salt") ("salt.scm" "env.scm" "parser.scm" "expr.grm.scm")
+       ((dynld-name "salt") ("salt.scm" "env.scm" "parser.scm" "expr.grm.scm" "codegen.scm" )
 	(compile -O -d2 -S -s salt.scm -j salt))
 
        ((dynld-name "salt.import") ("salt.import.scm")
@@ -35,3 +35,23 @@
   `((version ,version)
     ))
 
+
+;; From setup-header.scm by Kon Lovett
+
+(define (installation-chicken-home)
+  (if (not (installation-prefix)) (chicken-home)
+    (make-pathname `(,(installation-prefix) "share") "chicken") ) )
+
+;;; Constants & Procedures
+
+(define SHARED-DIR (installation-chicken-home))
+(define SALT-DIR (make-pathname SHARED-DIR "salt"))
+
+;; File Copy Operations
+
+(define (copy-file-to-salt-dir fn)
+  (let ([fn (->string fn)])
+    (copy-file fn (make-pathname SALT-DIR fn)) ) )
+
+(copy-file-to-salt-dir "sml-lib/rk/rk.sml")
+(copy-file-to-salt-dir "sml-lib/rk/rk.mlb")
