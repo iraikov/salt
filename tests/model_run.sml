@@ -43,7 +43,7 @@ fun start (f,initial,evinitial,tmax) =
 val h = 0.01
 val p = Model.paramfun()
 val initial = Model.initfun(p)
-val evinitial = Model.condfun(p)(0.0,initial)
+val evinitial = Model.initcondfun()
 val f = Model.eintegral(Model.eqfun(p),Model.condfun(p),Model.posfun(p),Model.negfun(p),h)
-val _ = start (f,initial,evinitial,50.0)
+val _ = start (f,initial,evinitial,500.0)
 

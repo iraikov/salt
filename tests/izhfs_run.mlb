@@ -1,0 +1,13 @@
+(* Compile with mlton -mlb-path-var 'RK_LIB $(CHICKEN_HOME)/share/chicken/salt/sml-lib/rk' *)
+
+$(SML_LIB)/basis/basis.mlb
+$(SML_LIB)/basis/unsafe.mlb
+$(RK_LIB)/rk.mlb
+
+local
+	izhfs.sml
+in
+	structure Model
+end
+model_run.sml
+

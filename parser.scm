@@ -398,6 +398,12 @@
                  (if assoc-var-def
                      (binding-value assoc-var-def)
                      (make-free-variable x)))))
+             (((and x (? symbol?)))
+              (let ((assoc-var-def (env-lookup x env)))
+                (make-derivative-variable
+                 (if assoc-var-def
+                     (binding-value assoc-var-def)
+                     (make-free-variable x)))))
              (else (salt:error 'parse-variable "Not an identifier: " e)))
       ))
 
@@ -533,19 +539,19 @@
         (cond
          ((symbol? pattern)
           (match exp-or-body
-                 (('= 'unknown expr)
+                 (('= 'unknown . expr)
                   (unknown
                    (parse-expression env (parse-sym-infix-expr expr))
                    (free-variable-name 
                     (parse-variable env pattern))))
-                 (('= 'parameter expr)
+                 (('= 'parameter . expr)
                   (parameter
                    (gensym 'p)
                    (free-variable-name 
                     (parse-variable env pattern))
                    (parse-expression env (parse-sym-infix-expr expr))
                    ))
-                 (('= 'constant expr)
+                 (('= 'constant . expr)
                   (constant
                    (free-variable-name
                     (parse-variable env pattern))

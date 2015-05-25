@@ -37,7 +37,7 @@
 
 	(
 
-         parse elaborate simcreate codegen codegen/ML
+         parse elaborate simcreate codegen-ODE codegen-ODE/ML
          verbose
 
 	 )
@@ -483,13 +483,15 @@
 
 ;; runtime representation of a simulation object
 (define-record-type simruntime
-  (make-simruntime cindexmap dindexmap parameters defs eqblock condblock posresp negresp)
+  (make-simruntime eqset cindexmap dindexmap parameters defs derivblock asgnblock condblock posresp negresp)
   simruntime?
+  (eqset simruntime-eqset)
   (cindexmap simruntime-cindexmap)
   (dindexmap simruntime-dindexmap)
   (parameters simruntime-parameters)
   (defs simruntime-definitions)
-  (eqblock simruntime-eqblock)
+  (derivblock simruntime-derivblock)
+  (asgnblock simruntime-asgnblock)
   (condblock simruntime-condblock)
   (posresp simruntime-posresp)
   (negresp simruntime-negresp)
@@ -501,8 +503,10 @@
     (pp `(simruntime 
           (cindexmap=,(simruntime-cindexmap x))
           (dindexmap=,(simruntime-dindexmap x))
+          (parameters=,(simruntime-parameters x))
           (defs=,(simruntime-definitions x))
-          (eqblock=,(simruntime-eqblock x))
+          (derivblock=,(simruntime-derivblock x))
+          (asgnblock=,(simruntime-asgnblock x))
           (evblock=,(simruntime-condblock x))
           (posresp=,(simruntime-posresp x))
           (negresp=,(simruntime-negresp x))
@@ -860,7 +864,7 @@
   (d 'subst-function-call "f = ~A arg=~A~%" f arg)
   (if (symbol? f)
       (let ((args (subst-pair-arg arg env-stack)))
-        `(primop ,f . ,args))
+        `(signal.primop ,f . ,args))
       (match-let ((($ function name formals body) f))
                  (let ((fenv (function-call-env formals arg empty-env)))
                    (d 'subst-function-call "fenv = ~A~%" fenv)
@@ -966,6 +970,43 @@
          (else expr)
          ))
 
+;; reduce expr for constant expressions
+(define (reduce-constant-expr expr pindexmap cindexmap dindexmap)
+  (d 'reduce-constant-expr "expr = ~A~%" expr)
+  (d 'reduce-constant-expr "cindexmap = ~A~%" cindexmap)
+  (match expr
+
+         (($ pair-arg fst snd)
+          (make-pair-arg
+           (reduce-constant-expr fst pindexmap cindexmap dindexmap)
+           (reduce-constant-expr snd pindexmap cindexmap dindexmap)))
+
+         (($ variable name label value has-history)
+          (reduce-constant-expr value pindexmap cindexmap dindexmap))
+
+         (($ parameter name label value)
+          (reduce-constant-expr value pindexmap cindexmap dindexmap))
+
+         (('signal.let lbnds body)
+          (subst-expr
+           `(signal.let 
+             ,(map (lambda (lb) (cons (car lb) (reduce-constant-expr (cdr lb) pindexmap cindexmap dindexmap))) lbnds)
+             ,(reduce-constant-expr body pindexmap cindexmap dindexmap))
+           empty-env-stack))
+
+         (('signal.call f args)
+          (subst-expr 
+           `(signal.call ,f ,(reduce-constant-expr args pindexmap cindexmap dindexmap))
+           empty-env-stack))
+
+         ((op . args)
+          (subst-expr
+           (cons op (map (lambda (x) (reduce-constant-expr x pindexmap cindexmap dindexmap)) args))
+           empty-env-stack))
+
+         (else expr)
+         ))
+
 
 (define (reduce-eq eq pindexmap cindexmap dindexmap)
 
@@ -1049,16 +1090,20 @@
              ))
 
          (param-block 
-          (map (lambda (x) (reduce-expr (cdr x) pindexmap cindexmap dindexmap))
+          (map (lambda (x) (reduce-constant-expr (cdr x) pindexmap cindexmap dindexmap))
                (equation-set-parameters eqset)))
 
          (init-block 
           (map (lambda (x) (reduce-expr (cdr x) pindexmap cindexmap dindexmap))
                (equation-set-definitions eqset)))
 
-         (eq-block
+         (deriv-block
           (map (lambda (x) (reduce-eq x pindexmap cindexmap dindexmap)) 
-               (equation-set-equations eqset)))
+               (filter ode? (equation-set-equations eqset))))
+         
+         (asgn-block
+          (map (lambda (x) (reduce-eq x pindexmap cindexmap dindexmap)) 
+               (filter asgn? (equation-set-equations eqset))))
          
          (cond-block
           (map (lambda (c) (reduce-eq c pindexmap cindexmap dindexmap))
@@ -1075,10 +1120,12 @@
          )
 
     (make-simruntime 
+     eqset
      cindexmap dindexmap
      param-block
      init-block
-     eq-block
+     deriv-block
+     asgn-block
      cond-block
      pos-responses
      neg-responses)

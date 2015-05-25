@@ -76,7 +76,7 @@
 		  )))
 
 
-(define (codegen sim)
+(define (codegen-ODE sim)
 
   (define (update-bucket k v alst)
     (let recur ((alst alst)
@@ -115,7 +115,7 @@
     (match expr
            ((? symbol?)
             (V:Var expr))
-           (('primop op . args)
+           (('signal.primop op . args)
             (V:Op op (map codegen-expr args)))
            (('getindex vect index)
             (V:Sub index (codegen-expr vect)))
@@ -137,16 +137,26 @@
         (dindexmap (simruntime-dindexmap sim))
         (defs (simruntime-definitions sim))
         (params (simruntime-parameters sim))
-        (eqblock (let ((sorted-eqs 
-                        (sort (simruntime-eqblock sim) 
-                              (match-lambda*
-                               [(('setindex vect1 index1 val1) 
-                                 ('setindex vect2 index2 val2)) 
-                                (< index1 index2)]))))
-                   (map (match-lambda [('setindex vect index val) val]
-                                      [eq (error 'codegen "unknown equation type" eq)]
-                                      ) 
-                        sorted-eqs)))
+        (derivblock (let ((sorted-eqs 
+                           (sort (simruntime-derivblock sim) 
+                                 (match-lambda*
+                                        [(('setindex vect1 index1 val1) 
+                                              ('setindex vect2 index2 val2)) 
+                                             (< index1 index2)]))))
+                             (map (match-lambda [('setindex vect index val) val]
+                                                [eq (error 'codegen "unknown equation type" eq)]
+                                  ) 
+                                  sorted-eqs)))
+        (asgnblock (let ((sorted-eqs 
+                           (sort (simruntime-asgnblock sim) 
+                                 (match-lambda*
+                                        [(('setindex vect1 index1 val1) 
+                                              ('setindex vect2 index2 val2)) 
+                                             (< index1 index2)]))))
+                             (map (match-lambda [('setindex vect index val) val]
+                                                [eq (error 'codegen "unknown equation type" eq)]
+                                  ) 
+                                  sorted-eqs)))
         (condblock (let ((sorted-eqs 
                           (sort (simruntime-condblock sim) 
                                 (match-lambda*
@@ -154,6 +164,8 @@
                                    ('setindex vect2 index2 val2)) 
                                   (< index1 index2)]))))
                    (map (match-lambda [('setindex vect index val) val]
+                                       ;(signal.sub (signal.sign ,val) 
+                                       ;             (signal.sign ,(getindex ,vect ,index))
                                       [eq (error 'codegen "unknown equation type" eq)]
                                       ) 
                         sorted-eqs)))
@@ -187,7 +199,8 @@
           (paramfun (V:Fn '() (E:Ret (V:Vec (map codegen-expr params)))))
           (initfun (V:Fn '(p) (E:Ret (V:Vec (map codegen-expr defs)))))
           (eqfun   (V:Fn '(p) (E:Ret (V:Fn '(t y) (E:Ret (V:Vec (map codegen-expr eqblock)))))))
-          (condfun (V:Fn '(p) (E:Ret (V:Fn '(t y) (E:Ret (V:Vec (map codegen-expr condblock)))))))
+          (initcondfun (V:Fn '() (E:Ret (V:Vec (map (lambda (x) (V:C 'negInf)) condblock)))))
+          (condfun (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map codegen-expr condblock)))))))
           (posfun (if (null? posblocks)
                        (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Var 'y)))))
                        (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map (compose codegen-expr cdr) posblocks))))))))
@@ -196,7 +209,7 @@
                        (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map (compose codegen-expr cdr) negblocks))))))))
           )
 
-      (list paramfun initfun eqfun condfun posfun negfun)
+      (list paramfun initfun eqfun initcondfun condfun posfun negfun)
 
     ))
 )
@@ -370,20 +383,21 @@
 	 ))
 
 
-(define (codegen/ML sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
+(define (codegen-ODE/ML sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
 
   (let* (
-         (c (codegen sim))
+         (c (codegen-ODE sim))
          (paramfun (car c))
          (initfun (cadr c))
          (eqfun (caddr c)) 
-         (condfun (car (cdddr c)))
-         (posfun  (cadr (cdddr c)))
-         (negfun  (caddr (cdddr c)))
+         (initcondfun (car (cdddr c)))
+         (condfun     (cadr (cdddr c)))
+         (posfun      (caddr (cdddr c)))
+         (negfun      (cadddr (cdddr c)))
          )
     
     (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkoz rkdp))))
-        (error 'codegen/ML "unknown solver" solver))
+        (error 'codegen-ODE/ML "unknown solver" solver))
     
     (if mod (print-fragments (prelude/ML solver: solver libs: libs) out))
     
@@ -391,6 +405,7 @@
      (list (binding->ML (B:Val 'paramfun paramfun)) nl
            (binding->ML (B:Val 'initfun initfun)) nl
            (binding->ML (B:Val 'eqfun eqfun)) nl
+           (binding->ML (B:Val 'initcondfun initcondfun)) nl
            (binding->ML (B:Val 'condfun condfun)) nl
            (binding->ML (B:Val 'posfun posfun)) nl
            (binding->ML (B:Val 'negfun negfun)) nl)
@@ -433,21 +448,33 @@ fun vmap2 f (v1,v2) =
         Vector.tabulate (n, fn (i) => f (getindex (v1,i), getindex (v2,i)))
     end
 
-fun vany2 f (v1,v2) = 
+fun vfind2 f (v1,v2) = 
     let 
         val n = Vector.length v1
         fun recur i = 
             if Int.<(i, n)
-            then (if f (getindex (v1,i), getindex (v2,i)) then true else recur (Int.+(i,1)))
-            else false
+            then (if f (getindex (v1,i), getindex (v2,i)) then SOME(i) else recur (Int.+(i,1)))
+            else NONE
     in
       recur 0
+    end 
+
+fun vfoldpi2 f (v1,v2) = 
+    let 
+        val n = Vector.length v1
+        fun recur (i, ax) = 
+            if Int.<(i, n)
+            then recur (Int.+(i,1), f (i, getindex (v1,i), getindex (v2,i), ax))
+            else ax
+    in
+      recur (0, NONE)
     end 
 
 exception EmptySignal
 
 val equal = fn (x,y) => (x = y) 
 
+val signal_sign = sign
 val signal_eqnum = (op ==)
 val signal_neg = (op ~)
 val signal_add = (op +)
@@ -530,32 +557,69 @@ fun secant tol f fg0 guess1 guess0 =
 
 datatype 'a result = Next of 'a | Root of 'a
 
-
-fun esolver (stepper,evtest) (x,ys,h) =
-    let open Real
-        val (ys',e,finterp) = stepper h (x,ys)
+(* 1. Ensures that the event closest is time is selected, not just the first one in the event index.
+   2. Determines the direction (positive or negative) of the event. *)
+fun ethr (i,v1,v2,ax) = 
+    let
+        fun ethr0 (i, v1, v2) =
+            (case (Real.sign(v1),Real.sign(v2)) of
+                 (-1, 1) => SOME (1, i, v1-v2)
+               | (-1, 0) => SOME (1, i, v1-v2)
+               | (1, -1) => SOME (-1, i, v1-v2)
+               | (1,  0) => SOME (-1, i, v1-v2)
+               | _ => NONE)
     in
-        case predictor tol (h,e) of
-            Right h' => 
-            if (evtest (ys') >= 0.0)
-            then (let
-                     val theta   = secant tol (evtest o finterp) (evtest ys) 1.0 0.0
-                     val ys''    = finterp (theta+tol)
-                 in
-                     Root (x+(theta+tol)*h,ys'',h')
-                 end)
-            else Next (x+h,ys',h')
-          | Left h'  => 
-            esolver (stepper,evtest) (x,ys,h')
+        case ax of 
+            NONE => ethr0 (i,v1,v2)
+          | SOME (dir,index,diff) =>
+            case ethr0 (i, v1, v2) of
+                NONE => ax
+              | SOME (dir',index',diff') =>
+                if abs(diff') < abs(diff)
+                then SOME (dir',index',diff')
+                else ax
     end
 
 
-fun eintegral (f,x,ys,evtest,h,i) =
-    case esolver (make_estepper f,evtest) (x,ys,h) of
-        Next (xn,ysn,h') =>
-        ({xn=xn,h=h',ysn=ysn})
-      | Root (xn,ysn,h') =>
-        ({xn=xn,ysn=ysn,h=h'})
+fun esolver (stepper,fcond) (x,ys,ev,h) =
+    let open Real
+        val (ys',e,finterp) = stepper h (x,ys)
+        val ev' = fcond (x+h,ys',ev)
+    in
+        case predictor tol (h,e) of
+            Right h' => 
+            (case (vfoldpi2 ethr (ev, ev') of
+                 SOME (evdir,evind,evdiff) => 
+                 (let
+                     fun fy (theta) = Vector.sub(fcond (x+theta*h, finterp theta, ev), evind)
+                     val y0    = Vector.sub(fcond(x,ys,ev), evind)
+                     val theta = secant tol fy y0 1.0 0.0
+                     val x'    = x+(theta+tol)*h
+                     val ys''  = finterp (theta+tol)
+                 in
+                     Root (x',ys'',evdir,fcond (x',ys''),h')
+                 end)
+               | NONE => Next (x+h,ys',ev',h'))
+          | Left h'  => 
+            esolver (stepper, fcond) (x,ys,ev,h')
+    end
+
+
+fun eintegral (f,fcond,fpos,fneg) =
+    let
+       val fstepper = make_estepper f
+       val fesolver = esolver (fstepper,fcond) 
+    in
+       fn(x,ys,ev,h) => 
+       (case fesolver (x,ys,ev,h) of
+            Next (xn,ysn,evn,hn) => (xn,ysn,evn,hn)
+          | Root (xn,ysn,evn,hn) => 
+            let 
+               val ysn' = fneg(xn,fpos(xn,ysn,evn),evn)
+            in
+               (xn,ysn',evn,hn)
+            end)
+   end
 
 fun solver stepper (x,ys,h) =
     let open Real
@@ -568,11 +632,12 @@ fun solver stepper (x,ys,h) =
             solver (stepper) (x,ys,h')
     end
 
-fun integral (f,x,ys,h) =
+fun integral f =
     let 
-        val (xn,ysn,h') = solver (make_stepper f) (x,ys,h) 
+        val fstepper = make_stepper f
+        val (xn,ysn,hn) = solver fstepper (x,ys,h) 
     in
-        {xn=xn,ysn=ysn,h=h'}
+        fn(x,y,h) => solver fstepper (x,y,h)
     end
 
 
@@ -597,19 +662,18 @@ fun integral (f,h) =
                    end
     end
 
-fun eintegral (f,fev,fpos,fneg,h) =
+fun eintegral (f,fcond,fpos,fneg,h) =
     let 
         val solver = (make_stepper f) h
-        val pospred = vany2 (fn(v1,v2) => (Int.<(Real.sign v1, (Real.sign v2))))
-        val negpred = vany2 (fn(v1,v2) => (Int.>(Real.sign v1, (Real.sign v2))))
+        fun thr (v1,v2) = (Int.-(Real.sign(v1),Real.sign(v2)) = 0)
     in
         fn(x,y,e) => let val x' = x + h
                          val y' = solver (x,y)
-                         val e' = fev (x',y')
-                         val epos = pospred (e, e')
-                         val eneg = negpred (e, e')
-                         val y'' = if epos then fpos (x',y',e') else y'
-                         val y'' = if eneg then fneg (x',y'',e') else y''
+                         val e' = fcond (x',y',e)
+                         val pos = vfind2 thr (e', e) 
+                         val neg = vfind2 thr (e, e')
+                         val y'' = case pos of SOME i => fpos(x',y',e') | _ => y'
+                         val y'' = case neg of SOME i => fneg(x',y'',e') | _ => y''
                      in
                          (x',y'',e')
                      end
