@@ -126,7 +126,7 @@
                    (codegen-expr ift)
                    (codegen-expr iff)))
            (('signal.reinit test dflt upd)
-            (V:Ifv (V:Op 'signal.eqnum (list (codegen-expr test) (V:C 0.0)))
+            (V:Ifv (V:Op 'signal.gte (list (codegen-expr test) (V:C 0.0)))
                    (codegen-expr upd)
                    (codegen-expr dflt)))
            (else expr)))
@@ -158,22 +158,28 @@
                                       ) 
                         sorted-eqs)))
 
-        (posblocks (let (
-                         (bucket-eqs 
+        (posblocks (let ((bucket-eqs 
                           (bucket 
                            (match-lambda*
-                            [((and eq ('signal.reinit ev ('getindex 'y index) rhs)))
+                            [((and eq ('setindex 'y index ('signal.reinit ev y rhs))))
                              index])
                            (simruntime-posresp sim))))
-                     (map (lambda (x) (cons (car x) (fold-reinits (cdr x)))) bucket-eqs)
+                     (map (lambda (x) 
+                            (let ((reinits (map (match-lambda [('setindex vect index val) val]) (cdr x))))
+                              (cons (car x) (fold-reinits reinits))))
+                           bucket-eqs)
                      ))
+
         (negblocks (let ((bucket-eqs 
                           (bucket 
                            (match-lambda*
-                            [((and eq ('signal.reinit ev ('getindex 'y index) rhs)))
+                            [((and eq ('setindex 'y index ('signal.reinit ev y rhs))))
                              index])
                            (simruntime-negresp sim))))
-                     (map (lambda (x) (cons (car x) (fold-reinits (cdr x)))) bucket-eqs)
+                     (map (lambda (x) 
+                            (let ((reinits (map (match-lambda [('setindex vect index val) val]) (cdr x))))
+                              (cons (car x) (fold-reinits reinits))))
+                           bucket-eqs)
                      ))
         )
     
@@ -181,9 +187,13 @@
           (paramfun (V:Fn '() (E:Ret (V:Vec (map codegen-expr params)))))
           (initfun (V:Fn '(p) (E:Ret (V:Vec (map codegen-expr defs)))))
           (eqfun   (V:Fn '(p) (E:Ret (V:Fn '(t y) (E:Ret (V:Vec (map codegen-expr eqblock)))))))
-          (condfun (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map codegen-expr condblock)))))))
-          (posfun (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map (compose codegen-expr cdr) posblocks)))))))
-          (negfun (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map (compose codegen-expr cdr) negblocks)))))))
+          (condfun (V:Fn '(p) (E:Ret (V:Fn '(t y) (E:Ret (V:Vec (map codegen-expr condblock)))))))
+          (posfun (if (null? posblocks)
+                       (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Var 'y)))))
+                       (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map (compose codegen-expr cdr) posblocks))))))))
+          (negfun (if (null? negblocks)
+                       (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Var 'y)))))
+                       (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map (compose codegen-expr cdr) negblocks))))))))
           )
 
       (list paramfun initfun eqfun condfun posfun negfun)
@@ -349,7 +359,7 @@
                              ((NONE)  (list name1))
                              (else    (list name1 "()"))))
                           ((null? (cdr args))
-                           (list "(" name1 " " (value->ML (car args)) ")"))
+                           (list "(" name1 " (" (value->ML (car args)) "))"))
                           (else
                            (list "(" name1 "(" (intersperse (map value->ML args) ",") "))")))))
 	 (V:Ifv     (test ift iff)
@@ -423,6 +433,17 @@ fun vmap2 f (v1,v2) =
         Vector.tabulate (n, fn (i) => f (getindex (v1,i), getindex (v2,i)))
     end
 
+fun vany2 f (v1,v2) = 
+    let 
+        val n = Vector.length v1
+        fun recur i = 
+            if Int.<(i, n)
+            then (if f (getindex (v1,i), getindex (v2,i)) then true else recur (Int.+(i,1)))
+            else false
+    in
+      recur 0
+    end 
+
 exception EmptySignal
 
 val equal = fn (x,y) => (x = y) 
@@ -436,6 +457,8 @@ val signal_div = (op /)
 val signal_pow = pow
 val signal_max = max
 val signal_min = min
+val signal_gt = (op >)
+val signal_gte = (op >=)
 
 EOF
 
@@ -572,6 +595,25 @@ fun integral (f,h) =
                    in
                        (x+h,y')
                    end
+    end
+
+fun eintegral (f,fev,fpos,fneg,h) =
+    let 
+        val solver = (make_stepper f) h
+        val pospred = vany2 (fn(v1,v2) => (Int.<(Real.sign v1, (Real.sign v2))))
+        val negpred = vany2 (fn(v1,v2) => (Int.>(Real.sign v1, (Real.sign v2))))
+    in
+        fn(x,y,e) => let val x' = x + h
+                         val y' = solver (x,y)
+                         val e' = fev (x',y')
+                         val epos = pospred (e, e')
+                         val eneg = negpred (e, e')
+                         val y'' = if epos then fpos (x',y',e') else y'
+                         val y'' = if eneg then fneg (x',y'',e') else y''
+                     in
+                         (x',y'',e')
+                     end
+
     end
 
 

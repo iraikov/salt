@@ -14,22 +14,36 @@ fun showReal n =
     end
 
 fun printstate (t,input) = 
-    ( (showReal (t)) ^ " " ^ (showReal (Vector.sub(input,0)))  ^ " " ^ (showReal (Vector.sub(input,1))) )
-
-fun start (initial,tmax,f) =
     let
-	fun run (t, input) =
-	    let val (t',nstate) = f (t, input)
-	    in putStrLn (printstate (t,nstate));
+        val n = Vector.length input
+        fun fshow i =
+            if i < n
+            then (putStr(showReal (Vector.sub(input,0))  ^ " ");
+                  fshow(i+1))
+            else putStrLn("")
+    in
+        ( putStr ((showReal (t)) ^ " "); fshow 0 )
+    end
+      
+
+fun start (f,initial,evinitial,tmax) =
+    let
+	fun run (t, input, ev) =
+	    let val (t',nstate,ev') = f (t,input,ev)
+	    in printstate (t,nstate); 
 	       if (t'  > tmax)
 	       then (putStrLn "# All done!"; nstate)
-	       else (run (t',nstate))
+	       else (run (t',nstate,ev'))
 	    end
     in
 	printstate (0.0, initial);
-	run (0.0, initial)
+	run (0.0, initial, evinitial)
     end
 
 val h = 0.01
-val _ = start (Model.initfun(),50.0,Model.integral(Model.eqfun,h))
+val p = Model.paramfun()
+val initial = Model.initfun(p)
+val evinitial = Model.condfun(p)(0.0,initial)
+val f = Model.eintegral(Model.eqfun(p),Model.condfun(p),Model.posfun(p),Model.negfun(p),h)
+val _ = start (f,initial,evinitial,50.0)
 

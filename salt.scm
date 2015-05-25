@@ -374,7 +374,8 @@
   (cond ((left-var? x) `(signal.reinit ,e ,x ,y))
         ((variable? x)  (reinit e (left-var x) y))
         ((ref-var? x)   (reinit e (left-var x) y))
-        ((derivative-variable? x)   (reinit e (left-var x) y))
+        ((derivative-variable? x)   
+         (reinit e (left-var (derivative-variable-parent x)) y))
         (else (error 'reinit "invalid argument to reinit" x))
         ))
 
@@ -439,8 +440,6 @@
           ))
   )
   
-
-;;(define (ifelse x y z)  `(signal.ifelse ,x ,y ,z))
 
 
 ;; A representation of a flattened model, normally created with
@@ -698,7 +697,7 @@
         (begin
           (make-equation-set model
                              (reverse definitions)
-                             parameters
+                             (reverse parameters)
                              equations
                              (map-equations replace-fixed initial)
                              conditions
@@ -899,15 +898,15 @@
         (else e)))
          
 
-(define (reduce-expr expr cindexmap dindexmap)
+(define (reduce-expr expr pindexmap cindexmap dindexmap)
   (d 'reduce-expr "expr = ~A~%" expr)
   (d 'reduce-expr "cindexmap = ~A~%" cindexmap)
   (match expr
 
          (($ pair-arg fst snd)
           (make-pair-arg
-           (reduce-expr fst cindexmap dindexmap)
-           (reduce-expr snd cindexmap dindexmap)))
+           (reduce-expr fst pindexmap cindexmap dindexmap)
+           (reduce-expr snd pindexmap cindexmap dindexmap)))
 
          (($ derivative-variable y)
           (let ((yindex (assv (variable-name y) cindexmap)))
@@ -917,7 +916,11 @@
             ))
          
          (($ left-var y)
-          (reduce-expr y cindexmap dindexmap))
+          (let ((yindex (assv (variable-name y) cindexmap)))
+            (if (not yindex)
+                (error 'reduce-expr "variable not in index" y)
+                `(getindex y ,(cdr yindex)))
+            ))
          
          (($ variable name label value has-history)
           (let ((yindex (assv name cindexmap)))
@@ -929,7 +932,7 @@
             ))
 
          (($ parameter name label value)
-          (let ((yindex (assv name cindexmap)))
+          (let ((yindex (assv name pindexmap)))
             (if (not yindex)
                 (error 'reduce-expr "parameter not in index" name)
                 `(getindex p ,(cdr yindex)))
@@ -938,56 +941,62 @@
          (('signal.let lbnds body)
           (subst-expr
            `(signal.let 
-             ,(map (lambda (lb) (cons (car lb) (reduce-expr (cdr lb) cindexmap dindexmap))) lbnds)
-             ,(reduce-expr body cindexmap dindexmap))
+             ,(map (lambda (lb) (cons (car lb) (reduce-expr (cdr lb) pindexmap cindexmap dindexmap))) lbnds)
+             ,(reduce-expr body pindexmap cindexmap dindexmap))
            empty-env-stack))
 
          (('signal.call f args)
           (subst-expr 
-           `(signal.call ,f ,(reduce-expr args cindexmap dindexmap))
+           `(signal.call ,f ,(reduce-expr args pindexmap cindexmap dindexmap))
            empty-env-stack))
 
          (('signal.reinit e x y)
           (let ((eindex (assv e dindexmap)))
             (subst-expr 
              `(signal.reinit (getindex c ,(cdr eindex))
-                             ,(reduce-expr x cindexmap dindexmap) 
-                             ,(reduce-expr y cindexmap dindexmap))
+                             ,(reduce-expr x pindexmap cindexmap dindexmap) 
+                             ,(reduce-expr y pindexmap cindexmap dindexmap))
              empty-env-stack)))
 
          ((op . args)
           (subst-expr
-           (cons op (map (lambda (x) (reduce-expr x cindexmap dindexmap)) args))
+           (cons op (map (lambda (x) (reduce-expr x pindexmap cindexmap dindexmap)) args))
            empty-env-stack))
 
          (else expr)
          ))
 
 
-(define (reduce-eq eq cindexmap dindexmap)
+(define (reduce-eq eq pindexmap cindexmap dindexmap)
 
   (match eq
          ((($ derivative-variable y) rhs)
           (let ((yindex (assv (variable-name y) cindexmap)))
             (if (not yindex)
                 (error 'reduce-eq "variable not in index" y)
-                `(setindex dy ,(cdr yindex) ,(reduce-expr rhs cindexmap dindexmap)))
+                `(setindex dy ,(cdr yindex) ,(reduce-expr rhs pindexmap cindexmap dindexmap)))
             ))
          
          ((($ variable name label value has-history) rhs)
           (let ((yindex (assv name cindexmap)))
             (if (not yindex)
                 (error 'reduce-eq "variable not in index" name)
-                `(setindex y ,(cdr yindex) ,(reduce-expr rhs cindexmap dindexmap)))
+                `(setindex y ,(cdr yindex) ,(reduce-expr rhs pindexmap cindexmap dindexmap)))
             ))
 
          (($ evcondition name expr)
           (let ((cindex (assv name dindexmap)))
-            `(setindex c ,(cdr cindex) ,(reduce-expr expr cindexmap dindexmap))))
+            `(setindex c ,(cdr cindex) ,(reduce-expr expr pindexmap cindexmap dindexmap))))
          
          (($ evresponse name expr)
-          (let ((cindex (assv name dindexmap)))
-            (reduce-expr expr cindexmap dindexmap)))
+          (let* ((y (match expr
+                           (('signal.reinit e ($ left-var u) yindex . rest) u)
+                           (error 'reduce-eq "unknown event response equation" eq)))
+                 (yindex (assv (variable-name y) cindexmap)))
+            (if (not yindex)
+                (error 'reduce-eq "variable not in index" y)
+                `(setindex y ,(cdr yindex) ,(reduce-expr expr pindexmap cindexmap dindexmap)))
+            ))
          
          (else eq)))
           
@@ -1005,9 +1014,27 @@
                        (index     0))
              (if (null? nodemap)
                  indexmap
-                 (recur (cdr nodemap)
-                        (cons (cons (car (car nodemap)) index) indexmap)
-                        (+ 1 index)))
+                 (let ((node (car nodemap)))
+                   (if (variable? (cdr node))
+                       (recur (cdr nodemap)
+                              (cons (cons (car node) index) indexmap)
+                              (+ 1 index))
+                       (recur (cdr nodemap) indexmap index))))
+             ))
+          
+
+         (pindexmap 
+           (let recur ((nodemap nodemap)
+                       (indexmap  '())
+                       (index     0))
+             (if (null? nodemap)
+                 indexmap
+                 (let ((node (car nodemap)))
+                   (if (parameter? (cdr node))
+                       (recur (cdr nodemap)
+                              (cons (cons (car node) index) indexmap)
+                              (+ 1 index))
+                       (recur (cdr nodemap) indexmap index))))
              ))
           
          (dindexmap 
@@ -1022,27 +1049,27 @@
              ))
 
          (param-block 
-          (map (lambda (x) (reduce-expr (cdr x) cindexmap dindexmap))
+          (map (lambda (x) (reduce-expr (cdr x) pindexmap cindexmap dindexmap))
                (equation-set-parameters eqset)))
 
          (init-block 
-          (map (lambda (x) (reduce-expr (cdr x) cindexmap dindexmap))
+          (map (lambda (x) (reduce-expr (cdr x) pindexmap cindexmap dindexmap))
                (equation-set-definitions eqset)))
 
          (eq-block
-          (map (lambda (x) (reduce-eq x cindexmap dindexmap)) 
+          (map (lambda (x) (reduce-eq x pindexmap cindexmap dindexmap)) 
                (equation-set-equations eqset)))
          
          (cond-block
-          (map (lambda (c) (reduce-eq c cindexmap dindexmap))
+          (map (lambda (c) (reduce-eq c pindexmap cindexmap dindexmap))
                (equation-set-conditions eqset)))
 
          (pos-responses 
-          (map (lambda (x) (reduce-eq x cindexmap dindexmap))
+          (map (lambda (x) (reduce-eq x pindexmap cindexmap dindexmap))
                (equation-set-pos-responses eqset)))
 
          (neg-responses 
-          (map (lambda (x) (reduce-eq x cindexmap dindexmap))
+          (map (lambda (x) (reduce-eq x pindexmap cindexmap dindexmap))
                (equation-set-neg-responses eqset)))
 
          )
