@@ -225,7 +225,7 @@
 		 (t     (if x
 			    (begin (stack-push! is (cdr p))
 				   (match x
-					  ((or '< '> '>= '<= '^ '+ '- '* '/ '= )      x)
+					  ((or '== '< '> '>= '<= '^ '+ '- '* '/ '= )      x)
 					  ('?           (tok loc QUESTION))
 					  (':           (tok loc COLON))
 					  ('~           (tok loc COMMA))
@@ -571,6 +571,26 @@
       (salt:error 'parse-equation "Not a valid equation: " args)))
 
 
+(define (parse-reinit env asgn)
+  (match asgn 
+         ((pattern ':= . rhs)
+          `(reinit ,(parse-variable env pattern)
+                   ,(parse-expression env (parse-sym-infix-expr rhs))))
+         (else
+          (salt:error 'parse-reinit "Not a valid reinit: " asgn))
+         ))
+
+(define (parse-event env args)
+  (if (pair? args)
+      (let ((condition (parse-expression env (parse-sym-infix-expr (car args))))
+            (pos-asgns (cadr args))
+            (neg-asgns (if (list-of-2? args) '() (caddr args))))
+        (let ((pos-asgns1 (map (lambda (x) (parse-reinit env x)) pos-asgns))
+              (neg-asgns1 (map (lambda (x) (parse-reinit env x)) neg-asgns)))
+          (make-event (gensym 'e) condition pos-asgns1 neg-asgns1)))
+      (salt:error 'parse-event "Not a valid event: " args)))
+
+
 (define (parse-declaration env c)
   (d 'parse-declaration "c = ~A~%" c)
   (if (pair? c)
@@ -580,5 +600,6 @@
         (case op
          ((function) (parse-function env args))
          ((define)   (parse-definition env args))
+         ((event)    (parse-event env args))
          (else (parse-equation env c))))
       (parse-equation env c)))

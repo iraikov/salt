@@ -22,7 +22,7 @@
 (define-datatype value value?
   (V:C       (v (lambda (x) (or (symbol? x) (number? x) ))))
   (V:Var     (name symbol?))
-  (V:Sub     (index (lambda (x) (and (integer? x) (or (zero? x) (positive? x))))) (v value?))
+  (V:Sub (index (lambda (x) (and (integer? x) (or (zero? x) (positive? x))))) (v value?))
   (V:Vec     (vals (lambda (x) (every value? x))))
   (V:Fn      (args list?) (body stmt?))
   (V:Op      (name symbol?)  (args (lambda (x) (every value? x))))
@@ -78,6 +78,39 @@
 
 (define (codegen sim)
 
+  (define (update-bucket k v alst)
+    (let recur ((alst alst)
+                (res  '()))
+      (cond ((null? alst)
+             (cons (list k v) res))
+            ((equal? k (car (car alst)))
+             (append (cons (cons k (cons v (cdr (car alst)))) res)
+                     (cdr alst)))
+            (else
+             (recur (cdr alst) (cons (car alst) res)))
+            ))
+    )
+
+
+  (define (bucket f lst)
+    (let recur ((lst lst)
+                (res '()))
+      (if (null? lst) res
+          (let ((k (f (car lst))))
+            (recur (cdr lst) (update-bucket k (car lst) res)))
+          ))
+      )
+
+
+  (define (fold-reinits lst)
+    (let recur ((lst (cdr lst)) (expr (car lst)))
+      (if (null? lst) expr
+          (match (car lst)
+                 (('signal.reinit ev ('getindex 'y index) rhs)
+                  (recur (cdr lst) `(signal.reinit ,ev ,expr ,rhs)))
+                 (else (error 'fold-reinits "unknown reinit equation" (car lst)))))
+      ))
+
   (define (codegen-expr expr)
     (match expr
            ((? symbol?)
@@ -88,12 +121,22 @@
             (V:Sub index (codegen-expr vect)))
            (($ constant 'number val)
             (V:C val))
+           (('signal.if test ift iff)
+            (V:Ifv (codegen-expr test)
+                   (codegen-expr ift)
+                   (codegen-expr iff)))
+           (('signal.reinit test dflt upd)
+            (V:Ifv (V:Op 'signal.eqnum (list (codegen-expr test) (V:C 0.0)))
+                   (codegen-expr upd)
+                   (codegen-expr dflt)))
            (else expr)))
 
 
   (let (
-        (indexmap (simruntime-indexmap sim))
+        (cindexmap (simruntime-cindexmap sim))
+        (dindexmap (simruntime-dindexmap sim))
         (defs (simruntime-definitions sim))
+        (params (simruntime-parameters sim))
         (eqblock (let ((sorted-eqs 
                         (sort (simruntime-eqblock sim) 
                               (match-lambda*
@@ -104,16 +147,49 @@
                                       [eq (error 'codegen "unknown equation type" eq)]
                                       ) 
                         sorted-eqs)))
+        (condblock (let ((sorted-eqs 
+                          (sort (simruntime-condblock sim) 
+                                (match-lambda*
+                                 [(('setindex vect1 index1 val1) 
+                                   ('setindex vect2 index2 val2)) 
+                                  (< index1 index2)]))))
+                   (map (match-lambda [('setindex vect index val) val]
+                                      [eq (error 'codegen "unknown equation type" eq)]
+                                      ) 
+                        sorted-eqs)))
+
+        (posblocks (let (
+                         (bucket-eqs 
+                          (bucket 
+                           (match-lambda*
+                            [((and eq ('signal.reinit ev ('getindex 'y index) rhs)))
+                             index])
+                           (simruntime-posresp sim))))
+                     (map (lambda (x) (cons (car x) (fold-reinits (cdr x)))) bucket-eqs)
+                     ))
+        (negblocks (let ((bucket-eqs 
+                          (bucket 
+                           (match-lambda*
+                            [((and eq ('signal.reinit ev ('getindex 'y index) rhs)))
+                             index])
+                           (simruntime-negresp sim))))
+                     (map (lambda (x) (cons (car x) (fold-reinits (cdr x)))) bucket-eqs)
+                     ))
         )
     
     (let (
-          (initfun (V:Fn '() (E:Ret (V:Vec (map (compose codegen-expr cdr) defs)))))
-          (eqfun   (V:Fn '(t y) (E:Ret (V:Vec (map codegen-expr eqblock)))))
+          (paramfun (V:Fn '() (E:Ret (V:Vec (map codegen-expr params)))))
+          (initfun (V:Fn '(p) (E:Ret (V:Vec (map codegen-expr defs)))))
+          (eqfun   (V:Fn '(p) (E:Ret (V:Fn '(t y) (E:Ret (V:Vec (map codegen-expr eqblock)))))))
+          (condfun (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map codegen-expr condblock)))))))
+          (posfun (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map (compose codegen-expr cdr) posblocks)))))))
+          (negfun (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map (compose codegen-expr cdr) negblocks)))))))
           )
 
-      (list initfun eqfun))
+      (list paramfun initfun eqfun condfun posfun negfun)
 
     ))
+)
 
 
 
@@ -259,7 +335,7 @@
 			      (else v)))
 	 (V:Var     (name) (name/ML name))
 	 (V:Sub     (index v) 
-		    (list "sub (" (value->ML v) ", " index ")"))
+		    (list "getindex (" (value->ML v) ", " index ")"))
 	 (V:Vec   (lst) 
 		    (let ((n (length lst)))
 		      (list "(Vector.fromList [" (intersperse (map (lambda (v) (value->ML v)) lst) ", ") "])")))
@@ -288,8 +364,12 @@
 
   (let* (
          (c (codegen sim))
-         (initfun (car c))
-         (eqfun (cadr c)) 
+         (paramfun (car c))
+         (initfun (cadr c))
+         (eqfun (caddr c)) 
+         (condfun (car (cdddr c)))
+         (posfun  (cadr (cdddr c)))
+         (negfun  (caddr (cdddr c)))
          )
     
     (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkoz rkdp))))
@@ -298,8 +378,12 @@
     (if mod (print-fragments (prelude/ML solver: solver libs: libs) out))
     
     (print-fragments
-     (list (binding->ML (B:Val 'eqfun eqfun)) nl
-           (binding->ML (B:Val 'initfun initfun)) nl)
+     (list (binding->ML (B:Val 'paramfun paramfun)) nl
+           (binding->ML (B:Val 'initfun initfun)) nl
+           (binding->ML (B:Val 'eqfun eqfun)) nl
+           (binding->ML (B:Val 'condfun condfun)) nl
+           (binding->ML (B:Val 'posfun posfun)) nl
+           (binding->ML (B:Val 'negfun negfun)) nl)
      out)
     
     (if mod (print-fragments (list nl "end" nl) out))
@@ -330,19 +414,21 @@ in
 (if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
 end
 
-val sub = Unsafe.Vector.sub
+val getindex = Unsafe.Vector.sub
 
 fun vmap2 f (v1,v2) = 
     let 
         val n = Vector.length v1
     in
-        Vector.tabulate (n, fn (i) => f (sub (v1,i), sub (v2,i)))
+        Vector.tabulate (n, fn (i) => f (getindex (v1,i), getindex (v2,i)))
     end
 
 exception EmptySignal
 
 val equal = fn (x,y) => (x = y) 
 
+val signal_eqnum = (op ==)
+val signal_neg = (op ~)
 val signal_add = (op +)
 val signal_sub = (op -)
 val signal_mul = (op *)

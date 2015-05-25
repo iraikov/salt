@@ -136,7 +136,7 @@
 
 
 (define (unknown value label)
-  (make-variable (gensym 'u) value label #t))
+  (make-variable (gensym 'u) label value #t))
 
 
 (define-record-type free-variable
@@ -331,11 +331,26 @@
 
 
 (define-record-type event
-  (make-event condition pos neg)
+  (make-event name condition pos neg)
   event?
+  (name event-name)
   (condition event-condition)
   (pos event-pos)
   (neg event-neg))
+
+
+(define-record-type evcondition
+  (make-evcondition name expr)
+  evcondition?
+  (name evcondition-name)
+  (expr evcondition-expr))
+
+
+(define-record-type evresponse
+  (make-evresponse name expr)
+  evresponse?
+  (name evresponse-name)
+  (expr evresponse-expr))
 
 
 (define-record-type structural-event
@@ -355,19 +370,14 @@
         (else x)))
 
 
-(define (reinit x y)
-  (cond ((left-var? x) `(variable.reinit ,x ,y))
-        ((variable? x)  (reinit (left-var x) y))
-        ((ref-var? x)   (reinit (left-var x) y))
-        ((derivative-variable? x)   (reinit (left-var x) y))
+(define (reinit e x y)
+  (cond ((left-var? x) `(signal.reinit ,e ,x ,y))
+        ((variable? x)  (reinit e (left-var x) y))
+        ((ref-var? x)   (reinit e (left-var x) y))
+        ((derivative-variable? x)   (reinit e (left-var x) y))
         (else (error 'reinit "invalid argument to reinit" x))
         ))
 
-
-(define (ev condition p . rest)
-  (if (null? rest)
-      (make-event condition p '())
-      (make-event condition p (car rest))))
 
 (define math-constant-env
   (fold (lambda (k v env)
@@ -387,8 +397,8 @@
      
 
 (define math-binop-env
-  (let ((function-names `(+ - * / pow max min))
-        (op-names `(signal.add signal.sub signal.mul signal.div signal.pow signal.max signal.min)))
+  (let ((function-names `(+ - * / pow max min ==))
+        (op-names `(signal.add signal.sub signal.mul signal.div signal.pow signal.max signal.min signal.eqnum)))
     (fold (lambda (k v env)
             (let ((binding (gen-binding k v)))
               (extend-env-with-binding env binding)))
@@ -422,7 +432,7 @@
           (map (lambda (f fn)
                  (function (make-free-variable f)
                            (make-pair-formal (make-var-def 'a) (make-null-formal))
-                           `(signal.call ,fn (make-pair-arg (make-var-def 'a) (make-null-arg))))
+                           `(signal.call ,fn ,(make-pair-arg (make-var-def 'a) (make-null-arg))))
                  )
                function-names
                op-names)
@@ -443,14 +453,14 @@
 
 
 (define-record-type equation-set
-  (make-equation-set model definitions parameters equations initial events pos-reponses neg-responses functions nodemap)
+  (make-equation-set model definitions parameters equations initial conditions pos-responses neg-responses functions nodemap)
   equation-set?
   (model equation-set-model)
   (definitions equation-set-definitions)
   (parameters equation-set-parameters)
   (equations equation-set-equations)
   (initial equation-set-initial)
-  (events equation-set-events)
+  (conditions equation-set-conditions)
   (pos-responses equation-set-pos-responses)
   (neg-responses equation-set-neg-responses)
   (functions equation-set-functions)
@@ -459,38 +469,51 @@
 
 
 (define-record-printer (equation-set x out)
-  (fprintf out "#(equation-set: ~%    definitions = ~A~%    parameters = ~A~%    equations = ~A~%    functions = ~A~%    events = ~A~%    nodemap = ~A~%)"
-           (equation-set-definitions x)
-           (equation-set-parameters x)
-           (equation-set-equations x)
-           (equation-set-functions x)
-           (equation-set-events x)
-           (equation-set-nodemap x)
-           ))
+  (fprintf out "#")
+  (pp
+   `(equation-set
+    (definitions=,(equation-set-definitions x))    
+    (parameters=,(equation-set-parameters x))
+    (equations=,(equation-set-equations x))
+    (functions=,(equation-set-functions x))
+    (conditions=,(equation-set-conditions x))
+    (pos-responses=,(equation-set-pos-responses x))
+    (neg-responses=,(equation-set-neg-responses x))
+    (nodemap=,(equation-set-nodemap x)))))
 
 
 ;; runtime representation of a simulation object
 (define-record-type simruntime
-  (make-simruntime indexmap defs eqblock)
+  (make-simruntime cindexmap dindexmap parameters defs eqblock condblock posresp negresp)
   simruntime?
-  (indexmap simruntime-indexmap)
+  (cindexmap simruntime-cindexmap)
+  (dindexmap simruntime-dindexmap)
+  (parameters simruntime-parameters)
   (defs simruntime-definitions)
   (eqblock simruntime-eqblock)
+  (condblock simruntime-condblock)
+  (posresp simruntime-posresp)
+  (negresp simruntime-negresp)
   )
 
 
 (define-record-printer (simruntime x out)
     (fprintf out "#")
     (pp `(simruntime 
-          (indexmap=,(simruntime-indexmap x))
+          (cindexmap=,(simruntime-cindexmap x))
+          (dindexmap=,(simruntime-dindexmap x))
           (defs=,(simruntime-definitions x))
-          (eqblock=,(simruntime-eqblock x)))
+          (eqblock=,(simruntime-eqblock x))
+          (evblock=,(simruntime-condblock x))
+          (posresp=,(simruntime-posresp x))
+          (negresp=,(simruntime-negresp x))
+          )
         out)
     )
     
 
 
-(define MTime (unknown 't (constant 'number 0.0)))
+(define MTime (unknown (constant 'number 0.0) 't))
 
 
 (define (map-equations f eqs)
@@ -544,15 +567,15 @@
 
     (cond
      
-     ((derivative-variable? e)
-      (make-derivative-variable (resolve (derivative-variable-parent e) env-stack)))
-
      ((free-variable? e)
       (let ((assoc-var-def (env-stack-lookup (free-variable-name e) env-stack)))
         (d 'resolve "free-var: e = ~A assoc-var-def = ~A~%" (free-variable-name e) assoc-var-def)
         (if assoc-var-def
             (binding-value assoc-var-def)
             e)))
+
+     ((derivative-variable? e)
+      (make-derivative-variable (resolve (derivative-variable-parent e) env-stack)))
 
      ((pair-arg? e)
       (make-pair-arg (recur (pair-arg-fst e))
@@ -571,6 +594,31 @@
                                ,(recur (cadr args))))
           ((signal.call) `(,op . ,(map recur args)))
           (else   (map recur e)))))
+
+     (else e)
+
+     ))
+  )
+
+;; Resolution of reinit expressions
+(define (resolve-reinit evname expr)
+
+  (d 'resolve-reinit "expr: ~A~%" expr)
+
+  (let recur ((e expr))
+
+    (d 'resolve-reinit "e: ~A~%" e)
+
+    (cond
+
+     ((pair? e)
+      (let ((op (car e)) (args (cdr e)))
+        (d 'resolve "op = ~A~%" op)
+        (d 'resolve "args = ~A~%" args)
+        (case op
+          ((reinit)   (reinit evname (car args) (cadr args)))
+          (else       e))
+        ))
 
      (else e)
 
@@ -607,13 +655,13 @@
                 (recur (append decl (cdr decls)) env)
                 
                 (match decl  
-                       (($ variable name value label has-history)
+                       (($ variable name label value has-history)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
-                       (($ parameter name value )
+                       (($ parameter name label value )
                         (recur (cdr decls)
-                               (extend-env-with-binding env (gen-binding name decl))
+                               (extend-env-with-binding env (gen-binding label decl))
                                ))
                        (($ function name formals expr)
                         (recur (cdr decls)
@@ -635,7 +683,7 @@
               (parameters     '())
               (equations      '())
               (initial        '())
-              (events         '())
+              (conditions     '())
               (pos-responses  '())
               (neg-responses  '())
               (functions      '())
@@ -647,19 +695,20 @@
               )
       
     (if (null? entries)
-        
-        (make-equation-set model
-                           (reverse definitions)
-                           parameters
-                           equations
-                           (map-equations replace-fixed initial)
-                           events
-                           pos-responses
-                           neg-responses
-                           functions
-                           (reverse nodemap)
-                           )
-          
+        (begin
+          (make-equation-set model
+                             (reverse definitions)
+                             parameters
+                             equations
+                             (map-equations replace-fixed initial)
+                             conditions
+                             pos-responses
+                             neg-responses
+                             functions
+                             (reverse nodemap)
+                             )
+          )
+
         (let ((en (car entries)))
 
           (if (pair? en)
@@ -667,7 +716,7 @@
               (recur (append en (cons 'pop-node-env-stack (cdr entries)))
                      (push-env-stack (model-env en) env-stack)
                      definitions parameters equations
-                     initial events pos-responses neg-responses 
+                     initial conditions pos-responses neg-responses 
                      functions nodemap)
 
               (match en  
@@ -675,24 +724,25 @@
                      ('pop-node-env-stack
                       (recur (cdr entries) (pop-env-stack env-stack)
                              definitions parameters equations initial 
-                             events pos-responses neg-responses functions
+                             conditions pos-responses neg-responses functions
                              nodemap
                              )
                       )
 
-                     (($ variable name value label has-history)
+                     (($ variable name label value has-history)
                       (recur (cdr entries) env-stack
                              (cons (cons name (resolve value env-stack)) definitions)
-                             parameters equations initial events pos-responses 
+                             parameters equations initial conditions pos-responses 
                              neg-responses functions
                              (extend-env-with-binding nodemap (gen-binding name en))
                              )
                       )
 
-                     (($ parameter name value )
+                     (($ parameter name label value )
                       (recur (cdr entries) env-stack
-                             definitions (cons (cons name (resolve value env-stack)) parameters) 
-                             equations initial events pos-responses neg-responses 
+                             definitions 
+                             (cons (cons name (resolve value env-stack)) parameters) 
+                             equations initial conditions pos-responses neg-responses 
                              functions
                              (extend-env-with-binding nodemap (gen-binding name en))
                              )
@@ -703,14 +753,15 @@
                       (recur (cdr entries) env-stack
                              definitions parameters
                              (cons (list (resolve s env-stack) (resolve expr env-stack)) equations)
-                             initial events pos-responses neg-responses 
+                             initial conditions pos-responses neg-responses 
                              functions nodemap
                              )
                       )
                      (($ initial-equation s expr)
                       (recur (cdr entries) env-stack
                              definitions parameters
-                             equations (cons (cons s (resolve expr env-stack)) initial) events pos-responses neg-responses 
+                             equations (cons (cons s (resolve expr env-stack)) initial) 
+                             conditions pos-responses neg-responses 
                              functions nodemap
                              )
                       )
@@ -718,25 +769,27 @@
                       (recur (cdr entries) env-stack
                              definitions parameters
                              equations initial
-                             (cons (resolve left-condition env-stack) (cons (resolve right-condition env-stack) events) )
+                             (cons (resolve left-condition env-stack) (cons (resolve right-condition env-stack) conditions) )
                              pos-responses 
                              neg-responses
                              functions nodemap
                              ;; TODO: generate equations for new regimes
                              ))
-                     (($ event condition pos neg)
+                     (($ event name condition pos neg)
                       (recur (cdr entries) env-stack
                              definitions parameters
                              equations initial 
-                             (cons (resolve condition env-stack) events) 
-                             (cons (resolve pos env-stack) pos-responses)
-                             (or (and neg (cons (resolve neg env-stack) neg-responses)) neg-responses)
+                             (cons (make-evcondition name (resolve condition env-stack)) conditions) 
+                             (append (map (lambda (x) (make-evresponse name (resolve-reinit name (resolve x env-stack)))) pos) pos-responses)
+                             (or (and neg (append (map (lambda (x) (make-evresponse name (resolve-reinit name (resolve x env-stack)))) neg)
+                                                  neg-responses))
+                                 neg-responses)
                              functions nodemap
                              ))
                      (($ function name formals expr)
                       (recur (cdr entries) env-stack
                              definitions parameters
-                             equations initial events pos-responses neg-responses 
+                             equations initial conditions pos-responses neg-responses 
                              (cons (list name formals (resolve expr env-stack)) functions)
                              nodemap
                              ))
@@ -777,6 +830,9 @@
 (define (subst-if args env-stack)
   (map (lambda (x) (subst-expr x env-stack)) args))
 
+(define (subst-reinit args env-stack)
+  (cons (car args) (map (lambda (x) (subst-expr x env-stack)) (cdr args))))
+
 (define (subst-cond args env-stack)
   (map (lambda (x) (subst-expr x env-stack)) args))
 
@@ -800,6 +856,7 @@
          (($ null-arg)
           (list))))
 
+
 (define (subst-function-call f arg env-stack)
   (d 'subst-function-call "f = ~A arg=~A~%" f arg)
   (if (symbol? f)
@@ -819,43 +876,51 @@
          (let ((op (car e)) (args (cdr e)))
            (d 'subst-expr "op = ~A args = ~A~%" op args)
            (case op
-             ((signal.if)    (cons 'signal.if (subst-if args env-stack)))
-             ((signal.cond)  (cons 'signal.cond (subst-cond args env-stack)))
-             ((signal.and)   (cons 'signal.and (subst-and args env-stack)))
-             ((signal.or)    (cons 'signal.or (subst-or args env-stack)))
-             ((signal.let)   (cons 'signal.let (subst-let args env-stack)))
+             ((signal.reinit) (cons 'signal.reinit (subst-reinit args env-stack)))
+             ((signal.if)     (cons 'signal.if (subst-if args env-stack)))
+             ((signal.cond)   (cons 'signal.cond (subst-cond args env-stack)))
+             ((signal.and)    (cons 'signal.and (subst-and args env-stack)))
+             ((signal.or)     (cons 'signal.or (subst-or args env-stack)))
+             ((signal.let)    (cons 'signal.let (subst-let args env-stack)))
              ((signal.call)  
               (let ((f (car args))
                     (fargs (cadr args)))
                 (d 'subst-expr "f = ~A fargs = ~A~%" f args)
                 (subst-function-call f fargs env-stack)
                 ))
+             (else e)
              )))
         ((var-def? e)
          (subst-symbol (var-def-sym e) env-stack))
         ((free-variable? e)
          (subst-symbol (free-variable-name e) env-stack))
+        ((left-var? e)
+         (subst-expr (left-var-u e) env-stack))
         (else e)))
          
 
-(define (reduce-expr expr indexmap)
+(define (reduce-expr expr cindexmap dindexmap)
   (d 'reduce-expr "expr = ~A~%" expr)
+  (d 'reduce-expr "cindexmap = ~A~%" cindexmap)
   (match expr
 
          (($ pair-arg fst snd)
           (make-pair-arg
-           (reduce-expr fst indexmap)
-           (reduce-expr snd indexmap)))
+           (reduce-expr fst cindexmap dindexmap)
+           (reduce-expr snd cindexmap dindexmap)))
 
          (($ derivative-variable y)
-          (let ((yindex (assv (variable-name y) indexmap)))
+          (let ((yindex (assv (variable-name y) cindexmap)))
             (if (not yindex)
                 (error 'reduce-expr "variable not in index" y)
                 `(getindex dy ,(cdr yindex)))
             ))
          
-         (($ variable name value label has-history)
-          (let ((yindex (assv name indexmap)))
+         (($ left-var y)
+          (reduce-expr y cindexmap dindexmap))
+         
+         (($ variable name label value has-history)
+          (let ((yindex (assv name cindexmap)))
             (if (not yindex)
                 (if (equal? name (variable-name MTime))
                     label
@@ -863,44 +928,66 @@
                 `(getindex y ,(cdr yindex)))
             ))
 
+         (($ parameter name label value)
+          (let ((yindex (assv name cindexmap)))
+            (if (not yindex)
+                (error 'reduce-expr "parameter not in index" name)
+                `(getindex p ,(cdr yindex)))
+            ))
+
          (('signal.let lbnds body)
           (subst-expr
            `(signal.let 
-             ,(map (lambda (lb) (cons (car lb) (reduce-expr (cdr lb) indexmap))) lbnds)
-             ,(reduce-expr body indexmap))
+             ,(map (lambda (lb) (cons (car lb) (reduce-expr (cdr lb) cindexmap dindexmap))) lbnds)
+             ,(reduce-expr body cindexmap dindexmap))
            empty-env-stack))
 
          (('signal.call f args)
           (subst-expr 
-           `(signal.call ,f ,(reduce-expr args indexmap))
+           `(signal.call ,f ,(reduce-expr args cindexmap dindexmap))
            empty-env-stack))
+
+         (('signal.reinit e x y)
+          (let ((eindex (assv e dindexmap)))
+            (subst-expr 
+             `(signal.reinit (getindex c ,(cdr eindex))
+                             ,(reduce-expr x cindexmap dindexmap) 
+                             ,(reduce-expr y cindexmap dindexmap))
+             empty-env-stack)))
 
          ((op . args)
           (subst-expr
-           (cons op (map (lambda (x) (reduce-expr x indexmap)) args))
+           (cons op (map (lambda (x) (reduce-expr x cindexmap dindexmap)) args))
            empty-env-stack))
 
          (else expr)
          ))
 
 
-(define (reduce-eq eq indexmap)
+(define (reduce-eq eq cindexmap dindexmap)
 
   (match eq
-
          ((($ derivative-variable y) rhs)
-          (let ((yindex (assv (variable-name y) indexmap)))
+          (let ((yindex (assv (variable-name y) cindexmap)))
             (if (not yindex)
                 (error 'reduce-eq "variable not in index" y)
-                `(setindex dy ,(cdr yindex) ,(reduce-expr rhs indexmap)))
+                `(setindex dy ,(cdr yindex) ,(reduce-expr rhs cindexmap dindexmap)))
             ))
          
-         ((($ variable name value label has-history) rhs)
-          (let ((yindex (assv name indexmap)))
+         ((($ variable name label value has-history) rhs)
+          (let ((yindex (assv name cindexmap)))
             (if (not yindex)
                 (error 'reduce-eq "variable not in index" name)
-                `(setindex y ,(cdr yindex) ,(reduce-expr rhs indexmap)))
+                `(setindex y ,(cdr yindex) ,(reduce-expr rhs cindexmap dindexmap)))
             ))
+
+         (($ evcondition name expr)
+          (let ((cindex (assv name dindexmap)))
+            `(setindex c ,(cdr cindex) ,(reduce-expr expr cindexmap dindexmap))))
+         
+         (($ evresponse name expr)
+          (let ((cindex (assv name dindexmap)))
+            (reduce-expr expr cindexmap dindexmap)))
          
          (else eq)))
           
@@ -908,9 +995,11 @@
 
 (define (simcreate eqset)
 
-  (let* ((nodemap (equation-set-nodemap eqset))
 
-         (indexmap 
+  (let* ((nodemap (equation-set-nodemap eqset))
+         (conditions (equation-set-conditions eqset))
+
+         (cindexmap 
            (let recur ((nodemap nodemap)
                        (indexmap  '())
                        (index     0))
@@ -921,15 +1010,51 @@
                         (+ 1 index)))
              ))
           
+         (dindexmap 
+           (let recur ((conditions conditions)
+                       (indexmap  '())
+                       (index     0))
+             (if (null? conditions)
+                 indexmap
+                 (recur (cdr conditions)
+                        (cons (cons (evcondition-name (car conditions)) index) indexmap)
+                        (+ 1 index)))
+             ))
+
+         (param-block 
+          (map (lambda (x) (reduce-expr (cdr x) cindexmap dindexmap))
+               (equation-set-parameters eqset)))
+
+         (init-block 
+          (map (lambda (x) (reduce-expr (cdr x) cindexmap dindexmap))
+               (equation-set-definitions eqset)))
+
          (eq-block
-          (map (lambda (x) (reduce-eq x indexmap)) (equation-set-equations eqset)))
+          (map (lambda (x) (reduce-eq x cindexmap dindexmap)) 
+               (equation-set-equations eqset)))
          
+         (cond-block
+          (map (lambda (c) (reduce-eq c cindexmap dindexmap))
+               (equation-set-conditions eqset)))
+
+         (pos-responses 
+          (map (lambda (x) (reduce-eq x cindexmap dindexmap))
+               (equation-set-pos-responses eqset)))
+
+         (neg-responses 
+          (map (lambda (x) (reduce-eq x cindexmap dindexmap))
+               (equation-set-neg-responses eqset)))
+
          )
 
     (make-simruntime 
-     indexmap
-     (equation-set-definitions eqset)
-     eq-block)
+     cindexmap dindexmap
+     param-block
+     init-block
+     eq-block
+     cond-block
+     pos-responses
+     neg-responses)
 
     )
   )
