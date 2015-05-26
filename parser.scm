@@ -400,10 +400,9 @@
                      (make-free-variable x)))))
              (((and x (? symbol?)))
               (let ((assoc-var-def (env-lookup x env)))
-                (make-derivative-variable
-                 (if assoc-var-def
-                     (binding-value assoc-var-def)
-                     (make-free-variable x)))))
+                (if assoc-var-def
+                    (binding-value assoc-var-def)
+                    (make-free-variable x))))
              (else (salt:error 'parse-variable "Not an identifier: " e)))
       ))
 

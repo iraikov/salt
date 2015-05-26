@@ -46,7 +46,7 @@
         
 	(require-extension matchable datatype lalr-driver mathh)
 	(require-library data-structures extras srfi-1 srfi-13)
-	(import (only srfi-1 first second zip fold fold-right every)
+	(import (only srfi-1 first second zip fold fold-right filter filter-map every)
                 (only srfi-13 string-null? string-concatenate string<)
 		(only data-structures ->string alist-ref conc intersperse compose sort)
                 (only extras pp fprintf)
@@ -483,15 +483,15 @@
 
 ;; runtime representation of a simulation object
 (define-record-type simruntime
-  (make-simruntime eqset cindexmap dindexmap parameters defs derivblock asgnblock condblock posresp negresp)
+  (make-simruntime eqset cindexmap dindexmap parameters defs eqblock assignments condblock posresp negresp)
   simruntime?
   (eqset simruntime-eqset)
   (cindexmap simruntime-cindexmap)
   (dindexmap simruntime-dindexmap)
   (parameters simruntime-parameters)
   (defs simruntime-definitions)
-  (derivblock simruntime-derivblock)
-  (asgnblock simruntime-asgnblock)
+  (eqblock simruntime-eqblock)
+  (assignments simruntime-assignments)
   (condblock simruntime-condblock)
   (posresp simruntime-posresp)
   (negresp simruntime-negresp)
@@ -505,8 +505,8 @@
           (dindexmap=,(simruntime-dindexmap x))
           (parameters=,(simruntime-parameters x))
           (defs=,(simruntime-definitions x))
-          (derivblock=,(simruntime-derivblock x))
-          (asgnblock=,(simruntime-asgnblock x))
+          (eqblock=,(simruntime-eqblock x))
+          (assignments=,(simruntime-assignments x))
           (evblock=,(simruntime-condblock x))
           (posresp=,(simruntime-posresp x))
           (negresp=,(simruntime-negresp x))
@@ -702,11 +702,11 @@
           (make-equation-set model
                              (reverse definitions)
                              (reverse parameters)
-                             equations
+                             (reverse equations)
                              (map-equations replace-fixed initial)
-                             conditions
-                             pos-responses
-                             neg-responses
+                             (reverse conditions)
+                             (reverse pos-responses)
+                             (reverse neg-responses)
                              functions
                              (reverse nodemap)
                              )
@@ -1046,6 +1046,16 @@
 (define (simcreate eqset)
 
 
+  (define (ode? eq)
+    (match eq
+           ((($ derivative-variable y) rhs) #t)
+           (else #f)))
+
+  (define (asgn? eq)
+    (match eq
+           ((($ variable name label value has-history) rhs) #t)
+           (else #f)))
+
   (let* ((nodemap (equation-set-nodemap eqset))
          (conditions (equation-set-conditions eqset))
 
@@ -1089,6 +1099,8 @@
                         (+ 1 index)))
              ))
 
+         (asgns (filter asgn? (equation-set-definitions eqset)))
+
          (param-block 
           (map (lambda (x) (reduce-constant-expr (cdr x) pindexmap cindexmap dindexmap))
                (equation-set-parameters eqset)))
@@ -1097,13 +1109,9 @@
           (map (lambda (x) (reduce-expr (cdr x) pindexmap cindexmap dindexmap))
                (equation-set-definitions eqset)))
 
-         (deriv-block
+         (eq-block
           (map (lambda (x) (reduce-eq x pindexmap cindexmap dindexmap)) 
-               (filter ode? (equation-set-equations eqset))))
-         
-         (asgn-block
-          (map (lambda (x) (reduce-eq x pindexmap cindexmap dindexmap)) 
-               (filter asgn? (equation-set-equations eqset))))
+               (equation-set-equations eqset)))
          
          (cond-block
           (map (lambda (c) (reduce-eq c pindexmap cindexmap dindexmap))
@@ -1121,11 +1129,10 @@
 
     (make-simruntime 
      eqset
-     cindexmap dindexmap
+     cindexmap dindexmap 
      param-block
      init-block
-     deriv-block
-     asgn-block
+     eq-block asgns
      cond-block
      pos-responses
      neg-responses)
