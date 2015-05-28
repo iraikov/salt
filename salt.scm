@@ -46,7 +46,7 @@
         
 	(require-extension matchable datatype lalr-driver mathh)
 	(require-library data-structures extras srfi-1 srfi-13)
-	(import (only srfi-1 first second zip fold fold-right filter filter-map every)
+	(import (only srfi-1 first second zip fold fold-right filter filter-map list-tabulate every)
                 (only srfi-13 string-null? string-concatenate string<)
 		(only data-structures ->string alist-ref conc intersperse compose sort)
                 (only extras pp fprintf)

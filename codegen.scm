@@ -111,42 +111,70 @@
                  (else (error 'fold-reinits "unknown reinit equation" (car lst)))))
       ))
 
-  (define (codegen-expr expr)
-    (match expr
-           ((? symbol?)
-            (V:Var expr))
-           (('signal.primop op . args)
-            (V:Op op (map codegen-expr args)))
-           (('getindex vect index)
-            (V:Sub (codegen-expr vect) index))
-           (($ constant 'number val)
-            (V:C val))
-           (('signal.if test ift iff)
-            (V:Ifv (codegen-expr test)
-                   (codegen-expr ift)
-                   (codegen-expr iff)))
-           (('signal.reinit test dflt upd)
-            (V:Ifv (V:Op 'signal.gte (list (codegen-expr test) (V:C 0.0)))
-                   (codegen-expr upd)
-                   (codegen-expr dflt)))
-           (else expr)))
+
+  (define (fold-reinit-blocks ode-inds blocks)
+    (sort
+     (filter-map
+      (lambda (x) 
+        (let ((reinits 
+               (filter-map 
+                (match-lambda
+                 [('setindex vect index val) (and (vector-ref ode-inds index) val)])
+                (cdr x))))
+          (and (pair? reinits) (cons (car x) (fold-reinits reinits)))))
+      blocks)
+     (lambda (x y) (< (car x) (car y))))
+    )
+    
+
+  (define (ode-def? cindexmap ode-inds)
+    (lambda (def)
+      (let* ((name (car def))
+             (index (cdr (assv name cindexmap))))
+        (vector-ref ode-inds index))
+      ))
+        
+
+  (define (codegen-expr ode-inds rindexmap)
+    (lambda (expr)
+      (let recur ((expr expr))
+        (match expr
+               ((? symbol?)
+                (V:Var expr))
+               (('signal.primop op . args)
+                (V:Op op (map recur args)))
+               (('getindex vect index)
+                (case vect
+                  ((y)
+                   (if (vector-ref ode-inds index)
+                       (V:Sub (recur vect) index)
+                       (V:Var (cdr (assv index rindexmap)))))
+                  (else (V:Sub (recur vect) index))))
+               (($ constant 'number val)
+                (V:C val))
+               (('signal.if test ift iff)
+                (V:Ifv (recur test)
+                       (recur ift)
+                       (recur iff)))
+               (('signal.reinit test dflt upd)
+                (V:Ifv (V:Op 'signal.gte 
+                             (list (recur test) (V:C 0.0)))
+                       (recur upd)
+                       (recur dflt)))
+               (else expr))
+        )))
 
 
   (let (
         (cindexmap (simruntime-cindexmap sim))
         (dindexmap (simruntime-dindexmap sim))
-        (defs (simruntime-definitions sim))
-        (params (simruntime-parameters sim))
-        (eqblock (let ((sorted-eqs 
-                           (sort (simruntime-eqblock sim) 
-                                 (match-lambda*
-                                        [(('setindex vect1 index1 val1) 
-                                              ('setindex vect2 index2 val2)) 
-                                             (< index1 index2)]))))
-                             (map (match-lambda [('setindex vect index val) val]
-                                                [eq (error 'codegen "unknown equation type" eq)]
-                                                ) 
-                                  sorted-eqs)))
+        (defs      (simruntime-definitions sim))
+        (params    (simruntime-parameters sim))
+        (eqblock   (sort (simruntime-eqblock sim) 
+                         (match-lambda*
+                          [(('setindex vect1 index1 val1) 
+                            ('setindex vect2 index2 val2)) 
+                           (< index1 index2)])))
         (condblock (let ((sorted-eqs 
                           (sort (simruntime-condblock sim) 
                                 (match-lambda*
@@ -164,13 +192,7 @@
                             [((and eq ('setindex 'y index ('signal.reinit ev y rhs))))
                              index])
                            (simruntime-posresp sim))))
-                     (sort
-                      (map (lambda (x) 
-                             (let ((reinits (map (match-lambda [('setindex vect index val) val]) (cdr x))))
-                               (cons (car x) (fold-reinits reinits))))
-                           bucket-eqs)
-                      (lambda (x y) (< (car x) (car y))))
-                     ))
+                     bucket-eqs))
 
         (negblocks (let ((bucket-eqs 
                           (bucket 
@@ -178,35 +200,85 @@
                             [((and eq ('setindex 'y index ('signal.reinit ev y rhs))))
                              index])
                            (simruntime-negresp sim))))
-                     (sort
-                      (map (lambda (x) 
-                            (let ((reinits (map (match-lambda [('setindex vect index val) val]) (cdr x))))
-                              (cons (car x) (fold-reinits reinits))))
-                           bucket-eqs)
-                      (lambda (x y) (< (car x) (car y))))
-                      ))
-        )
-    (let (
-          (sysinds (V:Vec (map (lambda (i) (V:C i))
-                               (filter-map (match-lambda [('setindex 'dy index val) 1] 
-                                                         [('setindex 'y index val) 0] 
-                                                         [eq (error 'codegen "unknown equation type" eq)]) 
-                                           (simruntime-eqblock sim)))))
+                     bucket-eqs))
 
-          (paramfun (V:Fn '() (E:Ret (V:Vec (map codegen-expr params)))))
-          (initfun (V:Fn '(p) (E:Ret (V:Vec (map codegen-expr defs)))))
-          (eqfun   (V:Fn '(p) (E:Ret (V:Fn '(t y) (E:Ret (V:Vec (map codegen-expr eqblock)))))))
-          (initcondfun (V:Fn '() (E:Ret (V:Vec (map (lambda (x) (V:C 'negInf)) condblock)))))
-          (condfun (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map codegen-expr condblock)))))))
-          (posfun (if (null? posblocks)
-                       (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Var 'y)))))
-                       (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map (compose codegen-expr cdr) posblocks))))))))
-          (negfun (if (null? negblocks)
-                       (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Var 'y)))))
-                       (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Vec (map (compose codegen-expr cdr) negblocks))))))))
+        )
+    (let* (
+           (rindexmap
+            (map (lambda (x) (cons (cdr x) (car x))) cindexmap))
+           (ode-inds 
+            (list->vector 
+             (map (match-lambda [('setindex 'dy index val) #t] 
+                                [('setindex 'y index val)  #f] 
+                                [eq (error 'codegen "unknown equation type" eq)]) 
+                  eqblock)))
+           (codegen-expr1 (codegen-expr ode-inds rindexmap))
+
+           (ode-defs (filter-map (lambda (index) 
+                                   (and (vector-ref ode-inds index)
+                                        (list-ref defs index))) 
+                                 (list-tabulate (vector-length ode-inds) 
+                                                (lambda (x) x))))
+           (asgn-defs (filter-map (lambda (index) 
+                                    (and (not (vector-ref ode-inds index))
+                                         (cons (cdr (assv index rindexmap))
+                                               (list-ref defs index))))
+                                  (list-tabulate (vector-length ode-inds) 
+                                                 (lambda (x) x))))
+           (asgns 
+            (filter-map
+             (match-lambda [('setindex 'dy index val) #f] 
+                           [('setindex 'y index val)  
+                            (cons (cdr (assv index rindexmap)) val)]
+                           [eq (error 'codegen "unknown equation type" eq)])
+             eqblock))
+           (odes 
+            (filter-map
+             (match-lambda [(and ode ('setindex 'dy index val)) val] 
+                           [('setindex 'y index val)  #f]
+                           [eq (error 'codegen "unknown equation type" eq)])
+             eqblock))
+
+           (paramfun 
+            (V:Fn '() (E:Ret (V:Vec (map codegen-expr1 params)))))
+           (initfun  
+            (V:Fn '(p) (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                   asgn-defs)
+                              (E:Ret (V:Vec (map codegen-expr1 ode-defs))))))
+           (odefun    
+            (V:Fn '(p) (E:Ret
+                        (V:Fn '(t y) 
+                              (E:Let (map (lambda (asgn) (B:Val (car asgn) (codegen-expr1 (cdr asgn)))) asgns)
+                                     (E:Ret (V:Vec (map codegen-expr1 odes)))))))
+            )
+           (initcondfun 
+            (V:Fn '() (E:Ret (V:Vec (map (lambda (x) (V:C 'negInf)) condblock)))))
+           (condfun     
+            (V:Fn '(p) (E:Ret (V:Fn '(t y c) 
+                                    (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                asgns)
+                                           (E:Ret (V:Vec (map codegen-expr1 condblock))))))))
+           (posfun      
+            (if (null? posblocks)
+                (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Var 'y)))))
+                (let ((blocks (fold-reinit-blocks ode-inds posblocks)))
+                  (V:Fn '(p) (E:Ret (V:Fn '(t y c) 
+                                          (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                      asgns)
+                                                 (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))
+            )
+           (negfun
+            (if (null? negblocks)
+                (V:Fn '(p) (E:Ret (V:Fn '(t y c) (E:Ret (V:Var 'y)))))
+                (let ((blocks (fold-reinit-blocks ode-inds negblocks)))
+                  (V:Fn '(p) (E:Ret (V:Fn '(t y c) 
+                                          (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                      asgns)
+                                                 (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))
+            )
           )
 
-      (list sysinds paramfun initfun eqfun initcondfun condfun posfun negfun)
+      (list paramfun initfun odefun initcondfun condfun posfun negfun)
 
     ))
 )
@@ -384,14 +456,13 @@
 
   (let* (
          (c (codegen-ODE sim))
-         (sysinds     (car c))
-         (paramfun    (cadr c))
-         (initfun     (caddr c))
-         (eqfun       (cadddr c)) 
-         (initcondfun (car (cddddr c)))
-         (condfun     (cadr (cddddr c)))
-         (posfun      (caddr (cddddr c)))
-         (negfun      (cadddr (cddddr c)))
+         (paramfun    (car c))
+         (initfun     (cadr c))
+         (odefun       (caddr c)) 
+         (initcondfun (car (cdddr c)))
+         (condfun     (cadr (cdddr c)))
+         (posfun      (caddr (cdddr c)))
+         (negfun      (cadddr (cdddr c)))
          )
     
     (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkoz rkdp))))
@@ -400,10 +471,10 @@
     (if mod (print-fragments (prelude/ML solver: solver libs: libs) out))
     
     (print-fragments
-     (list (binding->ML (B:Val 'sysinds sysinds)) nl
+     (list 
            (binding->ML (B:Val 'paramfun paramfun)) nl
            (binding->ML (B:Val 'initfun initfun)) nl
-           (binding->ML (B:Val 'eqfun eqfun)) nl
+           (binding->ML (B:Val 'odefun odefun)) nl
            (binding->ML (B:Val 'initcondfun initcondfun)) nl
            (binding->ML (B:Val 'condfun condfun)) nl
            (binding->ML (B:Val 'posfun posfun)) nl
@@ -446,7 +517,7 @@ fun vmap2 f (v1,v2) =
     let 
         val n = Vector.length v1
     in
-        Vector.tabulate (n, fn (i) => f (getindex (v1,i), getindex (v2,i))
+        Vector.tabulate (n, fn (i) => f (getindex (v1,i), getindex (v2,i)))
     end
 
 fun vfind2 f (v1,v2) = 

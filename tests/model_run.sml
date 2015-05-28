@@ -44,6 +44,6 @@ val h = 0.01
 val p = Model.paramfun()
 val initial = Model.initfun(p)
 val evinitial = Model.initcondfun()
-val f = Model.eintegral(Model.sysinds,Model.eqfun(p),Model.condfun(p),Model.posfun(p),Model.negfun(p),h)
+val f = Model.eintegral(Model.odefun(p),Model.condfun(p),Model.posfun(p),Model.negfun(p),h)
 val _ = start (f,initial,evinitial,100.0)
 
