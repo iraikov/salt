@@ -256,10 +256,10 @@
 
 (define (parse-datum e)
   (cond
-   ((boolean? e) (constant 'boolean e))
-   ((number? e)  (constant 'number e))
-   ((symbol? e)  (constant 'symbol e))
-   ((vector? e)  (constant 'vector (vector->list e)))
+   ((boolean? e) (constant 'boolean e unitless))
+   ((number? e)  (constant 'number e unitless))
+   ((symbol? e)  (constant 'symbol e unitless))
+   ((vector? e)  (constant 'vector (vector->list e) unitless))
    (else (salt:error 'parse-datum "Unknown datum: " e))))
 
 
@@ -538,23 +538,47 @@
         (cond
          ((symbol? pattern)
           (match exp-or-body
+                 (('= 'unknown ('unit u) . expr)
+                  (unknown
+                   (parse-expression env (parse-sym-infix-expr expr))
+                   (free-variable-name 
+                    (parse-variable env pattern))
+                   (assv u basic-units)))
                  (('= 'unknown . expr)
                   (unknown
                    (parse-expression env (parse-sym-infix-expr expr))
                    (free-variable-name 
-                    (parse-variable env pattern))))
+                    (parse-variable env pattern))
+                   unitless))
+                 (('= 'parameter ('unit u) . expr)
+                  (parameter
+                   (gensym 'p)
+                   (free-variable-name 
+                    (parse-variable env pattern))
+                   (parse-expression env (parse-sym-infix-expr expr))
+                   (assv u basic-units)
+                   ))
                  (('= 'parameter . expr)
                   (parameter
                    (gensym 'p)
                    (free-variable-name 
                     (parse-variable env pattern))
                    (parse-expression env (parse-sym-infix-expr expr))
+                   unitless
+                   ))
+                 (('= 'constant ('unit u) . expr)
+                  (constant
+                   (free-variable-name
+                    (parse-variable env pattern))
+                   (parse-expression env (parse-sym-infix-expr expr))
+                   (assv u basic-units)
                    ))
                  (('= 'constant . expr)
                   (constant
                    (free-variable-name
                     (parse-variable env pattern))
                    (parse-expression env (parse-sym-infix-expr expr))
+                   unitless
                    ))
                   (else (salt:error 'parse-define "Not a valid definition expression: " exp-or-body))
                  ))
@@ -596,6 +620,21 @@
       (salt:error 'parse-event "Not a valid event: " args)))
 
 
+;; (define (parse-define-unit env args)
+;;   (if (pair? args)
+;;       (let ((pattern (car args))
+;;             (rhs (cdr args)))
+;;         (match rhs 
+;;                ((name dims factor)
+;;                 (unit (parse-variable env name)
+;;                       (parse-dim-expression env (parse-sym-infix-expr dims))
+;;                       (parse-unit-factor-expression env (parse-sym-infix-expr factor))))
+;;                (else
+;;                 (salt:error 'parse-define-unit "Not a valid unit definitions: " rhs))
+;;                ))
+;;       (salt:error 'parse-define-unit "Not a valid unit: " args)))
+  
+
 (define (parse-declaration env c)
   (d 'parse-declaration "c = ~A~%" c)
   (if (pair? c)
@@ -603,8 +642,8 @@
             (args (cdr c)))
         (d 'parse-declaration "op = ~A args = ~A~%" op args)
         (case op
-         ((function) (parse-function env args))
-         ((define)   (parse-definition env args))
-         ((event)    (parse-event env args))
-         (else (parse-equation env c))))
+         ((function)    (parse-function env args))
+         ((define)      (parse-definition env args))
+         ((event)       (parse-event env args))
+         (else          (parse-equation env c))))
       (parse-equation env c)))

@@ -44,9 +44,9 @@
 
 	(import scheme chicken)
         
-	(require-extension matchable datatype lalr-driver mathh)
+	(require-extension matchable datatype lalr-driver mathh unitconv)
 	(require-library data-structures extras srfi-1 srfi-13)
-	(import (only srfi-1 first second zip fold fold-right filter filter-map list-tabulate every)
+	(import (only srfi-1 zip fold fold-right filter filter-map list-tabulate every)
                 (only srfi-13 string-null? string-concatenate string<)
 		(only data-structures ->string alist-ref conc intersperse compose sort)
                 (only extras pp fprintf)
@@ -54,10 +54,47 @@
 		)
 
 
+(define-unit-prefix    milli second ms)
+(define-unit-prefix    milli volt    mV)
+(define-unit-prefix    milli amp     mA)
+(define-unit-prefix    pico  amp     pA)
+(define-unit-prefix    nano  amp     nA)
+(define-unit-prefix    micro amp     uA)
+(define-unit-prefix    micro siemens uS)
+(define-unit-prefix    milli siemens mS)
+(define-unit-prefix    milli mole    mM)
+ 
+(define-quantity   CurrentDensity        (/ Current Area))
+(define-quantity   CapacitanceDensity    (/ Capacitance Area))
+(define-quantity   ConductanceDensity    (/ Conductance Area))
+(define-quantity   Resistivity           (* Resistance Length))
+(define-quantity   ReactionRate1         (** Time -1))
+(define-quantity   ReactionRate2         (* (** Substance -1) (** Time -1)))
+(define-quantity   InversePotential      (** Potential -1))
+(define-quantity   InversePotentialTime  (* (** Potential -1) (** Time -1)))
+
+(define-unit milliamp-per-square-centimeter   CurrentDensity  (/ mA (* cm cm)) mA/cm2)
+(define-unit microfarad-per-square-centimeter CapacitanceDensity (/ uF (* cm cm)) uf/cm2)
+(define-unit siemens-per-square-centimeter    ConductanceDensity (/ S (* cm cm)) S/cm2)
+(define-unit ohm.cm                           Resistivity     (* ohm cm) ohm.cm)
+
+(define-unit degC    Temperature      1.0)
+(define-unit /ms     ReactionRate1    1000.0)
+(define-unit /mM-ms  ReactionRate2    1000000.0)
+(define-unit /mV     InversePotential 1000.0)
+(define-unit /mV-ms  InversePotentialTime 1000000.0)
+
+(define basic-units
+  (zip
+   `(ms mV mA/cm2 pA nA uA mA mM uf/cm2 um S/cm2 uS mS ohm.cm ohm degC /ms /mM-ms /mV /mV-ms)
+   (list ms mV mA/cm2 pA nA uA mA mM uf/cm2 um S/cm2 uS mS ohm.cm ohm degC /ms /mM-ms /mV /mV-ms)))
+
+
 (include "mathh-constants.scm")
 (include "parser.scm")
 (include "env.scm")
 (include "codegen.scm")
+
 
 (define nl "\n")
 (define (s+ . rst) (string-concatenate (map ->string rst)))
@@ -107,22 +144,18 @@
           (flush-output port) ) )))
 
 
-
-;(define-record-type SI-quantity  
-;{T,m,kg,s,A,K,mol,cd,rad,sr}
-
-
 (define syntactic-keywords
   '(function if cond and or let else))
 
 
 (define-record-type variable
-  (make-variable  name label value history )
+  (make-variable  name label value history unit)
   variable?
   (name        variable-name)
   (label       variable-label)
   (value       variable-value)
   (history     variable-history)
+  (unit        variable-unit)
   )
 
 
@@ -135,8 +168,8 @@
            ))
 
 
-(define (unknown value label)
-  (make-variable (gensym 'u) label value #t))
+(define (unknown value label unit)
+  (make-variable (gensym 'u) label value #t unit))
 
 
 (define-record-type free-variable
@@ -180,11 +213,12 @@
 
 
 (define-record-type parameter
-  (parameter name label value)
+  (parameter name label value unit)
   parameter?
   (name parameter-name)
   (label parameter-label)
   (value parameter-value)
+  (unit  parameter-unit)
   )
 
 
@@ -197,18 +231,25 @@
 
 
 (define-record-type constant
-  (constant type value)
+  (constant type value unit)
   constant?
   (type constant-type)
   (value constant-value)
+  (unit constant-unit)
   )
 
 
 (define-record-printer (constant x out)
-  (fprintf out "#(constant ~S = ~A)"
-	   (constant-type x)
-	   (constant-value x)
-           ))
+  (if (constant-unit x)
+      (fprintf out "#(constant ~S = ~A ~A)"
+               (constant-type x)
+               (constant-value x)
+               (constant-unit x)
+               )
+      (fprintf out "#(constant ~S = ~A)"
+               (constant-type x)
+               (constant-value x)
+               )))
 
 
 (define-record-type left-var
@@ -389,7 +430,7 @@
             PI/4 1/PI 2/PI 2/SQRTPI SQRTPI PI^2 DEGREE SQRT2 1/SQRT2 SQRT3 SQRT5
             SQRT10 CUBERT2 CUBERT3 4THRT2 GAMMA1/2 GAMMA1/3 GAMMA2/3 PHI LNPHI
             1/LNPHI EULER E^EULER SIN1 COS1 ZETA3)
-        (map (lambda (x) (constant 'number x))
+        (map (lambda (x) (constant 'number x unitless))
              (list E 1/E E^2 E^PI/4 LOG2E LOG10E LN2 LN3 LNPI LN10 1/LN2 1/LN10 PI PI/2
                    PI/4 1/PI 2/PI 2/SQRTPI SQRTPI PI^2 DEGREE SQRT2 1/SQRT2 SQRT3 SQRT5
                    SQRT10 CUBERT2 CUBERT3 4THRT2 GAMMA1/2 GAMMA1/3 GAMMA2/3 PHI LNPHI
@@ -516,7 +557,7 @@
     
 
 
-(define MTime (unknown (constant 'number 0.0) 't))
+(define model-time (unknown (constant 'number 0.0 millisecond) 't millisecond))
 
 
 (define (map-equations f eqs)
@@ -680,9 +721,9 @@
               (entries        model)
               (env-stack      (extend-env-stack-with-binding
                                (make-env-stack (model-env model))
-                               (gen-binding (variable-label MTime) MTime)
+                               (gen-binding (variable-label model-time) model-time)
                                ))
-              (definitions    '()) ;;(list (cons (variable-name MTime) (variable-value MTime))))
+              (definitions    '()) 
               (parameters     '())
               (equations      '())
               (initial        '())
@@ -691,10 +732,6 @@
               (neg-responses  '())
               (functions      '())
               (nodemap        empty-env)
-                              ;(extend-env-with-binding
-                              ; empty-env
-                              ; (gen-binding (variable-name MTime) MTime)
-                               
               )
       
     (if (null? entries)
@@ -929,7 +966,7 @@
          (($ variable name label value has-history)
           (let ((yindex (assv name cindexmap)))
             (if (not yindex)
-                (if (equal? name (variable-name MTime))
+                (if (equal? name (variable-name model-time))
                     label
                     (error 'reduce-expr "variable not in index" name))
                 `(getindex y ,(cdr yindex)))

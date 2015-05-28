@@ -17,7 +17,7 @@
 
  ; A list of eggs hmodl depends on.
 
- (needs make mathh lalr datatype matchable datatype)
+ (needs make mathh lalr datatype matchable datatype unitconv)
 
  (author "Ivan Raikov")
 
