@@ -8,8 +8,8 @@
   
   (pp elab)
   (pp sim)
-  (pp (codegen-ODE sim))
-  (codegen-ODE/ML sim)
+;  (pp (codegen-ODE sim))
+;  (codegen-ODE/ML sim)
 
 )
 
@@ -51,8 +51,8 @@
 (define izhfs 
   (parse 
    `(
-     (define Isyn = parameter 0.0)
-     (define Iext = parameter 400.0)
+     (define Isyn = parameter (dim Current) 0.0 * nA)
+     (define Iext = parameter (dim Current) 400.0 * nA)
 
      (define k     = parameter 1.0)
      (define Vinit = parameter -65.0)
@@ -67,7 +67,7 @@
      (define FS_c = parameter  -45.0)
      (define FS_U = parameter  FS_b * -65.0)
 
-     (define v  = unknown -60.899)
+     (define v  = unknown (dim Current) -60.899 * mV)
      (define u  = unknown FS_U)
      (define s  = unknown 0.0)
 

@@ -260,7 +260,8 @@
    ((number? e)  (constant 'number e unitless))
    ((symbol? e)  (constant 'symbol e unitless))
    ((vector? e)  (constant 'vector (vector->list e) unitless))
-   (else (salt:error 'parse-datum "Unknown datum: " e))))
+   (else (salt:error 'parse-datum "Unknown datum: " e))
+   ))
 
 
 
@@ -538,25 +539,25 @@
         (cond
          ((symbol? pattern)
           (match exp-or-body
-                 (('= 'unknown ('unit u) . expr)
+                 (('= 'unknown ('dim u) . expr)
                   (unknown
                    (parse-expression env (parse-sym-infix-expr expr))
                    (free-variable-name 
                     (parse-variable env pattern))
-                   (assv u basic-units)))
+                   (assv u (model-quantities))))
                  (('= 'unknown . expr)
                   (unknown
                    (parse-expression env (parse-sym-infix-expr expr))
                    (free-variable-name 
                     (parse-variable env pattern))
                    unitless))
-                 (('= 'parameter ('unit u) . expr)
+                 (('= 'parameter ('dim u) . expr)
                   (parameter
                    (gensym 'p)
                    (free-variable-name 
                     (parse-variable env pattern))
                    (parse-expression env (parse-sym-infix-expr expr))
-                   (assv u basic-units)
+                   (assv u (model-quantities))
                    ))
                  (('= 'parameter . expr)
                   (parameter
@@ -571,7 +572,7 @@
                    (free-variable-name
                     (parse-variable env pattern))
                    (parse-expression env (parse-sym-infix-expr expr))
-                   (assv u basic-units)
+                   (assv u (model-units))
                    ))
                  (('= 'constant . expr)
                   (constant
