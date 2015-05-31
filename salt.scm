@@ -63,6 +63,8 @@
 (define-unit-prefix    micro siemens uS)
 (define-unit-prefix    milli siemens mS)
 (define-unit-prefix    milli mole    mM)
+(define-unit-prefix    mega ohm      )
+(define-unit-prefix    kilo ohm      kohm)
  
 (define-quantity   CurrentDensity        (/ Current Area))
 (define-quantity   CapacitanceDensity    (/ Capacitance Area))
@@ -87,8 +89,8 @@
 (define model-units
   (make-parameter
    (map cons
-    `(ms mV mA/cm2 pA nA uA mA mM uf/cm2 um S/cm2 uS mS ohm.cm ohm degC /ms /mM-ms /mV /mV-ms)
-    (list ms mV mA/cm2 pA nA uA mA mM uf/cm2 um S/cm2 uS mS ohm.cm ohm degC /ms /mM-ms /mV /mV-ms))
+    `(ms mV mA/cm2 pA nA uA mA mM uF uf/cm2 um S/cm2 uS mS ohm.cm ohm kohm megaohm degC /ms /mM-ms /mV /mV-ms)
+    (list ms mV mA/cm2 pA nA uA mA mM uF uf/cm2 um S/cm2 uS mS ohm.cm ohm kohm megaohm degC /ms /mM-ms /mV /mV-ms))
    ))
 
 (define model-quantities
@@ -103,7 +105,8 @@
       ReactionRate1
       ReactionRate2
       InversePotential
-      InversePotentialTime)
+      InversePotentialTime
+      )
     (list Time Area Volume Temperature
           Potential Current Capacitance Conductance Resistance
           CurrentDensity
@@ -113,7 +116,8 @@
           ReactionRate1
           ReactionRate2
           InversePotential
-          InversePotentialTime))
+          InversePotentialTime
+          ))
    ))
 
 (include "mathh-constants.scm")
@@ -641,7 +645,10 @@
       (let ((assoc-var-def (env-stack-lookup (free-variable-name e) env-stack)))
         (d 'resolve "free-var: e = ~A assoc-var-def = ~A~%" (free-variable-name e) assoc-var-def)
         (if assoc-var-def
-            (resolve (binding-value assoc-var-def) env-stack)
+            (let recur ((resval (binding-value assoc-var-def)))
+              (let ((resval1 (resolve resval env-stack)))
+                (if (equal? resval resval1) resval
+                    (recur resval1))))
             (let ((assoc-unit (assv (free-variable-name e) (model-units))))
               (d 'resolve "free-var: e = ~A assoc-unit = ~A~%" (free-variable-name e) assoc-unit)
               (if assoc-unit
@@ -655,10 +662,23 @@
      ((variable? e)
       (let ((name    (variable-name e))
             (label   (variable-label e))
-            (value   (resolve (variable-value e) env-stack))
+            (value   (let recur ((resval (variable-value e)))
+                       (let ((resval1 (resolve resval env-stack)))
+                         (if (equal? resval resval1) resval
+                             (recur resval1)))))
             (history (variable-history e))
             (dim     (variable-dim e)))
         (make-variable name label value history dim)))
+
+     ((parameter? e)
+      (let ((name    (parameter-name e))
+            (label   (parameter-label e))
+            (value   (let recur ((resval (parameter-value e)))
+                       (let ((resval1 (resolve resval env-stack)))
+                         (if (equal? resval resval1) resval
+                             (recur resval1)))))
+            (dim     (parameter-dim e)))
+        (parameter name label value dim)))
 
      ((pair-arg? e)
       (make-pair-arg (recur (pair-arg-fst e))
@@ -824,7 +844,7 @@
                              (en1 (parameter name label resolved-value dim)))
                         (recur (cdr entries) env-stack
                                definitions 
-                               (cons (cons name (resolve value env-stack)) parameters) 
+                               (cons (cons name resolved-value) parameters) 
                                equations initial conditions pos-responses neg-responses 
                                functions
                                (extend-env-with-binding nodemap (gen-binding name en1))
@@ -1036,25 +1056,30 @@
           (list))))
 
 
-(define (units-primop f units-args)
-  (case f 
-    ((signal.add signal.sub) 
-     (if (unit-equal? (car units-args) (cadr units-args))
-         (car units-args) 
-         (error 'units-function-call "units mismatch" f units-args)))
-    ((signal.mul) 
-     (unit* (car units-args) (cadr units-args) ))
-    ((signal.div) 
-     (unit/ (car units-args) (cadr units-args) ))
-    ((signal.pow) 
-     (unit-expt (car units-args) (cadr units-args) ))
-    (else unitless)))
+(define (units-primop f args units-args)
+  (d 'expr-units "f = ~A units-args = ~A~%" f units-args)
+  (let ((u (case f 
+             ((signal.add signal.sub) 
+              (if (unit-equal? (car units-args) (cadr units-args))
+                  (car units-args) 
+                  (error 'units-function-call "units mismatch" f units-args)))
+             ((signal.mul) 
+              (unit* (car units-args) (cadr units-args) ))
+             ((signal.div) 
+              (unit/ (car units-args) (cadr units-args) ))
+             ((signal.pow) 
+              (unit-expt (car units-args) (constant-value (cadr args) )))
+             ((signal.neg) 
+              (car units-args))
+             (else unitless))))
+    (d 'expr-units "u = ~A~%" u)
+    u))
 
 
 (define (units-function-call f arg env)
   (if (symbol? f)
       (let ((units-args (units-pair-arg arg env)))
-        (units-primop f units-args))
+        (units-primop f arg units-args))
       (match-let
        ((($ function name formals body) f))
        (let ((fenv (function-call-env formals arg empty-env)))
@@ -1068,18 +1093,18 @@
 (define (expr-units e env)
   (d 'expr-units "e = ~A~%" e)
   (cond ((symbol? e)
-         (env-lookup e env))
+         (let ((u (assv e (model-units))))
+           (or (and u (cdr u)) (env-lookup e env) unitless)))
         ((pair? e)
          (let ((op (car e)) (args (cdr e)))
            (case op
-             ((signal.primop) (units-primop op (map (lambda (e) (expr-units e env)) args)))
+             ((signal.primop) (units-primop (car args) (cdr args) (map (lambda (e) (expr-units e env)) (cdr args))))
              ((signal.reinit) (units-reinit args env))
              ((signal.if)     (units-if args env))
              ((signal.let)    (units-let args env))
              ((signal.call)  
               (let ((f (car args))
                     (fargs (cadr args)))
-                (d 'expr-units "f = ~A fargs = ~A~%" f args)
                 (units-function-call f fargs env)
                 ))
              (else e)
@@ -1216,22 +1241,28 @@
                 (error 'reduce-eq "variable not in index" y)
                 (let ((expr (reduce-expr rhs pindexmap cindexmap dindexmap))
                       (ddim (- (quantity-int dim) (quantity-int Time))))
-                  (if (expr-units rhs unit-env)
-                      `(setindex dy ,(cdr yindex) ,expr)
-                      (error 'reduce-eq "dimension mismatch in rhs" rhs))
+                  (let ((rhs-units (expr-units rhs unit-env)))
+                    (if (equal? ddim (quantity-int (unit-dims rhs-units)))
+                        `(setindex dy ,(cdr yindex) ,expr)
+                        (error 'reduce-eq "dimension mismatch in rhs" 
+                               (variable-name y) (variable-label y)))
+                    ))
                 ))
-            ))
+          )
          
          ((($ variable name label value has-history dim) rhs)
           (let ((yindex (assv name cindexmap)))
             (if (not yindex)
                 (error 'reduce-eq "variable not in index" name)
                 (let ((expr (reduce-expr rhs pindexmap cindexmap dindexmap)))
-                  (if (expr-units rhs unit-env)
-                      `(setindex y ,(cdr yindex) ,expr)
-                      (error 'reduce-eq "dimension mismatch in rhs" rhs))
-                  ))
-            ))
+                  (let ((rhs-units (expr-units rhs unit-env)))
+                    (d 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
+                    (if (equal? dim (unit-dims rhs-units))
+                        `(setindex y ,(cdr yindex) ,expr)
+                        (error 'reduce-eq "dimension mismatch in rhs" name label))
+                    ))
+                ))
+          )
 
          (($ evcondition name rhs)
           (let ((cindex (assv name dindexmap))
@@ -1250,7 +1281,7 @@
             (if (not yindex)
                 (error 'reduce-eq "variable not in index" y)
                 (let ((expr (reduce-expr rhs pindexmap cindexmap dindexmap)))
-                  (if (expr-units rhs unit-env)
+                  (if (equal? dim (unit-dims (expr-units rhs unit-env)))
                       `(setindex y ,(cdr yindex) ,expr)
                       (error 'reduce-eq "variable mismatch in event response" y))
                   ))
