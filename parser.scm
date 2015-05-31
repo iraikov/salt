@@ -544,20 +544,21 @@
                    (parse-expression env (parse-sym-infix-expr expr))
                    (free-variable-name 
                     (parse-variable env pattern))
-                   (assv u (model-quantities))))
+                   (cdr (assv u (model-quantities)))
+                   ))
                  (('= 'unknown . expr)
                   (unknown
                    (parse-expression env (parse-sym-infix-expr expr))
                    (free-variable-name 
                     (parse-variable env pattern))
-                   unitless))
+                   Unity))
                  (('= 'parameter ('dim u) . expr)
                   (parameter
                    (gensym 'p)
                    (free-variable-name 
                     (parse-variable env pattern))
                    (parse-expression env (parse-sym-infix-expr expr))
-                   (assv u (model-quantities))
+                   (cdr (assv u (model-quantities)))
                    ))
                  (('= 'parameter . expr)
                   (parameter
@@ -572,7 +573,7 @@
                    (free-variable-name
                     (parse-variable env pattern))
                    (parse-expression env (parse-sym-infix-expr expr))
-                   (assv u (model-units))
+                   (cdr (assv u (model-units)))
                    ))
                  (('= 'constant . expr)
                   (constant

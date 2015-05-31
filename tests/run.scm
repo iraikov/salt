@@ -8,8 +8,8 @@
   
   (pp elab)
   (pp sim)
-;  (pp (codegen-ODE sim))
-;  (codegen-ODE/ML sim)
+  (pp (codegen-ODE sim))
+  (codegen-ODE/ML sim)
 
 )
 
