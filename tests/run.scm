@@ -109,9 +109,9 @@
   )
 
 
-;(test-model vdp)
+(test-model 'vdp vdp)
 
-;(test-model iaf)
+(test-model 'iaf iaf)
 
 (test-model 'izhfs izhfs solver: 'rkoz)
 

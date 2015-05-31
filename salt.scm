@@ -1247,8 +1247,11 @@
             (if (not yindex)
                 (error 'reduce-eq "variable not in index" y)
                 (let ((expr (reduce-expr rhs pindexmap cindexmap dindexmap))
-                      (ddim (- (quantity-int dim) (quantity-int Time))))
+                      (ddim (if (equal? (quantity-int dim) (quantity-int Unity))
+                                (quantity-int dim)
+                                (- (quantity-int dim) (quantity-int Time)))))
                   (let ((rhs-units (expr-units rhs unit-env)))
+                    (d 'reduce-eq "ddim = ~A dims(rhs-units) = ~A ~%" ddim (unit-dims rhs-units))
                     (if (equal? ddim (quantity-int (unit-dims rhs-units)))
                         `(setindex dy ,(cdr yindex) ,expr)
                         (error 'reduce-eq "dimension mismatch in rhs" 

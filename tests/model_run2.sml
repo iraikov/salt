@@ -41,7 +41,7 @@ fun start (f,initial,evinitial,tmax,h0) =
     end
 
 val h0 = 0.01
-val tstop = 100.0
+val tstop = 5000.0
 val p = Model.paramfun()
 val initial = Model.initfun(p)
 val evinitial = Model.initcondfun()
