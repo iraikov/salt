@@ -525,7 +525,9 @@
 
 
 (define-record-type equation-set
-  (make-equation-set model definitions parameters equations initial conditions pos-responses neg-responses functions nodemap)
+  (make-equation-set model definitions parameters equations 
+                     initial conditions pos-responses neg-responses 
+                     functions nodemap dimenv)
   equation-set?
   (model equation-set-model)
   (definitions equation-set-definitions)
@@ -537,6 +539,7 @@
   (neg-responses equation-set-neg-responses)
   (functions equation-set-functions)
   (nodemap equation-set-nodemap)
+  (dimenv equation-set-dimenv)
   )
 
 
@@ -791,6 +794,7 @@
               (neg-responses  '())
               (functions      '())
               (nodemap        empty-env)
+              (dimenv         empty-env)
               )
       
     (if (null? entries)
@@ -805,6 +809,7 @@
                              (reverse neg-responses)
                              functions
                              (reverse nodemap)
+                             dimenv
                              )
           )
 
@@ -816,7 +821,7 @@
                      (push-env-stack (model-env en) env-stack)
                      definitions parameters equations
                      initial conditions pos-responses neg-responses 
-                     functions nodemap)
+                     functions nodemap dimenv)
 
               (match en  
 
@@ -824,7 +829,7 @@
                       (recur (cdr entries) (pop-env-stack env-stack)
                              definitions parameters equations initial 
                              conditions pos-responses neg-responses functions
-                             nodemap
+                             nodemap dimenv
                              )
                       )
 
@@ -836,6 +841,7 @@
                                parameters equations initial conditions pos-responses 
                                neg-responses functions
                                (extend-env-with-binding nodemap (gen-binding name en1))
+                               (extend-env-with-binding dimenv (gen-binding name dim))
                                )
                         ))
 
@@ -848,6 +854,7 @@
                                equations initial conditions pos-responses neg-responses 
                                functions
                                (extend-env-with-binding nodemap (gen-binding name en1))
+                               (extend-env-with-binding dimenv (gen-binding name dim))
                                )
                         ))
                      (($ equation s expr)
@@ -857,7 +864,7 @@
                              definitions parameters
                              (cons (list (resolve s env-stack) (resolve expr env-stack)) equations)
                              initial conditions pos-responses neg-responses 
-                             functions nodemap
+                             functions nodemap dimenv
                              )
                       )
                      (($ initial-equation s expr)
@@ -865,7 +872,7 @@
                              definitions parameters
                              equations (cons (cons s (resolve expr env-stack)) initial) 
                              conditions pos-responses neg-responses 
-                             functions nodemap
+                             functions nodemap dimenv
                              )
                       )
                      (($ structural-event left-condition left right-condition right)
@@ -875,7 +882,7 @@
                              (cons (resolve left-condition env-stack) (cons (resolve right-condition env-stack) conditions) )
                              pos-responses 
                              neg-responses
-                             functions nodemap
+                             functions nodemap dimenv
                              ;; TODO: generate equations for new regimes
                              ))
                      (($ event name condition pos neg)
@@ -890,14 +897,14 @@
                                                          (make-evresponse name (resolve-reinit name (resolve x env-stack)))) neg)
                                                   neg-responses))
                                  neg-responses)
-                             functions nodemap
+                             functions nodemap dimenv
                              ))
                      (($ function name formals expr)
                       (recur (cdr entries) env-stack
                              definitions parameters
                              equations initial conditions pos-responses neg-responses 
                              (cons (list name formals (resolve expr env-stack)) functions)
-                             nodemap
+                             nodemap dimenv
                              ))
                      (else
                       (error 'elaborate "unknown equation type" eq))
@@ -1293,13 +1300,22 @@
 
 (define (simcreate eqset)
 
-  (let* ((nodemap (equation-set-nodemap eqset))
+  (let* ((nodemap    (equation-set-nodemap eqset))
+         (dimenv     (equation-set-dimenv eqset))
          (conditions (equation-set-conditions eqset))
 
          (unit-env
           (fold (lambda (p env)
-                  (extend-env-with-binding
-                   env (gen-binding (car p) (expr-units (cdr p) env))))
+                  (let* ((name (car p)) (rhs (cdr p))
+                         (rhs-units (expr-units rhs env)))
+                    (d 'unit-env "rhs-units = ~A (env-lookup dimenv name) ~A~%" 
+                       rhs-units (env-lookup name dimenv))
+                    (if (equal? (quantity-int (binding-value (env-lookup name dimenv)))
+                                (quantity-int (unit-dims rhs-units)))
+                        (extend-env-with-binding
+                         env (gen-binding name rhs-units))
+                        (error 'simcreate "dimension mismatch in initial value" name rhs-units))
+                    ))
                 empty-env 
                 (equation-set-parameters eqset)))
 

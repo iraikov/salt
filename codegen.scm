@@ -133,7 +133,21 @@
              (index (cdr (assv name cindexmap))))
         (vector-ref ode-inds index))
       ))
-        
+
+  (define (codegen-primop op args)
+    (case op
+      ((signal.mul)
+       (match args
+              ((($ value 'V:C 1.0) right) right)
+              ((left ($ value 'V:C 1.0)) left)
+              (else (V:Op op args))))
+      ((signal.div)
+       (match args
+              ((left ($ value 'V:C 1.0)) left)
+              (else (V:Op op args))))
+      (else (V:Op op args))
+      ))
+      
 
   (define (codegen-expr ode-inds rindexmap)
     (lambda (expr)
@@ -142,7 +156,7 @@
                ((? symbol?)
                 (V:Var expr))
                (('signal.primop op . args)
-                (V:Op op (map recur args)))
+                (codegen-primop op (map recur args)))
                (('getindex vect index)
                 (case vect
                   ((y)
@@ -455,10 +469,10 @@
 (define (codegen-ODE/ML sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
 
   (let* (
-         (c (codegen-ODE sim))
+         (c           (codegen-ODE sim))
          (paramfun    (car c))
          (initfun     (cadr c))
-         (odefun       (caddr c)) 
+         (odefun      (caddr c)) 
          (initcondfun (car (cdddr c)))
          (condfun     (cadr (cdddr c)))
          (posfun      (caddr (cdddr c)))
@@ -635,10 +649,8 @@ fun ethr (i,v1,v2,ax) =
     let
         fun ethr0 (i, v1, v2) =
             (case (Real.sign(v1),Real.sign(v2)) of
-                 (-1, 1) => SOME (1, i, v1-v2)
-               | (-1, 0) => SOME (1, i, v1-v2)
-               | (1, -1) => SOME (-1, i, v1-v2)
-               | (1,  0) => SOME (-1, i, v1-v2)
+                 (~1, 1) => SOME (1, i, v1-v2)
+               | (~1, 0) => SOME (1, i, v1-v2)
                | _ => NONE)
     in
         case ax of 
@@ -660,22 +672,22 @@ fun esolver (stepper,fcond) (x,ys,ev,h) =
     in
         case predictor tol (h,e) of
             Right h' => 
-            (case (vfoldpi2 ethr (ev, ev') of
+            (case vfoldpi2 ethr (ev, ev') of
                  SOME (evdir,evind,evdiff) => 
                  (let
                      fun fy (theta) = Vector.sub(fcond (x+theta*h, finterp theta, ev), evind)
-                     val y0    = Vector.sub(fcond(x,ys,ev), evind)
+                     val y0   = Vector.sub(fcond(x,ys,ev), evind)
                      val theta = secant tol fy y0 1.0 0.0
                      val x'    = x+(theta+tol)*h
                      val ys''  = finterp (theta+tol)
+                     val ev''  = fcond (x',ys'',ev)
                  in
-                     Root (x',ys'',evdir,fcond (x',ys''),h')
+                     Root (x',ys'',evdir,ev'',h')
                  end)
-               | NONE => Next (x+h,ys',ev',h'))
+               | NONE => Next (x+h,ys',0,ev',h'))
           | Left h'  => 
             esolver (stepper, fcond) (x,ys,ev,h')
     end
-
 
 fun eintegral (f,fcond,fpos,fneg) =
     let
@@ -684,8 +696,8 @@ fun eintegral (f,fcond,fpos,fneg) =
     in
        fn(x,ys,ev,h) => 
        (case fesolver (x,ys,ev,h) of
-            Next (xn,ysn,evn,hn) => (xn,ysn,evn,hn)
-          | Root (xn,ysn,evn,hn) => 
+            Next (xn,ysn,_,evn,hn) => (xn,ysn,evn,hn)
+          | Root (xn,ysn,_,evn,hn) => 
             let 
                val ysn' = fneg(xn,fpos(xn,ysn,evn),evn)
             in
@@ -707,7 +719,6 @@ fun solver stepper (x,ys,h) =
 fun integral (f) =
     let 
         val fstepper = make_stepper (f)
-        val (xn,ysn,hn) = solver fstepper (x,ys,h) 
     in
         fn(x,y,h) => solver fstepper (x,y,h)
     end
@@ -737,13 +748,17 @@ fun integral (f,h) =
 fun eintegral (f,fcond,fpos,fneg,h) =
     let 
         val solver = (make_stepper (f)) h
-        fun thr (v1,v2) = (Int.-(Real.sign(v1),Real.sign(v2)) = 0)
+        fun thr (v1,v2) = case (Real.sign(v1),Real.sign(v2)) of
+                              (~1,1) => true
+                            | (~1,0) => true
+                            | _ => false
+
     in
         fn(x,y,e) => let val x' = x + h
                          val y' = solver (x,y)
                          val e' = fcond (x',y',e)
-                         val pos = vfind2 thr (e', e) 
-                         val neg = vfind2 thr (e, e')
+                         val pos = vfind2 thr (e, e') 
+                         val neg = vfind2 thr (e', e)
                          val y'' = case pos of SOME i => fpos(x',y',e') | _ => y'
                          val y'' = case neg of SOME i => fneg(x',y'',e') | _ => y''
                      in

@@ -9,5 +9,5 @@ local
 in
 	structure Model
 end
-model_run.sml
+model_run2.sml
 

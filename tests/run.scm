@@ -1,6 +1,6 @@
 (use extras salt)
 
-(define (test-model model)
+(define (test-model name model #!key (solver 'rk4b))
   (pp model)
 
   (define elab (elaborate model))
@@ -9,7 +9,9 @@
   (pp elab)
   (pp sim)
   (pp (codegen-ODE sim))
-  (codegen-ODE/ML sim)
+  (let ((port (open-output-file (string-append (->string name) ".sml"))))
+    (codegen-ODE/ML sim out: port solver: solver)
+    (close-output-port port))
 
 )
 
@@ -26,6 +28,28 @@
 
 
 (define iaf 
+  (parse 
+   `(
+     (define Isyn = parameter 20.0)
+     (define gL   = parameter 0.2)
+     (define vL   = parameter -70.0)
+     (define C    = parameter 1.0)
+     (define theta  = parameter 25.0)
+     (define vreset = parameter -65.0)
+
+     (define v = unknown vreset)
+
+     ((der(v)) = ( ((- gL) * (v - vL)) + Isyn) / C)
+
+     (event (v - theta)
+            ((v := vreset))
+            )
+
+     )
+   ))
+
+
+(define iafrefr
   (parse 
    `(
      (define Isyn = parameter 20.0)
@@ -89,7 +113,7 @@
 
 ;(test-model iaf)
 
-(test-model izhfs)
+(test-model 'izhfs izhfs solver: 'rkoz)
 
 
 

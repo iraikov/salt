@@ -566,7 +566,7 @@
                    (free-variable-name 
                     (parse-variable env pattern))
                    (parse-expression env (parse-sym-infix-expr expr))
-                   unitless
+                   Unity
                    ))
                  (('= 'constant ('unit u) . expr)
                   (constant
@@ -580,7 +580,7 @@
                    (free-variable-name
                     (parse-variable env pattern))
                    (parse-expression env (parse-sym-infix-expr expr))
-                   unitless
+                   Unity
                    ))
                   (else (salt:error 'parse-define "Not a valid definition expression: " exp-or-body))
                  ))
