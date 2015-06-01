@@ -58,15 +58,28 @@
      (define C    = parameter 1.0)
      (define theta  = parameter 25.0)
      (define vreset = parameter -65.0)
+     (define trefractory = parameter 5.0)
 
      (define v = unknown vreset)
+     (define trefr = unknown 0.0)
 
-     ((der(v)) = ( ((- gL) * (v - vL)) + Isyn) / C)
+     (structural-event subthreshold 
+      (
+       ((der(v)) = ( ((- gL) * (v - vL)) + Isyn) / C)
+       )
+      (refractory (v - theta)
+       ( 
+        (v := vreset)
+        (trefr := t + trefractory)
+        )
+       ))
 
-     (event (v - theta)
-            ((v := vreset))
-            )
-
+      (structural-event refractory
+        (
+         ((der(v) = 0.0))
+        )
+        (subthreshold (t - trefr) ())
+        )
      )
    ))
 

@@ -622,6 +622,30 @@
       (salt:error 'parse-event "Not a valid event: " args)))
 
 
+(define (parse-transition env args)
+  (if (pair? args)
+      (let* (
+             (target (parse-variable env (car args)))
+             (condition (parse-expression env (parse-sym-infix-expr (cadr args))))
+             (response (map (lambda (x) (parse-reinit env x)) (caddr args)))
+             )
+        (make-transition target condition response)
+        )
+      (error 'parse-transition "Not a valid transition: " args)
+      ))
+
+
+(define (parse-structural-event env args)
+  (if (pair? args)
+      (let (
+            (label (parse-variable env (car args)))
+            (equations (map (lambda (x) (parse-equation env x)) (cadr args)))
+            (transition (parse-transition (caddr args)))
+            )
+        (make-structural-event (gensym 'se) label equations transition))
+      (salt:error 'parse-event "Not a valid structural event: " args)))
+
+
 ;; (define (parse-define-unit env args)
 ;;   (if (pair? args)
 ;;       (let ((pattern (car args))
@@ -644,8 +668,14 @@
             (args (cdr c)))
         (d 'parse-declaration "op = ~A args = ~A~%" op args)
         (case op
-         ((function)    (parse-function env args))
-         ((define)      (parse-definition env args))
-         ((event)       (parse-event env args))
-         (else          (parse-equation env c))))
+         ((function)    
+          (parse-function env args))
+         ((define)      
+          (parse-definition env args))
+         ((event)       
+          (parse-event env args))
+         ((structural-event)       
+          (parse-structural-event env args))
+         (else          
+          (parse-equation env c))))
       (parse-equation env c)))

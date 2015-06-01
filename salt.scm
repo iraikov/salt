@@ -426,13 +426,22 @@
   (expr evresponse-expr))
 
 
+(define-record-type transition 
+  (make-transition target condition response)
+  transition?
+  (target transition-target)
+  (condition transition-condition)
+  (response transition-response)
+  )
+
+
 (define-record-type structural-event
-  (make-structural-event left-condition left right-condition right)
+  (make-structural-event name label regime transition )
   structural-event?
-  (left-condition structural-event-left-condition)
-  (left structural-event-left)
-  (right-condition structural-event-right-condition)
-  (right structural-event-right)
+  (name structural-event-name)
+  (label structural-event-label)
+  (regime structural-event-regime)
+  (transition structural-event-transition)
   )
 
 
@@ -875,15 +884,17 @@
                              functions nodemap dimenv
                              )
                       )
-                     (($ structural-event left-condition left right-condition right)
+                     (($ structural-event name label regime ($ transition target condition pos))
+                      ;; TODO: generate equations for new regimes
                       (recur (cdr entries) env-stack
                              definitions parameters
                              equations initial
-                             (cons (resolve left-condition env-stack) (cons (resolve right-condition env-stack) conditions) )
-                             pos-responses 
+                             (cons (resolve condition env-stack) conditions)
+                             (append (map (lambda (x) 
+                                            (make-evresponse name (resolve-reinit name (resolve x env-stack)))) pos)
+                                     pos-responses)
                              neg-responses
                              functions nodemap dimenv
-                             ;; TODO: generate equations for new regimes
                              ))
                      (($ event name condition pos neg)
                       (recur (cdr entries) env-stack
