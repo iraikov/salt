@@ -58,10 +58,10 @@
      (define C    = parameter 1.0)
      (define theta  = parameter 25.0)
      (define vreset = parameter -65.0)
-     (define trefractory = parameter 5.0)
+     (define trefractory = parameter (dim Time) 5.0 * ms)
 
      (define v = unknown vreset)
-     (define trefr = unknown 0.0)
+     (define trefr = discrete (dim Time) 0.0 * ms)
 
      (structural-event subthreshold 
       (
@@ -76,7 +76,7 @@
 
       (structural-event refractory
         (
-         ((der(v) = 0.0))
+         ((der(v)) = 0.0)
         )
         (subthreshold (t - trefr) ())
         )
@@ -122,11 +122,13 @@
   )
 
 
-(test-model 'vdp vdp)
+;(test-model 'vdp vdp)
 
-(test-model 'iaf iaf)
+;(test-model 'iaf iaf)
 
-(test-model 'izhfs izhfs solver: 'rkoz)
+;(test-model 'izhfs izhfs solver: 'rkoz)
+
+(test-model 'iafrefr iafrefr)
 
 
 

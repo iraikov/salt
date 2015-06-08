@@ -230,16 +230,36 @@
 
 
 (define-record-type discrete-variable
-  (make-discrete-variable u initial )
+  (make-discrete-variable name label value dim)
   discrete-variable?
-  (u          discrete-variable-u)
-  (initial    discrete-variable-initial)
+  (name       discrete-variable-name)
+  (label      discrete-variable-label)
+  (value      discrete-variable-value)
+  (dim        discrete-variable-dim)
   )
 
+(define (discrete value label dim)
+  (make-discrete-variable (gensym 'd) label value dim))
+
+
 (define-record-printer (discrete-variable x out)
-  (fprintf out "#(deriv ~S = ~A)"
-	   (discrete-variable-u x)
-	   (discrete-variable-initial x)
+  (fprintf out "#(discrete ~S (~a) [~A] = ~A)"
+	   (discrete-variable-name x)
+	   (discrete-variable-label x)
+	   (discrete-variable-dim x)
+	   (discrete-variable-value x)
+           ))
+
+
+(define-record-type regime-flag
+  (make-regime-flag name)
+  regime-flag?
+  (name       regime-flag-name)
+  )
+
+(define-record-printer (regime-flag x out)
+  (fprintf out "#(regime ~S)"
+	   (regime-flag-name x)
            ))
 
 
@@ -458,6 +478,8 @@
         ((ref-var? x)   (reinit e (left-var x) y))
         ((derivative-variable? x)   
          (reinit e (left-var (derivative-variable-parent x)) y))
+        ((discrete-variable? x)   
+         (reinit e (left-var x) y))
         (else (error 'reinit "invalid argument to reinit" x))
         ))
 
@@ -534,12 +556,13 @@
 
 
 (define-record-type equation-set
-  (make-equation-set model definitions parameters equations 
+  (make-equation-set model definitions discrete-definitions parameters equations 
                      initial conditions pos-responses neg-responses 
-                     functions nodemap dimenv)
+                     functions nodemap regimemap dimenv)
   equation-set?
   (model equation-set-model)
   (definitions equation-set-definitions)
+  (discrete-definitions equation-set-discrete-definitions)
   (parameters equation-set-parameters)
   (equations equation-set-equations)
   (initial equation-set-initial)
@@ -548,6 +571,7 @@
   (neg-responses equation-set-neg-responses)
   (functions equation-set-functions)
   (nodemap equation-set-nodemap)
+  (regimemap equation-set-regimemap)
   (dimenv equation-set-dimenv)
   )
 
@@ -557,22 +581,26 @@
   (pp
    `(equation-set
     (definitions=,(equation-set-definitions x))    
+    (discrete-definitions=,(equation-set-discrete-definitions x))
     (parameters=,(equation-set-parameters x))
     (equations=,(equation-set-equations x))
     (functions=,(equation-set-functions x))
     (conditions=,(equation-set-conditions x))
     (pos-responses=,(equation-set-pos-responses x))
     (neg-responses=,(equation-set-neg-responses x))
-    (nodemap=,(equation-set-nodemap x)))))
+    (nodemap=,(equation-set-nodemap x))
+    (regimemap=,(equation-set-regimemap x))
+    )))
 
 
 ;; runtime representation of a simulation object
 (define-record-type simruntime
-  (make-simruntime eqset cindexmap dindexmap parameters defs eqblock condblock posresp negresp)
+  (make-simruntime eqset cindexmap dindexmap evindexmap parameters defs eqblock condblock posresp negresp)
   simruntime?
   (eqset simruntime-eqset)
   (cindexmap simruntime-cindexmap)
   (dindexmap simruntime-dindexmap)
+  (evindexmap simruntime-evindexmap)
   (parameters simruntime-parameters)
   (defs simruntime-definitions)
   (eqblock simruntime-eqblock)
@@ -587,6 +615,7 @@
     (pp `(simruntime 
           (cindexmap=,(simruntime-cindexmap x))
           (dindexmap=,(simruntime-dindexmap x))
+          (evindexmap=,(simruntime-evindexmap x))
           (parameters=,(simruntime-parameters x))
           (defs=,(simruntime-definitions x))
           (eqblock=,(simruntime-eqblock x))
@@ -682,6 +711,16 @@
             (dim     (variable-dim e)))
         (make-variable name label value history dim)))
 
+     ((discrete-variable? e)
+      (let ((name    (discrete-variable-name e))
+            (label   (discrete-variable-label e))
+            (value   (let recur ((resval (discrete-variable-value e)))
+                       (let ((resval1 (resolve resval env-stack)))
+                         (if (equal? resval resval1) resval
+                             (recur resval1)))))
+            (dim     (discrete-variable-dim e)))
+        (make-discrete-variable name label value dim)))
+
      ((parameter? e)
       (let ((name    (parameter-name e))
             (label   (parameter-label e))
@@ -740,6 +779,25 @@
      ))
   )
 
+;; Merge the equations of the particular regime into the main list of
+;; equations with the requisite conditionals.
+(define (merge-regime-eq name regime-eq equations env-stack)
+  (match-let ((($ equation s expr) regime-eq))
+             (let ((s1 (resolve s env-stack))
+                   (expr1 (resolve expr env-stack)))
+               (map (lambda (eq)
+                      (match eq
+                             (($ equation s2 expr2)
+                              (if (equal? s2 s1)
+                                  (eq s `(if (= ,(make-regime-flag name) 1)
+                                             ,expr1 ,expr2))
+                                  eq))
+                             (else eq)
+                             ))
+                    equations))
+             ))
+  
+  
 
 ;;
 ;; Equation elaboration (flattening)
@@ -770,6 +828,10 @@
                 (recur (append decl (cdr decls)) env)
                 
                 (match decl  
+                       (($ discrete-variable name label value dim)
+                        (recur (cdr decls)
+                               (extend-env-with-binding env (gen-binding label decl))
+                               ))
                        (($ variable name label value has-history dim)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
@@ -795,6 +857,7 @@
                                (gen-binding (variable-label model-time) model-time)
                                ))
               (definitions    '()) 
+              (discrete-definitions '()) 
               (parameters     '())
               (equations      '())
               (initial        '())
@@ -803,6 +866,7 @@
               (neg-responses  '())
               (functions      '())
               (nodemap        empty-env)
+              (regimemap      empty-env)
               (dimenv         empty-env)
               )
       
@@ -810,6 +874,7 @@
         (begin
           (make-equation-set model
                              (reverse definitions)
+                             (reverse discrete-definitions)
                              (reverse parameters)
                              (reverse equations)
                              (map-equations replace-fixed initial)
@@ -818,6 +883,7 @@
                              (reverse neg-responses)
                              functions
                              (reverse nodemap)
+                             (reverse regimemap)
                              dimenv
                              )
           )
@@ -826,19 +892,19 @@
 
           (if (pair? en)
               
-              (recur (append en (cons 'pop-node-env-stack (cdr entries)))
+              (recur (append en (cons 'pop-env-stack (cdr entries)))
                      (push-env-stack (model-env en) env-stack)
-                     definitions parameters equations
+                     definitions discrete-definitions parameters equations
                      initial conditions pos-responses neg-responses 
-                     functions nodemap dimenv)
+                     functions nodemap regimemap dimenv)
 
               (match en  
 
-                     ('pop-node-env-stack
+                     ('pop-env-stack
                       (recur (cdr entries) (pop-env-stack env-stack)
-                             definitions parameters equations initial 
+                             definitions discrete-definitions parameters equations initial 
                              conditions pos-responses neg-responses functions
-                             nodemap dimenv
+                             regimemap nodemap dimenv
                              )
                       )
 
@@ -847,9 +913,25 @@
                              (en1 (make-variable name label resolved-value has-history dim)))
                         (recur (cdr entries) env-stack
                                (cons (cons name resolved-value) definitions)
-                               parameters equations initial conditions pos-responses 
-                               neg-responses functions
+                               discrete-definitions
+                               parameters equations initial conditions 
+                               pos-responses neg-responses functions
                                (extend-env-with-binding nodemap (gen-binding name en1))
+                               regimemap
+                               (extend-env-with-binding dimenv (gen-binding name dim))
+                               )
+                        ))
+
+                     (($ discrete-variable name label value dim)
+                      (let* ((resolved-value (resolve value env-stack))
+                             (en1 (make-discrete-variable name label resolved-value dim)))
+                        (recur (cdr entries) env-stack
+                               definitions
+                               (cons (cons name resolved-value) discrete-definitions)
+                               parameters equations initial conditions 
+                               pos-responses neg-responses functions
+                               (extend-env-with-binding nodemap (gen-binding name en1))
+                               regimemap
                                (extend-env-with-binding dimenv (gen-binding name dim))
                                )
                         ))
@@ -858,11 +940,12 @@
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (parameter name label resolved-value dim)))
                         (recur (cdr entries) env-stack
-                               definitions 
+                               definitions discrete-definitions
                                (cons (cons name resolved-value) parameters) 
                                equations initial conditions pos-responses neg-responses 
                                functions
                                (extend-env-with-binding nodemap (gen-binding name en1))
+                               regimemap
                                (extend-env-with-binding dimenv (gen-binding name dim))
                                )
                         ))
@@ -870,35 +953,39 @@
                       (d 'elaborate "equation: unresolved rhs = ~A~%" expr)
                       (d 'elaborate "equation: rhs = ~A~%" (resolve expr env-stack))
                       (recur (cdr entries) env-stack
-                             definitions parameters
+                             definitions discrete-definitions parameters
                              (cons (list (resolve s env-stack) (resolve expr env-stack)) equations)
                              initial conditions pos-responses neg-responses 
-                             functions nodemap dimenv
+                             functions regimemap nodemap dimenv
                              )
                       )
                      (($ initial-equation s expr)
                       (recur (cdr entries) env-stack
-                             definitions parameters
+                             definitions parameters discrete-definitions
                              equations (cons (cons s (resolve expr env-stack)) initial) 
                              conditions pos-responses neg-responses 
-                             functions nodemap dimenv
+                             functions regimemap nodemap dimenv
                              )
                       )
                      (($ structural-event name label regime ($ transition target condition pos))
-                      ;; TODO: generate equations for new regimes
-                      (recur (cdr entries) env-stack
-                             definitions parameters
-                             equations initial
-                             (cons (resolve condition env-stack) conditions)
-                             (append (map (lambda (x) 
-                                            (make-evresponse name (resolve-reinit name (resolve x env-stack)))) pos)
-                                     pos-responses)
-                             neg-responses
-                             functions nodemap dimenv
-                             ))
+                      (let ((condition-index (length conditions)))
+                        (recur (cdr entries) env-stack
+                               definitions discrete-definitions parameters
+                               (fold (lambda (eq ax) (merge-regime-eq name eq ax env-stack)) regime equations) initial
+                               (cons (make-evcondition name (resolve condition env-stack)) conditions) 
+                               (append (map (lambda (x) 
+                                              (make-evresponse name (resolve-reinit name (resolve x env-stack)))) pos)
+                                       pos-responses) 
+                               neg-responses
+                               functions 
+                               nodemap
+                               (extend-env-with-binding regimemap (gen-binding name condition-index))
+                               dimenv
+                               ))
+                      )
                      (($ event name condition pos neg)
                       (recur (cdr entries) env-stack
-                             definitions parameters
+                             definitions discrete-definitions parameters
                              equations initial 
                              (cons (make-evcondition name (resolve condition env-stack)) conditions) 
                              (append (map (lambda (x) 
@@ -908,14 +995,14 @@
                                                          (make-evresponse name (resolve-reinit name (resolve x env-stack)))) neg)
                                                   neg-responses))
                                  neg-responses)
-                             functions nodemap dimenv
+                             functions nodemap regimemap dimenv
                              ))
                      (($ function name formals expr)
                       (recur (cdr entries) env-stack
-                             definitions parameters
+                             definitions discrete-definitions parameters
                              equations initial conditions pos-responses neg-responses 
                              (cons (list name formals (resolve expr env-stack)) functions)
-                             nodemap dimenv
+                             nodemap regimemap dimenv
                              ))
                      (else
                       (error 'elaborate "unknown equation type" eq))
@@ -998,6 +1085,7 @@
 
 
 (define (subst-expr e env-stack)
+  (d 'subst-expr "e = ~A~%" e)
   (cond ((symbol? e)
          (subst-symbol e env-stack))
         ((pair? e)
@@ -1075,12 +1163,12 @@
 
 
 (define (units-primop f args units-args)
-  (d 'expr-units "f = ~A units-args = ~A~%" f units-args)
+  (d 'units-primop "f = ~A units-args = ~A~%" f units-args)
   (let ((u (case f 
              ((signal.add signal.sub) 
               (if (unit-equal? (car units-args) (cadr units-args))
                   (car units-args) 
-                  (error 'units-function-call "units mismatch" f units-args)))
+                  (error 'units-primop "units mismatch" f units-args)))
              ((signal.mul) 
               (unit* (car units-args) (cadr units-args) ))
              ((signal.div) 
@@ -1090,20 +1178,25 @@
              ((signal.neg) 
               (car units-args))
              (else unitless))))
-    (d 'expr-units "u = ~A~%" u)
+    (d 'units-primop "u = ~A~%" u)
     u))
 
 
 (define (units-function-call f arg env)
+  (d 'units-function-call "f = ~A arg = ~A~%" f arg)
   (if (symbol? f)
       (let ((units-args (units-pair-arg arg env)))
+        (d 'units-function-call "units-args = ~A~%" units-args)
         (units-primop f arg units-args))
       (match-let
        ((($ function name formals body) f))
        (let ((fenv (function-call-env formals arg empty-env)))
-         (expr-units 
-          (subst-expr body (make-env-stack fenv))
-          env)
+         (d 'units-function-call "fenv = ~A~%" fenv)
+         (let ((u (expr-units 
+                   (subst-expr body (make-env-stack fenv))
+                   env)))
+           (d 'units-function-call "u = ~A~%" u)
+           u)
          ))
       ))
 
@@ -1115,11 +1208,17 @@
            (or (and u (cdr u)) (env-lookup e env) unitless)))
         ((pair? e)
          (let ((op (car e)) (args (cdr e)))
+           (d 'expr-units "op = ~A args = ~A~%" op args)
            (case op
-             ((signal.primop) (units-primop (car args) (cdr args) (map (lambda (e) (expr-units e env)) (cdr args))))
-             ((signal.reinit) (units-reinit args env))
-             ((signal.if)     (units-if args env))
-             ((signal.let)    (units-let args env))
+             ((signal.primop) 
+              (units-primop (car args) (cdr args) 
+                            (map (lambda (e) (expr-units e env)) (cdr args))))
+             ((signal.reinit) 
+              (units-reinit args env))
+             ((signal.if)     
+              (units-if args env))
+             ((signal.let)    
+              (units-let args env))
              ((signal.call)  
               (let ((f (car args))
                     (fargs (cadr args)))
@@ -1133,6 +1232,8 @@
          (expr-units (free-variable-name e) env))
         ((variable? e)
          (expr-units (variable-value e) env))
+        ((discrete-variable? e)
+         (expr-units (discrete-variable-value e) env))
         ((parameter? e)
          (expr-units (parameter-value e) env))
         ((left-var? e)
@@ -1142,15 +1243,21 @@
         (else e)))
          
 
-(define (reduce-expr expr pindexmap cindexmap dindexmap)
+(define (reduce-expr expr indexmaps )
+  (let (
+        (pindexmap (alist-ref 'pindexmap indexmaps))
+        (cindexmap (alist-ref 'cindexmap indexmaps))
+        (dindexmap (alist-ref 'dindexmap indexmaps))
+        (evindexmap (alist-ref 'evindexmap indexmaps))
+        )
   (d 'reduce-expr "expr = ~A~%" expr)
   (d 'reduce-expr "cindexmap = ~A~%" cindexmap)
   (match expr
 
          (($ pair-arg fst snd)
           (make-pair-arg
-           (reduce-expr fst pindexmap cindexmap dindexmap)
-           (reduce-expr snd pindexmap cindexmap dindexmap)))
+           (reduce-expr fst indexmaps)
+           (reduce-expr snd indexmaps)))
 
          (($ derivative-variable y)
           (let ((yindex (assv (variable-name y) cindexmap)))
@@ -1160,11 +1267,21 @@
             ))
          
          (($ left-var y)
-          (let ((yindex (assv (variable-name y) cindexmap)))
-            (if (not yindex)
-                (error 'reduce-expr "variable not in index" y)
-                `(getindex y ,(cdr yindex)))
-            ))
+          (cond ((variable? y)
+                 (let ((yindex (assv (variable-name y) cindexmap)))
+                   (if (not yindex)
+                       (error 'reduce-expr "variable not in index" y)
+                       `(getindex y ,(cdr yindex)))
+                   ))
+                ((discrete-variable? y)
+                 (let ((yindex (assv (discrete-variable-name y) dindexmap)))
+                   (if (not yindex)
+                       (error 'reduce-expr "variable not in index" y)
+                       `(getindex d ,(cdr yindex)))
+                   ))
+                (else 
+                 (error 'reduce-expr "unknown left variable type" expr))
+                ))
          
          (($ variable name label value has-history dim)
           (let ((yindex (assv name cindexmap)))
@@ -1173,6 +1290,13 @@
                     label
                     (error 'reduce-expr "variable not in index" name))
                 `(getindex y ,(cdr yindex)))
+            ))
+
+         (($ discrete-variable name label value dim)
+          (let ((dindex (assv name dindexmap)))
+            (if (not dindex)
+                (error 'reduce-expr "discrete variable not in index" name)
+                `(getindex d ,(cdr dindex)))
             ))
 
          (($ parameter name label value dim)
@@ -1185,132 +1309,174 @@
          (('signal.let lbnds body)
           (subst-expr
            `(signal.let 
-             ,(map (lambda (lb) (cons (car lb) (reduce-expr (cdr lb) pindexmap cindexmap dindexmap))) lbnds)
-             ,(reduce-expr body pindexmap cindexmap dindexmap))
+             ,(map (lambda (lb) (cons (car lb) (reduce-expr (cdr lb) indexmaps))) lbnds)
+             ,(reduce-expr body indexmaps))
            empty-env-stack))
 
          (('signal.call f args)
           (subst-expr 
-           `(signal.call ,f ,(reduce-expr args pindexmap cindexmap dindexmap))
+           `(signal.call ,f ,(reduce-expr args indexmaps))
            empty-env-stack))
 
          (('signal.reinit e x y)
-          (let ((eindex (assv e dindexmap)))
+          (let ((eindex (assv e evindexmap)))
             (subst-expr 
              `(signal.reinit (getindex c ,(cdr eindex))
-                             ,(reduce-expr x pindexmap cindexmap dindexmap) 
-                             ,(reduce-expr y pindexmap cindexmap dindexmap))
+                             ,(reduce-expr x indexmaps) 
+                             ,(reduce-expr y indexmaps))
              empty-env-stack)))
 
          ((op . args)
           (subst-expr
-           (cons op (map (lambda (x) (reduce-expr x pindexmap cindexmap dindexmap)) args))
+           (cons op (map (lambda (x) (reduce-expr x indexmaps)) args))
            empty-env-stack))
 
          (else expr)
          ))
+)
+
 
 ;; reduce expr for constant expressions
-(define (reduce-constant-expr expr pindexmap cindexmap dindexmap)
+(define (reduce-constant-expr expr indexmaps)
+  (let (
+        (pindexmap  (alist-ref 'pindexmap indexmaps))
+        (cindexmap  (alist-ref 'cindexmap indexmaps))
+        (dindexmap  (alist-ref 'dindexmap indexmaps))
+        (evindexmap (alist-ref 'evindexmap indexmaps))
+        )
+
   (d 'reduce-constant-expr "expr = ~A~%" expr)
   (d 'reduce-constant-expr "cindexmap = ~A~%" cindexmap)
   (match expr
 
          (($ pair-arg fst snd)
           (make-pair-arg
-           (reduce-constant-expr fst pindexmap cindexmap dindexmap)
-           (reduce-constant-expr snd pindexmap cindexmap dindexmap)))
+           (reduce-constant-expr fst indexmaps)
+           (reduce-constant-expr snd indexmaps)))
 
          (($ variable name label value has-history dim)
-          (reduce-constant-expr value pindexmap cindexmap dindexmap))
+          (reduce-constant-expr value indexmaps))
 
          (($ parameter name label value dim)
-          (reduce-constant-expr value pindexmap cindexmap dindexmap))
+          (reduce-constant-expr value indexmaps))
 
          (('signal.let lbnds body)
           (subst-expr
            `(signal.let 
-             ,(map (lambda (lb) (cons (car lb) (reduce-constant-expr (cdr lb) pindexmap cindexmap dindexmap))) lbnds)
-             ,(reduce-constant-expr body pindexmap cindexmap dindexmap))
+             ,(map (lambda (lb) (cons (car lb) (reduce-constant-expr (cdr lb) indexmaps))) lbnds)
+             ,(reduce-constant-expr body indexmaps))
            empty-env-stack))
 
          (('signal.call f args)
           (subst-expr 
-           `(signal.call ,f ,(reduce-constant-expr args pindexmap cindexmap dindexmap))
+           `(signal.call ,f ,(reduce-constant-expr args indexmaps))
            empty-env-stack))
 
          ((op . args)
           (subst-expr
-           (cons op (map (lambda (x) (reduce-constant-expr x pindexmap cindexmap dindexmap)) args))
+           (cons op (map (lambda (x) (reduce-constant-expr x indexmaps)) args))
            empty-env-stack))
 
          (else expr)
          ))
+)
 
 
-(define (reduce-eq eq pindexmap cindexmap dindexmap unit-env)
+(define (reduce-eq eq indexmaps unit-env)
+  (let (
+        (pindexmap  (alist-ref 'pindexmap indexmaps))
+        (cindexmap  (alist-ref 'cindexmap indexmaps))
+        (dindexmap  (alist-ref 'dindexmap indexmaps))
+        (evindexmap (alist-ref 'evindexmap indexmaps))
+        )
+    (d 'reduce-eq "eq = ~A~%" eq)
 
-  (match eq
+    (match eq
 
-         ((($ derivative-variable y) rhs)
-          (let ((yindex (assv (variable-name y) cindexmap))
-                (dim (variable-dim y)))
-            (if (not yindex)
-                (error 'reduce-eq "variable not in index" y)
-                (let ((expr (reduce-expr rhs pindexmap cindexmap dindexmap))
-                      (ddim (if (equal? (quantity-int dim) (quantity-int Unity))
-                                (quantity-int dim)
-                                (- (quantity-int dim) (quantity-int Time)))))
-                  (let ((rhs-units (expr-units rhs unit-env)))
-                    (d 'reduce-eq "ddim = ~A dims(rhs-units) = ~A ~%" ddim (unit-dims rhs-units))
-                    (if (equal? ddim (quantity-int (unit-dims rhs-units)))
-                        `(setindex dy ,(cdr yindex) ,expr)
-                        (error 'reduce-eq "dimension mismatch in rhs" 
-                               (variable-name y) (variable-label y)))
-                    ))
-                ))
-          )
-         
-         ((($ variable name label value has-history dim) rhs)
-          (let ((yindex (assv name cindexmap)))
-            (if (not yindex)
-                (error 'reduce-eq "variable not in index" name)
-                (let ((expr (reduce-expr rhs pindexmap cindexmap dindexmap)))
-                  (let ((rhs-units (expr-units rhs unit-env)))
-                    (d 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
-                    (if (equal? dim (unit-dims rhs-units))
-                        `(setindex y ,(cdr yindex) ,expr)
-                        (error 'reduce-eq "dimension mismatch in rhs" name label))
-                    ))
-                ))
-          )
-
-         (($ evcondition name rhs)
-          (let ((cindex (assv name dindexmap))
-                (expr (reduce-expr rhs pindexmap cindexmap dindexmap)))
-            (if (expr-units rhs unit-env)
-                `(setindex c ,(cdr cindex) ,expr)
-                (error 'reduce-eq "dimension mismatch in condition" expr))
-            ))
-         
-         (($ evresponse name rhs)
-          (let* ((y (match rhs
-                           (('signal.reinit e ($ left-var u) yindex . rest) u)
-                           (error 'reduce-eq "unknown event response equation" eq)))
-                 (yindex (assv (variable-name y) cindexmap))
-                 (dim (variable-dim y)))
-            (if (not yindex)
-                (error 'reduce-eq "variable not in index" y)
-                (let ((expr (reduce-expr rhs pindexmap cindexmap dindexmap)))
-                  (if (equal? dim (unit-dims (expr-units rhs unit-env)))
-                      `(setindex y ,(cdr yindex) ,expr)
-                      (error 'reduce-eq "variable mismatch in event response" y))
+           ((($ derivative-variable y) rhs)
+            (let ((yindex (assv (variable-name y) cindexmap))
+                  (dim (variable-dim y)))
+              (if (not yindex)
+                  (error 'reduce-eq "variable not in index" y)
+                  (let ((expr (reduce-expr rhs indexmaps))
+                        (ddim (if (equal? (quantity-int dim) (quantity-int Unity))
+                                  (quantity-int dim)
+                                  (- (quantity-int dim) (quantity-int Time)))))
+                    (let ((rhs-units (expr-units rhs unit-env)))
+                      (d 'reduce-eq "ddim = ~A dims(rhs-units) = ~A ~%" ddim (unit-dims rhs-units))
+                      (if (equal? ddim (quantity-int (unit-dims rhs-units)))
+                          `(setindex dy ,(cdr yindex) ,expr)
+                          (error 'reduce-eq "dimension mismatch in rhs" 
+                                 (variable-name y) (variable-label y)))
+                      ))
                   ))
-            ))
-         
-         (else eq)))
-          
-                
+            )
+           
+           ((($ variable name label value has-history dim) rhs)
+            (let ((yindex (assv name cindexmap)))
+              (if (not yindex)
+                  (error 'reduce-eq "variable not in index" name)
+                  (let ((expr (reduce-expr rhs indexmaps)))
+                    (let ((rhs-units (expr-units rhs unit-env)))
+                      (d 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
+                      (if (equal? dim (unit-dims rhs-units))
+                          `(setindex y ,(cdr yindex) ,expr)
+                          (error 'reduce-eq "dimension mismatch in rhs" name label))
+                      ))
+                  ))
+            )
+
+           (($ evcondition name rhs)
+            (let ((evindex (assv name evindexmap))
+                  (expr (reduce-expr rhs indexmaps)))
+              (if (not evindex)
+                  (error 'reduce-eq "event identifier not found in indexmap" name))
+              (d 'reduce-eq "evcondition name = ~A~%" name)
+              (d 'reduce-eq "expr = ~A~%" expr)
+              (if (expr-units rhs unit-env)
+                  `(setindex c ,(cdr evindex) ,expr)
+                  (error 'reduce-eq "dimension mismatch in condition" expr))
+              ))
+           
+           (($ evresponse name rhs)
+            (d 'reduce-eq "evresponse rhs = ~A~%" rhs)
+            (let ((y (match rhs
+                            (('signal.reinit e ($ left-var u) yindex . rest) u)
+                            (error 'reduce-eq "unknown event response equation" eq))))
+              (cond
+               ((variable? y)
+                (let (
+                      (yindex (assv (variable-name y) cindexmap))
+                      (dim (variable-dim y))
+                      )
+                  (if (not yindex)
+                      (error 'reduce-eq "variable not in index" y)
+                      (let ((expr (reduce-expr rhs indexmaps)))
+                        (if (equal? dim (unit-dims (expr-units rhs unit-env)))
+                            `(setindex y ,(cdr yindex) ,expr)
+                            (error 'reduce-eq "variable mismatch in event response" y))
+                        ))
+                  ))
+               ((discrete-variable? y)
+                (let (
+                      (yindex (assv (discrete-variable-name y) dindexmap))
+                      (dim (discrete-variable-dim y))
+                      )
+                  (if (not yindex)
+                      (error 'reduce-eq "variable not in index" y)
+                      (let ((expr (reduce-expr rhs indexmaps)))
+                        (if (equal? dim (unit-dims (expr-units rhs unit-env)))
+                            `(setindex d ,(cdr yindex) ,expr)
+                            (error 'reduce-eq "variable mismatch in event response" y))
+                        ))
+                  ))
+               (else (error 'reduce-eq "unknown variable type in reinit equation" eq))
+               ))
+            )
+
+           (else eq)))
+  )          
+
 
 (define (simcreate eqset)
 
@@ -1347,6 +1513,20 @@
                        (recur (cdr nodemap) indexmap index))))
              ))
           
+         (dindexmap 
+           (let recur ((nodemap nodemap)
+                       (indexmap  '())
+                       (index     0))
+             (if (null? nodemap)
+                 indexmap
+                 (let ((node (car nodemap)))
+                   (if (discrete-variable? (cdr node))
+                       (recur (cdr nodemap)
+                              (cons (cons (car node) index) indexmap)
+                              (+ 1 index))
+                       (recur (cdr nodemap) indexmap index))))
+             ))
+          
 
          (pindexmap 
            (let recur ((nodemap nodemap)
@@ -1362,7 +1542,7 @@
                        (recur (cdr nodemap) indexmap index))))
              ))
           
-         (dindexmap 
+         (evindexmap 
            (let recur ((conditions conditions)
                        (indexmap  '())
                        (index     0))
@@ -1373,29 +1553,34 @@
                         (+ 1 index)))
              ))
 
+         (indexmaps `((cindexmap . ,cindexmap)
+                      (pindexmap . ,pindexmap)
+                      (dindexmap . ,dindexmap)
+                      (evindexmap . ,evindexmap)))
+                      
 
          (param-block 
-          (map (lambda (x) (reduce-constant-expr (cdr x) pindexmap cindexmap dindexmap))
+          (map (lambda (x) (reduce-constant-expr (cdr x) indexmaps))
                (equation-set-parameters eqset)))
 
          (init-block 
-          (map (lambda (x) (reduce-expr (cdr x) pindexmap cindexmap dindexmap))
+          (map (lambda (x) (reduce-expr (cdr x) indexmaps))
                (equation-set-definitions eqset)))
 
          (eq-block
-          (map (lambda (x) (reduce-eq x pindexmap cindexmap dindexmap unit-env)) 
+          (map (lambda (x) (reduce-eq x indexmaps unit-env)) 
                (equation-set-equations eqset)))
          
          (cond-block
-          (map (lambda (c) (reduce-eq c pindexmap cindexmap dindexmap unit-env))
+          (map (lambda (c) (reduce-eq c indexmaps unit-env))
                (equation-set-conditions eqset)))
 
          (pos-responses 
-          (map (lambda (x) (reduce-eq x pindexmap cindexmap dindexmap unit-env))
+          (map (lambda (x) (reduce-eq x indexmaps unit-env))
                (equation-set-pos-responses eqset)))
 
          (neg-responses 
-          (map (lambda (x) (reduce-eq x pindexmap cindexmap dindexmap unit-env))
+          (map (lambda (x) (reduce-eq x indexmaps unit-env))
                (equation-set-neg-responses eqset)))
 
          )
@@ -1403,6 +1588,7 @@
     (make-simruntime 
      eqset
      cindexmap dindexmap 
+     evindexmap
      param-block
      init-block
      eq-block 

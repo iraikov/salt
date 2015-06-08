@@ -539,6 +539,19 @@
         (cond
          ((symbol? pattern)
           (match exp-or-body
+                 (('= 'discrete ('dim u) . expr)
+                  (discrete
+                   (parse-expression env (parse-sym-infix-expr expr))
+                   (free-variable-name 
+                    (parse-variable env pattern))
+                   (cdr (assv u (model-quantities)))
+                   ))
+                 (('= 'discrete . expr)
+                  (discrete
+                   (parse-expression env (parse-sym-infix-expr expr))
+                   (free-variable-name 
+                    (parse-variable env pattern))
+                   Unity))
                  (('= 'unknown ('dim u) . expr)
                   (unknown
                    (parse-expression env (parse-sym-infix-expr expr))
@@ -623,6 +636,8 @@
 
 
 (define (parse-transition env args)
+  (d 'parse-transition "args = ~A~%" args)
+
   (if (pair? args)
       (let* (
              (target (parse-variable env (car args)))
@@ -636,11 +651,14 @@
 
 
 (define (parse-structural-event env args)
+  (d 'parse-structural-event "(cadr args) = ~A~%" (cadr args))
+  (d 'parse-structural-event "(caddr args) = ~A~%" (caddr args))
+
   (if (pair? args)
       (let (
             (label (parse-variable env (car args)))
             (equations (map (lambda (x) (parse-equation env x)) (cadr args)))
-            (transition (parse-transition (caddr args)))
+            (transition (parse-transition env (caddr args)))
             )
         (make-structural-event (gensym 'se) label equations transition))
       (salt:error 'parse-event "Not a valid structural event: " args)))

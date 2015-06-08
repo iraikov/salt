@@ -13,7 +13,7 @@ fun showReal n =
 	(if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
     end
 
-fun printstate (t,input) = 
+fun printstate (t,(input,_)) = 
     let
         val n = Vector.length input
         fun fshow i =

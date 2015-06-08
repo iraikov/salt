@@ -96,6 +96,7 @@
   ; returns a printable list representation of an environment
   (map binding-show env))
 
+
 ; stacks of environments
 
 (define empty-env-stack '())
