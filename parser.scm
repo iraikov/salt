@@ -660,7 +660,7 @@
             (equations (map (lambda (x) (parse-equation env x)) (cadr args)))
             (transition (parse-transition env (caddr args)))
             )
-        (make-structural-event (gensym 'se) label equations transition))
+        (make-structural-event (gensym 'se) (free-variable-name label) equations transition))
       (salt:error 'parse-event "Not a valid structural event: " args)))
 
 

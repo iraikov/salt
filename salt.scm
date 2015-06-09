@@ -251,15 +251,15 @@
            ))
 
 
-(define-record-type regime-flag
-  (make-regime-flag name)
-  regime-flag?
-  (name       regime-flag-name)
+(define-record-type regime-variable
+  (make-regime-variable name)
+  regime-variable?
+  (name       regime-variable-name)
   )
 
-(define-record-printer (regime-flag x out)
+(define-record-printer (regime-variable x out)
   (fprintf out "#(regime ~S)"
-	   (regime-flag-name x)
+	   (regime-variable-name x)
            ))
 
 
@@ -479,6 +479,8 @@
         ((derivative-variable? x)   
          (reinit e (left-var (derivative-variable-parent x)) y))
         ((discrete-variable? x)   
+         (reinit e (left-var x) y))
+        ((regime-variable? x)   
          (reinit e (left-var x) y))
         (else (error 'reinit "invalid argument to reinit" x))
         ))
@@ -782,20 +784,27 @@
 ;; Merge the equations of the particular regime into the main list of
 ;; equations with the requisite conditionals.
 (define (merge-regime-eq name regime-eq equations env-stack)
+  (d 'merge-regime-eq "regime-eq = ~A equations = ~A~%" regime-eq equations)
   (match-let ((($ equation s expr) regime-eq))
              (let ((s1 (resolve s env-stack))
                    (expr1 (resolve expr env-stack)))
-               (map (lambda (eq)
-                      (match eq
-                             (($ equation s2 expr2)
-                              (if (equal? s2 s1)
-                                  (eq s `(if (= ,(make-regime-flag name) 1)
-                                             ,expr1 ,expr2))
-                                  eq))
-                             (else eq)
-                             ))
-                    equations))
-             ))
+               (if (null? equations)
+                   (list (eq s `(if ,(make-regime-variable name) 
+                                             ,expr1 0.0)))
+                   (map (lambda (eq)
+                          (match eq
+                                 (($ equation s2 expr2)
+                                  (d 'merge-regime-eq "s1 = ~A s2 = ~A~%" s1 s2)
+                                  (d 'merge-regime-eq "expr1 = ~A expr2 = ~A~%" expr1 expr2)
+                                  (if (equal? s2 s1)
+                                      (eq s `(if ,(make-regime-variable name) 
+                                                 ,expr1 ,expr2))
+                                      eq))
+                                 (else eq)
+                                 ))
+                        equations))
+               ))
+  )
   
   
 
@@ -843,6 +852,10 @@
                        (($ function name formals expr)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding name decl))
+                               ))
+                       (($ structural-event name label regime transition)
+                        (recur (cdr decls)
+                               (extend-env-with-binding env (gen-binding label (make-regime-variable name)))
                                ))
                        (else (recur (cdr decls) env))
                        ))
@@ -968,14 +981,23 @@
                              )
                       )
                      (($ structural-event name label regime ($ transition target condition pos))
-                      (let ((condition-index (length conditions)))
+                      (let (
+                            (condition-index (length conditions))
+                            )
+                        (d 'elaborate "structural-event: name = ~A label = ~A~%" name label)
+                        (d 'elaborate "structural-event: target = ~A~%" target)
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions parameters
-                               (fold (lambda (eq ax) (merge-regime-eq name eq ax env-stack)) regime equations) initial
+                               (fold (lambda (eq ax) (merge-regime-eq name eq ax env-stack)) equations regime) initial
                                (cons (make-evcondition name (resolve condition env-stack)) conditions) 
-                               (append (map (lambda (x) 
-                                              (make-evresponse name (resolve-reinit name (resolve x env-stack)))) pos)
-                                       pos-responses) 
+                               (append (cons
+                                        (make-evresponse name (resolve-reinit name `(reinit ,(make-regime-variable name) #f)))
+                                         (cons
+                                          (make-evresponse name (resolve-reinit name `(reinit ,(resolve target env-stack) #t)))
+                                          (map
+                                           (lambda (x) 
+                                             (make-evresponse name (resolve-reinit name (resolve x env-stack)))) pos)))
+                                         pos-responses)
                                neg-responses
                                functions 
                                nodemap
@@ -1248,6 +1270,7 @@
         (pindexmap (alist-ref 'pindexmap indexmaps))
         (cindexmap (alist-ref 'cindexmap indexmaps))
         (dindexmap (alist-ref 'dindexmap indexmaps))
+        (rindexmap (alist-ref 'rindexmap indexmaps))
         (evindexmap (alist-ref 'evindexmap indexmaps))
         )
   (d 'reduce-expr "expr = ~A~%" expr)
@@ -1278,6 +1301,12 @@
                    (if (not yindex)
                        (error 'reduce-expr "variable not in index" y)
                        `(getindex d ,(cdr yindex)))
+                   ))
+                ((regime-variable? y)
+                 (let ((yindex (assv (regime-variable-name y) rindexmap)))
+                   (if (not yindex)
+                       (error 'reduce-expr "regime variable not in index" y)
+                       `(getindex c ,(cdr yindex)))
                    ))
                 (else 
                  (error 'reduce-expr "unknown left variable type" expr))
@@ -1388,6 +1417,7 @@
         (cindexmap  (alist-ref 'cindexmap indexmaps))
         (dindexmap  (alist-ref 'dindexmap indexmaps))
         (evindexmap (alist-ref 'evindexmap indexmaps))
+        (rindexmap  (alist-ref 'rindexmap indexmaps))
         )
     (d 'reduce-eq "eq = ~A~%" eq)
 
@@ -1470,6 +1500,16 @@
                             (error 'reduce-eq "variable mismatch in event response" y))
                         ))
                   ))
+               ((regime-variable? y)
+                (let (
+                      (rindex (assv (regime-variable-name y) rindexmap))
+                      )
+                  (if (not rindex)
+                      (error 'reduce-eq "regime variable not in index" y)
+                      (let ((expr (reduce-expr rhs indexmaps)))
+                        `(setindex r ,(cdr rindex) ,expr)
+                        ))
+                  ))
                (else (error 'reduce-eq "unknown variable type in reinit equation" eq))
                ))
             )
@@ -1481,6 +1521,7 @@
 (define (simcreate eqset)
 
   (let* ((nodemap    (equation-set-nodemap eqset))
+         (regimemap  (equation-set-regimemap eqset))
          (dimenv     (equation-set-dimenv eqset))
          (conditions (equation-set-conditions eqset))
 
@@ -1553,9 +1594,11 @@
                         (+ 1 index)))
              ))
 
+
          (indexmaps `((cindexmap . ,cindexmap)
                       (pindexmap . ,pindexmap)
                       (dindexmap . ,dindexmap)
+                      (rindexmap . ,regimemap)
                       (evindexmap . ,evindexmap)))
                       
 

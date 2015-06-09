@@ -97,7 +97,7 @@
                 (res '()))
       (if (null? lst) res
           (let ((k (f (car lst))))
-            (recur (cdr lst) (update-bucket k (car lst) res)))
+            (recur (cdr lst) (if k (update-bucket k (car lst) res) res)))
           ))
       )
 
@@ -204,7 +204,8 @@
                           (bucket 
                            (match-lambda*
                             [((and eq ('setindex 'y index ('signal.reinit ev y rhs))))
-                             index])
+                             index]
+                            [_ #f])
                            (simruntime-posresp sim))))
                      bucket-eqs))
 
