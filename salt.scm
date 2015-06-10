@@ -258,7 +258,7 @@
   )
 
 (define-record-printer (regime-variable x out)
-  (fprintf out "#(regime ~S)"
+  (fprintf out "#(regime-variable ~S)"
 	   (regime-variable-name x)
            ))
 
@@ -789,16 +789,16 @@
              (let ((s1 (resolve s env-stack))
                    (expr1 (resolve expr env-stack)))
                (if (null? equations)
-                   (list (eq s `(if ,(make-regime-variable name) 
-                                             ,expr1 0.0)))
+                   (list (list s1 `(signal.if ,(make-regime-variable name) 
+                                              ,expr1 ,(constant 'number 0.0 unitless))))
                    (map (lambda (eq)
                           (match eq
                                  (($ equation s2 expr2)
                                   (d 'merge-regime-eq "s1 = ~A s2 = ~A~%" s1 s2)
                                   (d 'merge-regime-eq "expr1 = ~A expr2 = ~A~%" expr1 expr2)
                                   (if (equal? s2 s1)
-                                      (eq s `(if ,(make-regime-variable name) 
-                                                 ,expr1 ,expr2))
+                                      (list s1 `(signal.if ,(make-regime-variable name) 
+                                                           ,expr1 ,expr2))
                                       eq))
                                  (else eq)
                                  ))
@@ -917,7 +917,7 @@
                       (recur (cdr entries) (pop-env-stack env-stack)
                              definitions discrete-definitions parameters equations initial 
                              conditions pos-responses neg-responses functions
-                             regimemap nodemap dimenv
+                             nodemap regimemap dimenv
                              )
                       )
 
@@ -969,7 +969,7 @@
                              definitions discrete-definitions parameters
                              (cons (list (resolve s env-stack) (resolve expr env-stack)) equations)
                              initial conditions pos-responses neg-responses 
-                             functions regimemap nodemap dimenv
+                             functions nodemap regimemap dimenv
                              )
                       )
                      (($ initial-equation s expr)
@@ -977,7 +977,7 @@
                              definitions parameters discrete-definitions
                              equations (cons (cons s (resolve expr env-stack)) initial) 
                              conditions pos-responses neg-responses 
-                             functions regimemap nodemap dimenv
+                             functions nodemap regimemap dimenv
                              )
                       )
                      (($ structural-event name label regime ($ transition target condition pos))
@@ -1155,6 +1155,7 @@
           (let ((cu (expr-units c env))
                 (xu (expr-units x env))
                 (yu (expr-units y env)))
+            (d 'units-if "cu = ~A xu = ~A yu = ~A~%" cu xu yu)
             (if (unit-equal? xu yu)
                 xu (error 'units-reinit "units mismatch in if" args))
             ))
@@ -1306,7 +1307,7 @@
                  (let ((yindex (assv (regime-variable-name y) rindexmap)))
                    (if (not yindex)
                        (error 'reduce-expr "regime variable not in index" y)
-                       `(getindex c ,(cdr yindex)))
+                       `(getindex r ,(cdr yindex)))
                    ))
                 (else 
                  (error 'reduce-expr "unknown left variable type" expr))
@@ -1328,8 +1329,16 @@
                 `(getindex d ,(cdr dindex)))
             ))
 
+         (($ regime-variable name label value)
+          (let ((rindex (assv name rindexmap)))
+            (if (not rindex)
+                (error 'reduce-expr "regime variable not in index" name)
+                `(getindex r ,(cdr rindex)))
+            ))
+
          (($ parameter name label value dim)
           (let ((yindex (assv name pindexmap)))
+            (d 'reduce-expr "pindexmap = ~A~%" pindexmap)
             (if (not yindex)
                 (error 'reduce-expr "parameter not in index" name)
                 `(getindex p ,(cdr yindex)))
@@ -1521,6 +1530,7 @@
 (define (simcreate eqset)
 
   (let* ((nodemap    (equation-set-nodemap eqset))
+         (dd         (d 'simcreate "nodemap = ~A~%" nodemap) )
          (regimemap  (equation-set-regimemap eqset))
          (dimenv     (equation-set-dimenv eqset))
          (conditions (equation-set-conditions eqset))
@@ -1576,6 +1586,7 @@
              (if (null? nodemap)
                  indexmap
                  (let ((node (car nodemap)))
+                   (d 'simcreate "pindexmap: node = ~A~%" node) 
                    (if (parameter? (cdr node))
                        (recur (cdr nodemap)
                               (cons (cons (car node) index) indexmap)
