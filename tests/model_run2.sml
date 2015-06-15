@@ -26,18 +26,18 @@ fun printstate (t,(input,_)) =
     end
       
 
-fun start (f,initial,evinitial,tmax,h0) =
+fun start (f,initial,evinitial,dinitial,rinitial,tmax,h0) =
     let
-	fun run (t, input, ev, h) =
-	    let val (t',nstate,ev',h') = f (t,input,ev,h)
+	fun run (t, input, ev, d, regime, h) =
+	    let val (t',nstate,ev',d',regime',h') = f (t,input,ev,d,regime,h)
 	    in printstate (t',nstate); 
 	       if (t'  > tmax)
 	       then (putStrLn "# All done!"; nstate)
-	       else (run (t',nstate,ev',h'))
+	       else (run (t',nstate,ev',d',regime',h'))
 	    end
     in
 	printstate (0.0, initial);
-	run (0.0, initial, evinitial, h0)
+	run (0.0, initial, evinitial, dinitial, rinitial, h0)
     end
 
 val h0 = 0.01
@@ -45,6 +45,8 @@ val tstop = 5000.0
 val p = Model.paramfun()
 val initial = Model.initfun(p)
 val evinitial = Model.initcondfun()
-val f = Model.eintegral(Model.odefun(p),Model.condfun(p),Model.posfun(p),Model.negfun(p))
-val _ = start (f,initial,evinitial,tstop,h0)
+val dinitial = Model.dinitfun()
+val rinitial = Model.initregfun()
+val f = Model.eintegral(Model.odefun(p),Model.condfun(p),Model.posfun(p),Model.negfun(p),Model.dposfun(p),Model.regfun)
+val _ = start (f,initial,evinitial,dinitial,rinitial,tstop,h0)
 

@@ -597,14 +597,16 @@
 
 ;; runtime representation of a simulation object
 (define-record-type simruntime
-  (make-simruntime eqset cindexmap dindexmap evindexmap parameters defs eqblock condblock posresp negresp)
+  (make-simruntime eqset cindexmap dindexmap evindexmap rindexmap parameters defs discrete-defs eqblock condblock posresp negresp)
   simruntime?
   (eqset simruntime-eqset)
   (cindexmap simruntime-cindexmap)
   (dindexmap simruntime-dindexmap)
   (evindexmap simruntime-evindexmap)
+  (rindexmap simruntime-rindexmap)
   (parameters simruntime-parameters)
   (defs simruntime-definitions)
+  (discrete-defs simruntime-discrete-definitions)
   (eqblock simruntime-eqblock)
   (condblock simruntime-condblock)
   (posresp simruntime-posresp)
@@ -1268,10 +1270,10 @@
 
 (define (reduce-expr expr indexmaps )
   (let (
-        (pindexmap (alist-ref 'pindexmap indexmaps))
-        (cindexmap (alist-ref 'cindexmap indexmaps))
-        (dindexmap (alist-ref 'dindexmap indexmaps))
-        (rindexmap (alist-ref 'rindexmap indexmaps))
+        (pindexmap  (alist-ref 'pindexmap indexmaps))
+        (cindexmap  (alist-ref 'cindexmap indexmaps))
+        (dindexmap  (alist-ref 'dindexmap indexmaps))
+        (rindexmap  (alist-ref 'rindexmap indexmaps))
         (evindexmap (alist-ref 'evindexmap indexmaps))
         )
   (d 'reduce-expr "expr = ~A~%" expr)
@@ -1478,7 +1480,7 @@
               ))
            
            (($ evresponse name rhs)
-            (d 'reduce-eq "evresponse rhs = ~A~%" rhs)
+            (d 'reduce-eq "evresponse name = ~A rhs = ~A~%" name rhs)
             (let ((y (match rhs
                             (('signal.reinit e ($ left-var u) yindex . rest) u)
                             (error 'reduce-eq "unknown event response equation" eq))))
@@ -1621,6 +1623,10 @@
           (map (lambda (x) (reduce-expr (cdr x) indexmaps))
                (equation-set-definitions eqset)))
 
+         (discrete-init-block
+          (map (lambda (x) (reduce-expr (cdr x) indexmaps))
+               (equation-set-discrete-definitions eqset)))
+         
          (eq-block
           (map (lambda (x) (reduce-eq x indexmaps unit-env)) 
                (equation-set-equations eqset)))
@@ -1642,9 +1648,10 @@
     (make-simruntime 
      eqset
      cindexmap dindexmap 
-     evindexmap
+     evindexmap regimemap
      param-block
      init-block
+     discrete-init-block
      eq-block 
      cond-block
      pos-responses
