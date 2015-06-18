@@ -328,7 +328,7 @@
                                            (E:Ret (V:Vec (map codegen-expr1 odes)))))))))))
 
            (initcondfun 
-            (V:Fn '() (E:Ret (V:Vec (map (lambda (x) (V:C 'negInf)) condblock)))))
+            (V:Fn '() (E:Ret (V:Vec (map (lambda (x) (V:C 'posInf)) condblock)))))
 
            (condfun     
             (V:Fn '(p) 
@@ -771,43 +771,47 @@ fun ethr (i,v1,v2,ax) =
     end
 
 
-fun esolver (stepper,fcond) (x,ys,ev,h) =
+fun esolver (stepper,fcond,fdiscrete,fregime) (x,ys,ev,d,r,h) =
     let open Real
-        val (ys',e,finterp) = stepper h (x,ys)
-        val ev' = fcond (x+h,ys',ev)
+        val (ys',e,finterp) = (stepper (d,r)) h (x,ys)
+        val ev' = fcond d (x+h,ys',ev)
     in
         case predictor tol (h,e) of
             Right h' => 
             (case vfoldpi2 ethr (ev, ev') of
                  SOME (evdir,evind,evdiff) => 
                  (let
-                     fun fy (theta) = Vector.sub(fcond (x+theta*h, finterp theta, ev), evind)
-                     val y0   = Vector.sub(fcond(x,ys,ev), evind)
+                     fun fy (theta) = Vector.sub(fcond d (x+theta*h, finterp theta, ev), evind)
+                     val y0   = Vector.sub(fcond d (x,ys,ev), evind)
                      val theta = secant tol fy y0 1.0 0.0
                      val x'    = x+(theta+tol)*h
                      val ys''  = finterp (theta+tol)
-                     val ev''  = fcond (x',ys'',ev)
+                     val ev''  = fcond d (x',ys'',ev)
+                     val d'    = fdiscrete (x',ys'',ev'',d)
+                     val r'    = fregime (ev'',r)
                  in
-                     Root (x',ys'',evdir,ev'',h')
+                     Root (x',ys'',evdir,ev'',d',r',h')
                  end)
-               | NONE => Next (x+h,ys',0,ev',h'))
+               | NONE => 
+                 Next (x+h,ys',0,ev',d,r,h'))
           | Left h'  => 
-            esolver (stepper, fcond) (x,ys,ev,h')
+            esolver (stepper, fcond, fdiscrete, fregime) (x,ys,ev,d,r,h')
     end
 
-fun eintegral (f,fcond,fpos,fneg) =
+fun eintegral (f,fcond,fpos,fneg,fdiscrete,fregime) =
     let
-       val fstepper = make_estepper (f)
-       val fesolver = esolver (fstepper,fcond) 
+       fun fstepper (d,r) = make_estepper (f(d,r))
+       val fesolver = esolver (fstepper,fcond,fdiscrete,fregime)
     in
-       fn(x,ys,ev,h) => 
-       (case fesolver (x,ys,ev,h) of
-            Next (xn,ysn,_,evn,hn) => (xn,ysn,evn,hn)
-          | Root (xn,ysn,_,evn,hn) => 
+       fn(x,ys,ev,d,r,h) => 
+       (case fesolver (x,ys,ev,d,r,h) of
+            Next (xn,ysn,_,evn,dn,rn,hn) => 
+            (xn,ysn,evn,dn,rn,hn)
+          | Root (xn,ysn,_,evn,dn,rn,hn) => 
             let 
-               val ysn' = fneg(xn,fpos(xn,ysn,evn),evn)
+               val ysn' = fneg(xn,fpos(xn,ysn,evn,dn),evn,dn)
             in
-               (xn,ysn',evn,hn)
+               (xn,ysn',evn,dn,rn,hn)
             end)
    end
 
@@ -851,25 +855,27 @@ fun integral (f,h) =
                    end
     end
 
-fun eintegral (f,fcond,fpos,fneg,h) =
+fun eintegral (f,fcond,fpos,fneg,fdiscrete,fregime,h) =
     let 
-        val solver = (make_stepper (f)) h
+        fun solver (d,r) = (make_stepper (f (d,r))) h
         fun thr (v1,v2) = case (Real.sign(v1),Real.sign(v2)) of
                               (~1,1) => true
                             | (~1,0) => true
                             | _ => false
 
     in
-        fn(x,y,e) => let val x' = x + h
-                         val y' = solver (x,y)
-                         val e' = fcond (x',y',e)
-                         val pos = vfind2 thr (e, e') 
-                         val neg = vfind2 thr (e', e)
-                         val y'' = case pos of SOME i => fpos(x',y',e') | _ => y'
-                         val y'' = case neg of SOME i => fneg(x',y'',e') | _ => y''
-                     in
-                         (x',y'',e')
-                     end
+        fn(x,y,e,d,r) => let val x'  = x + h
+                             val y'  = solver (d,r) (x,y)
+                             val e'  = fcond d (x',y',e)
+                             val pos = vfind2 thr (e, e') 
+                             val neg = vfind2 thr (e', e)
+                             val r'  = fregime (e',r)
+                             val y'' = case pos of SOME i => fpos(x',y',e',d) | _ => y'
+                             val y'' = case neg of SOME i => fneg(x',y'',e',d) | _ => y''
+                             val d'  = fdiscrete (x',y',e',d)
+                         in
+                             (x',y'',e',d',r')
+                         end
 
     end
 

@@ -128,7 +128,7 @@
 
 ;(test-model 'izhfs izhfs solver: 'rkoz)
 
-(test-model 'iafrefr iafrefr)
+(test-model 'iafrefr iafrefr solver: 'rkoz)
 
 
 
