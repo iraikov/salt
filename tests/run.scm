@@ -15,11 +15,12 @@
 
 )
 
+(verbose 0)
 
 (define vdp 
   (parse 
    `(
-     (define x = unknown 0.0)
+     (define x = unknown -0.25)
      (define y = unknown 1.0)
      ((der(x)) = (1 - y ^ 2) * x - y )
      ((der(y)) = x)
@@ -122,13 +123,85 @@
   )
 
 
-;(test-model 'vdp vdp)
+(define iaf0
+  (parse
+   `(
+     (define gL   = parameter 0.2)
+     (define vL   = parameter -70.0)
+     (define C    = parameter 1.0)
+
+     ((der(v)) = ( ((- gL) * (v - vL)) + Isyn) / C)
+
+     (event (v - theta)
+            ((v := vreset))
+            )
+
+     )
+   ))
+
+
+(define alphasyn 
+  (parse
+  `(
+
+     (define vsyn  = parameter 80.0)
+     (define alpha = parameter 1.0)
+     (define beta  = parameter 0.25)
+     (define gsmax = parameter 0.1)
+     (define taus  = parameter 2.5)
+     (define f     = parameter -100.0)
+     (define s0    = parameter 0.5)
+
+     (define S  = unknown 0.0)
+     (define SS = unknown 0.0)
+
+     (define gsyn  = unknown 0.0)
+
+     ((der (S)) = (alpha * (1 - S) - beta * S))
+     ((der (SS)) = ((s0 - SS) / taus))
+        
+     ((Isyn) = (gsyn * (v - vsyn)))
+     ((gsyn) = (gsmax * S * SS))
+
+     (event (v - theta)
+            (
+             (S := 0)
+             (SS := 0))
+            )
+
+     (event (grid_input (t))
+            (
+             (S := S)
+             (SS := (SS + f * (1 - SS)))
+            )
+            )
+     )
+))
+
+
+(define iafsyn
+  (parse
+   `(
+     (define theta = parameter 25.0)
+     (define Isyn  = unknown 0.0)
+     
+     (define v     = unknown -35.0)
+     
+     ,iaf0
+     ,alphasyn
+     ))
+  )
+
+
+(test-model 'vdp vdp)
 
 ;(test-model 'iaf iaf)
 
 ;(test-model 'izhfs izhfs solver: 'rkoz)
 
-(test-model 'iafrefr iafrefr solver: 'rkoz)
+;(test-model 'iafrefr iafrefr solver: 'rkoz)
+
+;(test-model 'iafsyn iafsyn)
 
 
 

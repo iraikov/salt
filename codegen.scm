@@ -209,11 +209,7 @@
         (defs      (simruntime-definitions sim))
         (discrete-defs  (simruntime-discrete-definitions sim))
         (params    (simruntime-parameters sim))
-        (eqblock   (sort (simruntime-eqblock sim) 
-                         (match-lambda*
-                          [(('setindex vect1 index1 val1) 
-                            ('setindex vect2 index2 val2)) 
-                           (< index1 index2)])))
+        (eqblock   (simruntime-eqblock sim))
         (condblock (let ((sorted-eqs 
                           (sort (simruntime-condblock sim) 
                                 (match-lambda*
@@ -294,12 +290,17 @@
                            [eq (error 'codegen "unknown equation type" eq)])
              eqblock))
 
-           (odes 
-            (filter-map
-             (match-lambda [(and ode ('setindex 'dy index val)) val] 
-                           [('setindex 'y index val)  #f]
-                           [eq (error 'codegen "unknown equation type" eq)])
-             eqblock))
+           (odeblock 
+            (sort 
+             (filter-map
+              (match-lambda [(and ode ('setindex 'dy index val)) ode] 
+                            [('setindex 'y index val)  #f]
+                            [eq (error 'codegen "unknown equation type" eq)])
+              eqblock)
+             (match-lambda*
+              [(('setindex vect1 index1 val1) 
+                ('setindex vect2 index2 val2)) 
+               (< index1 index2)])))
 
            (paramfun 
             (V:Fn '() (E:Ret (V:Vec (map codegen-expr1 params)))))
@@ -322,10 +323,15 @@
                    (V:Fn '(d r)
                          (E:Ret
                           (V:Fn '(t y) 
-                                (if (null? asgns)
-                                    (E:Ret (V:Vec (map codegen-expr1 odes)))
-                                    (E:Let (map (lambda (asgn) (B:Val (car asgn) (codegen-expr1 (cdr asgn)))) asgns)
-                                           (E:Ret (V:Vec (map codegen-expr1 odes)))))))))))
+                                (let ((resval (V:Vec (map (match-lambda [('setindex 'dy index val) (codegen-expr1 val)]) odeblock))))
+                                  (if (null? asgns)
+                                      (E:Ret resval)
+                                      (E:Let (map (lambda (asgn) (B:Val (car asgn) (codegen-expr1 (cdr asgn)))) asgns)
+                                             (E:Ret resval)))
+                                  ))
+                          ))
+                   ))
+            )
 
            (initcondfun 
             (V:Fn '() (E:Ret (V:Vec (map (lambda (x) (V:C 'posInf)) condblock)))))
@@ -630,8 +636,6 @@ in
 end
 
 val getindex = Unsafe.Vector.sub
-val setindex = Vector.update
-
 
 fun vmap2 f (v1,v2) = 
     let 

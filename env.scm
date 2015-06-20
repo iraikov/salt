@@ -37,6 +37,9 @@
 
 ; bindings
 
+(define (env-binding? x) 
+  (pair? x))
+
 (define gen-binding cons)
 ; generates a binding, binding a symbol to a value
 
@@ -62,63 +65,126 @@
 
 ; environments
 
-(define empty-env '())
+(define-datatype env env?
+  (Env (first env-binding?) (rest env?))
+  (EmptyEnv))
+
+(define empty-env (EmptyEnv))
 ; returns the empty environment
 
-(define (extend-env-with-binding env binding)
+(define (extend-env-with-binding e binding)
   ; extends env with a binding, which hides any other binding in env
   ; for the same key
   ; returns the extended environment
-  (cons binding env))
+  (Env binding e))
 
-(define (extend-env-with-binding env binding)
-  ; extends env with a binding, which hides any other binding in env
-  ; for the same key (see dynamic-lookup)
-  ; returns the extended environment
-  (cons binding env))
-
-(define (extend-env-with-env env ext-env)
+(define (extend-env-with-env e ext-env)
   ; extends environment env with environment ext-env 
   ; a binding for a key in ext-env hides any binding in env for
   ; the same key (see dynamic-lookup)
   ; returns the extended environment
-  (append ext-env env))
+  (cases env ext-env
+         (EmptyEnv () e)
+         (Env (first rest)
+              (Env first (extend-env-with-env e rest)))
+         ))
 
-(define env-lookup (lambda (x l) (assv x l)))
+(define (env-lookup x e)
 ; returns the first pair in env that matches the key; returns #f
 ; if no such pair exists
+  (cases env e 
+         (Env (first rest)
+              (if (eqv? (binding-key first) x)
+                  first
+                  (env-lookup x rest)))
+         (EmptyEnv () #f)
+         ))
+
 
 (define (env->list e)
   ; converts an environment to a list of bindings
-  e)
+  (cases env e
+         (Env (first rest)
+              (cons first (env->list rest)))
+         (EmptyEnv () '())))
 
-(define (env-show env)
+
+(define (env-show e)
   ; returns a printable list representation of an environment
-  (map binding-show env))
+  (cases env e
+         (Env (first rest)
+              (cons (binding-show first) (env-show rest)))
+         (EmptyEnv () '())))
 
 
 ; stacks of environments
 
-(define empty-env-stack '())
+(define-datatype env-stack env-stack?
+  (EnvStack (first env?) (rest env-stack?))
+  (EmptyEnvStack))
 
-(define (make-env-stack env) (list env))
+(define empty-env-stack (EmptyEnvStack))
 
-(define (extend-env-stack-with-binding env-stack binding)
-  (cons (extend-env-with-binding (car env-stack) binding) (cdr env-stack)))
+(define (extend-env-stack-with-binding es binding)
+  (cases env-stack es
+         (EnvStack (first rest)
+                   (EnvStack
+                    (extend-env-with-binding first binding) 
+                    rest))
+         (EmptyEnvStack ()
+                        (error 'extend-env-stack-with-binding
+                               "empty environment stack"))
+         ))
   
-(define (extend-env-stack-with-env env-stack env)
-  (cons (extend-env-with-env (car env-stack) env) (cdr env-stack)))
+(define (extend-env-stack-with-env es env)
+  (cases env-stack es
+         (EnvStack (first rest)
+                   (EnvStack
+                    (extend-env-with-env first env) 
+                    rest))
+         (EmptyEnvStack ()
+                        (error 'extend-env-stack-with-env
+                               "empty environment stack"))
+         ))
   
-(define (pop-env-stack env-stack) (cdr env-stack))
 
-(define (push-env-stack env-stack env) (cons env env-stack))
+(define (pop-env-stack es) 
+  (cases env-stack es
+         (EnvStack (first rest) rest)
+         (EmptyEnvStack ()
+                        (error 'pop-env-stack
+                               "empty environment stack"))
+         ))
+  
+
+(define (push-env-stack e es) 
+  (if (env? e) (EnvStack e es)
+      (else (error 'push-env-stack "invalid environment" e))))
+      
+
+(define (peek-env-stack es) 
+  (cases env-stack es
+         (EnvStack (first rest) first)
+         (EmptyEnvStack ()
+                        (error 'peek-env-stack
+                               "empty environment stack"))
+         ))
+  
 
 ;; env-stack-lookup: Key x Env -> (Binding + False)
 
-(define (env-stack-lookup x env-stack) 
-  (if (null? env-stack) #f
-      (begin
-        (or (env-lookup x (car env-stack))
-            (env-stack-lookup x (cdr env-stack)))
-        )))
-      
+(define (env-stack-lookup x es) 
+  (cases env-stack es
+         (EnvStack (first rest) 
+                   (or (env-lookup x first)
+                       (env-stack-lookup x rest)))
+         (EmptyEnvStack () #f)))
+                        
+
+(define (env-stack-show es)
+  (cases env-stack es
+         (EnvStack (first rest) 
+                   (cons (env-show first)
+                         (env-stack-show rest)))
+         (EmptyEnvStack () '())))
+                        

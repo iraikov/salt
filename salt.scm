@@ -162,7 +162,7 @@
 	    (loop (cdr objs)))))))
 
 
-(define verbose (make-parameter 1))
+(define verbose (make-parameter 0))
 
 
 (define (d loc fstr . args)
@@ -465,6 +465,14 @@
   )
 
 
+(define-record-type astdecls
+  (make-astdecls decls)
+  astdecls?
+  (decls astdecls-decls)
+  )
+
+
+
 (define (expr-value x)
   (cond ((variable? x) (variable-value x))
         ((ref-var? x) (vector-ref (ref-var-u x) (ref-var-idx x)))
@@ -591,8 +599,8 @@
     (pos-responses=,(equation-set-pos-responses x))
     (neg-responses=,(equation-set-neg-responses x))
     (nodemap=,(equation-set-nodemap x))
-    (regimemap=,(equation-set-regimemap x))
-    )))
+    (regimemap=,(equation-set-regimemap x)))
+   out))
 
 
 ;; runtime representation of a simulation object
@@ -630,6 +638,9 @@
         out)
     )
     
+(define-record-printer (astdecls x out)
+    (fprintf out "#")
+    (pp `(ast . ,(astdecls-decls x)) out))
 
 
 (define model-time (unknown (constant 'number 0.0 millisecond) 't millisecond))
@@ -642,7 +653,7 @@
      (init s (f expr))]
     [($ equation s expr) 
      (eq s (f expr))]
-    [eq (error 'map-equation "unknown equation type" eq)])
+    [eqn (error 'map-equation "unknown equation type" eqn)])
    eqs))
       
 
@@ -660,16 +671,25 @@
 ;; Equation parsing
 
 (define (parse decls) 
-  (d 'parse "decls = ~A~%" decls)
-  (let ((initial-env
-         (fold (lambda (ext-env env)
-                 (extend-env-with-env env ext-env))
+  (let ((parse-env
+         (fold (lambda (ext-env env) (extend-env-with-env env ext-env))
                empty-env
                (list math-constant-env
                      math-binop-env
                      math-unop-env
                      ))))
-    (map (lambda (x) (parse-declaration initial-env x)) decls)
+    (letrec
+        ((parse0
+          (lambda (decls)
+            (d 'parse "decls = ~A~%" decls)
+            (map (lambda (x) 
+                   (cond
+                    ((astdecls? x) x)
+                    (else (parse-declaration parse-env x))
+                    ))
+                 decls))
+          ))
+      (make-astdecls (parse0 decls)))
     ))
 
 
@@ -678,7 +698,7 @@
 (define (resolve expr env-stack)
 
   (d 'resolve "expr: ~A env-stack: ~A~%" 
-     expr (map (lambda (x) (map car x)) env-stack))
+     expr (env-stack-show env-stack))
 
   (let recur ((e expr))
 
@@ -866,9 +886,9 @@
 
 
   (let recur (
-              (entries        model)
+              (entries        (astdecls-decls model))
               (env-stack      (extend-env-stack-with-binding
-                               (make-env-stack (model-env model))
+                               (push-env-stack (model-env (astdecls-decls model)) empty-env-stack)
                                (gen-binding (variable-label model-time) model-time)
                                ))
               (definitions    '()) 
@@ -897,18 +917,19 @@
                              (reverse pos-responses)
                              (reverse neg-responses)
                              functions
-                             (reverse nodemap)
-                             (reverse regimemap)
+                             nodemap
+                             regimemap
                              dimenv
                              )
           )
 
         (let ((en (car entries)))
+          (d 'elaborate "en = ~A~%" en)
 
-          (if (pair? en)
+          (if (astdecls? en)
               
-              (recur (append en (cons 'pop-env-stack (cdr entries)))
-                     (push-env-stack (model-env en) env-stack)
+              (recur (append (astdecls-decls en) (cons 'pop-env-stack (cdr entries)))
+                     (push-env-stack (model-env (astdecls-decls en)) env-stack)
                      definitions discrete-definitions parameters equations
                      initial conditions pos-responses neg-responses 
                      functions nodemap regimemap dimenv)
@@ -952,6 +973,7 @@
                         ))
 
                      (($ parameter name label value dim)
+                      (d 'elaborate "parameter: label = ~A value = ~A~%" label value)
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (parameter name label resolved-value dim)))
                         (recur (cdr entries) env-stack
@@ -1028,8 +1050,8 @@
                              (cons (list name formals (resolve expr env-stack)) functions)
                              nodemap regimemap dimenv
                              ))
-                     (else
-                      (error 'elaborate "unknown equation type" eq))
+                     (eqn
+                      (error 'elaborate "unknown equation type" eqn))
                      ))
           ))
     ))
@@ -1100,12 +1122,15 @@
   (if (symbol? f)
       (let ((args (subst-pair-arg arg env-stack)))
         `(signal.primop ,f . ,args))
-      (match-let ((($ function name formals body) f))
+      (match f (($ function name formals body)
                  (let ((fenv (function-call-env formals arg empty-env)))
                    (d 'subst-function-call "fenv = ~A~%" fenv)
-                   (subst-expr body (push-env-stack env-stack fenv)))
-                 ))
-  )
+                   (subst-expr body (push-env-stack fenv env-stack)))
+                 )
+             (($ free-variable name)
+              (error 'subset-function-call "undefined function" name))
+             )
+      ))
 
 
 (define (subst-expr e env-stack)
@@ -1218,7 +1243,7 @@
        (let ((fenv (function-call-env formals arg empty-env)))
          (d 'units-function-call "fenv = ~A~%" fenv)
          (let ((u (expr-units 
-                   (subst-expr body (make-env-stack fenv))
+                   (subst-expr body (push-env-stack fenv empty-env-stack))
                    env)))
            (d 'units-function-call "u = ~A~%" u)
            u)
@@ -1537,6 +1562,8 @@
          (dimenv     (equation-set-dimenv eqset))
          (conditions (equation-set-conditions eqset))
 
+         (nodelst   (reverse (env->list nodemap)))
+
          (unit-env
           (fold (lambda (p env)
                   (let* ((name (car p)) (rhs (cdr p))
@@ -1553,47 +1580,47 @@
                 (equation-set-parameters eqset)))
 
          (cindexmap 
-           (let recur ((nodemap nodemap)
+           (let recur ((nodelst nodelst)
                        (indexmap  '())
                        (index     0))
-             (if (null? nodemap)
+             (if (null? nodelst)
                  indexmap
-                 (let ((node (car nodemap)))
+                 (let ((node (car nodelst)))
                    (if (variable? (cdr node))
-                       (recur (cdr nodemap)
+                       (recur (cdr nodelst)
                               (cons (cons (car node) index) indexmap)
                               (+ 1 index))
-                       (recur (cdr nodemap) indexmap index))))
+                       (recur (cdr nodelst) indexmap index))))
              ))
           
          (dindexmap 
-           (let recur ((nodemap nodemap)
+           (let recur ((nodelst nodelst)
                        (indexmap  '())
                        (index     0))
-             (if (null? nodemap)
+             (if (null? nodelst)
                  indexmap
-                 (let ((node (car nodemap)))
+                 (let ((node (car nodelst)))
                    (if (discrete-variable? (cdr node))
-                       (recur (cdr nodemap)
+                       (recur (cdr nodelst)
                               (cons (cons (car node) index) indexmap)
                               (+ 1 index))
-                       (recur (cdr nodemap) indexmap index))))
+                       (recur (cdr nodelst) indexmap index))))
              ))
           
 
          (pindexmap 
-           (let recur ((nodemap nodemap)
+           (let recur ((nodelst nodelst)
                        (indexmap  '())
                        (index     0))
-             (if (null? nodemap)
+             (if (null? nodelst)
                  indexmap
-                 (let ((node (car nodemap)))
+                 (let ((node (car nodelst)))
                    (d 'simcreate "pindexmap: node = ~A~%" node) 
                    (if (parameter? (cdr node))
-                       (recur (cdr nodemap)
+                       (recur (cdr nodelst)
                               (cons (cons (car node) index) indexmap)
                               (+ 1 index))
-                       (recur (cdr nodemap) indexmap index))))
+                       (recur (cdr nodelst) indexmap index))))
              ))
           
          (evindexmap 
