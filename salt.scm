@@ -1311,7 +1311,7 @@
            (reduce-expr snd indexmaps)))
 
          (($ derivative-variable y)
-          (let ((yindex (assv (variable-name y) cindexmap)))
+          (let ((yindex (env-lookup (variable-name y) cindexmap)))
             (if (not yindex)
                 (error 'reduce-expr "variable not in index" y)
                 `(getindex dy ,(cdr yindex)))
@@ -1319,19 +1319,19 @@
          
          (($ left-var y)
           (cond ((variable? y)
-                 (let ((yindex (assv (variable-name y) cindexmap)))
+                 (let ((yindex (env-lookup (variable-name y) cindexmap)))
                    (if (not yindex)
                        (error 'reduce-expr "variable not in index" y)
                        `(getindex y ,(cdr yindex)))
                    ))
                 ((discrete-variable? y)
-                 (let ((yindex (assv (discrete-variable-name y) dindexmap)))
+                 (let ((yindex (env-lookup (discrete-variable-name y) dindexmap)))
                    (if (not yindex)
                        (error 'reduce-expr "variable not in index" y)
                        `(getindex d ,(cdr yindex)))
                    ))
                 ((regime-variable? y)
-                 (let ((yindex (assv (regime-variable-name y) rindexmap)))
+                 (let ((yindex (env-lookup (regime-variable-name y) rindexmap)))
                    (if (not yindex)
                        (error 'reduce-expr "regime variable not in index" y)
                        `(getindex r ,(cdr yindex)))
@@ -1341,7 +1341,7 @@
                 ))
          
          (($ variable name label value has-history dim)
-          (let ((yindex (assv name cindexmap)))
+          (let ((yindex (env-lookup name cindexmap)))
             (if (not yindex)
                 (if (equal? name (variable-name model-time))
                     label
@@ -1350,21 +1350,21 @@
             ))
 
          (($ discrete-variable name label value dim)
-          (let ((dindex (assv name dindexmap)))
+          (let ((dindex (env-lookup name dindexmap)))
             (if (not dindex)
                 (error 'reduce-expr "discrete variable not in index" name)
                 `(getindex d ,(cdr dindex)))
             ))
 
          (($ regime-variable name label value)
-          (let ((rindex (assv name rindexmap)))
+          (let ((rindex (env-lookup name rindexmap)))
             (if (not rindex)
                 (error 'reduce-expr "regime variable not in index" name)
                 `(getindex r ,(cdr rindex)))
             ))
 
          (($ parameter name label value dim)
-          (let ((yindex (assv name pindexmap)))
+          (let ((yindex (env-lookup name pindexmap)))
             (d 'reduce-expr "pindexmap = ~A~%" pindexmap)
             (if (not yindex)
                 (error 'reduce-expr "parameter not in index" name)
@@ -1384,7 +1384,7 @@
            empty-env-stack))
 
          (('signal.reinit e x y)
-          (let ((eindex (assv e evindexmap)))
+          (let ((eindex (env-lookup e evindexmap)))
             (subst-expr 
              `(signal.reinit (getindex c ,(cdr eindex))
                              ,(reduce-expr x indexmaps) 
@@ -1460,7 +1460,7 @@
     (match eq
 
            ((($ derivative-variable y) rhs)
-            (let ((yindex (assv (variable-name y) cindexmap))
+            (let ((yindex (env-lookup (variable-name y) cindexmap))
                   (dim (variable-dim y)))
               (if (not yindex)
                   (error 'reduce-eq "variable not in index" y)
@@ -1479,7 +1479,7 @@
             )
            
            ((($ variable name label value has-history dim) rhs)
-            (let ((yindex (assv name cindexmap)))
+            (let ((yindex (env-lookup name cindexmap)))
               (if (not yindex)
                   (error 'reduce-eq "variable not in index" name)
                   (let ((expr (reduce-expr rhs indexmaps)))
@@ -1493,7 +1493,7 @@
             )
 
            (($ evcondition name rhs)
-            (let ((evindex (assv name evindexmap))
+            (let ((evindex (env-lookup name evindexmap))
                   (expr (reduce-expr rhs indexmaps)))
               (if (not evindex)
                   (error 'reduce-eq "event identifier not found in indexmap" name))
@@ -1512,7 +1512,7 @@
               (cond
                ((variable? y)
                 (let (
-                      (yindex (assv (variable-name y) cindexmap))
+                      (yindex (env-lookup (variable-name y) cindexmap))
                       (dim (variable-dim y))
                       )
                   (if (not yindex)
@@ -1525,7 +1525,7 @@
                   ))
                ((discrete-variable? y)
                 (let (
-                      (yindex (assv (discrete-variable-name y) dindexmap))
+                      (yindex (env-lookup (discrete-variable-name y) dindexmap))
                       (dim (discrete-variable-dim y))
                       )
                   (if (not yindex)
@@ -1538,7 +1538,7 @@
                   ))
                ((regime-variable? y)
                 (let (
-                      (rindex (assv (regime-variable-name y) rindexmap))
+                      (rindex (env-lookup (regime-variable-name y) rindexmap))
                       )
                   (if (not rindex)
                       (error 'reduce-eq "regime variable not in index" y)
@@ -1581,28 +1581,28 @@
 
          (cindexmap 
            (let recur ((nodelst nodelst)
-                       (indexmap  '())
+                       (indexmap  empty-env)
                        (index     0))
              (if (null? nodelst)
                  indexmap
                  (let ((node (car nodelst)))
                    (if (variable? (cdr node))
                        (recur (cdr nodelst)
-                              (cons (cons (car node) index) indexmap)
+                              (extend-env-with-binding indexmap (gen-binding (car node) index))
                               (+ 1 index))
                        (recur (cdr nodelst) indexmap index))))
              ))
           
          (dindexmap 
            (let recur ((nodelst nodelst)
-                       (indexmap  '())
+                       (indexmap  empty-env)
                        (index     0))
              (if (null? nodelst)
                  indexmap
                  (let ((node (car nodelst)))
                    (if (discrete-variable? (cdr node))
                        (recur (cdr nodelst)
-                              (cons (cons (car node) index) indexmap)
+                              (extend-env-with-binding indexmap (gen-binding (car node) index))
                               (+ 1 index))
                        (recur (cdr nodelst) indexmap index))))
              ))
@@ -1610,27 +1610,26 @@
 
          (pindexmap 
            (let recur ((nodelst nodelst)
-                       (indexmap  '())
+                       (indexmap  empty-env)
                        (index     0))
              (if (null? nodelst)
                  indexmap
                  (let ((node (car nodelst)))
-                   (d 'simcreate "pindexmap: node = ~A~%" node) 
                    (if (parameter? (cdr node))
                        (recur (cdr nodelst)
-                              (cons (cons (car node) index) indexmap)
+                              (extend-env-with-binding indexmap (gen-binding (car node) index))
                               (+ 1 index))
                        (recur (cdr nodelst) indexmap index))))
              ))
           
          (evindexmap 
            (let recur ((conditions conditions)
-                       (indexmap  '())
+                       (indexmap  empty-env)
                        (index     0))
              (if (null? conditions)
                  indexmap
                  (recur (cdr conditions)
-                        (cons (cons (evcondition-name (car conditions)) index) indexmap)
+                        (extend-env-with-binding indexmap (gen-binding (evcondition-name (car conditions)) index))
                         (+ 1 index)))
              ))
 

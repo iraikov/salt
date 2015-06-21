@@ -193,13 +193,13 @@
   )
 
 
-;(test-model 'vdp vdp)
+(test-model 'vdp vdp)
 
 (test-model 'iaf iaf)
 
-;(test-model 'izhfs izhfs solver: 'rkoz)
+(test-model 'izhfs izhfs solver: 'rkdp)
 
-;(test-model 'iafrefr iafrefr solver: 'rkoz)
+(test-model 'iafrefr iafrefr solver: 'rkoz)
 
 ;(test-model 'iafsyn iafsyn)
 

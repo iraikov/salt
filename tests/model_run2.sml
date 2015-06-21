@@ -86,6 +86,6 @@ val evinitial = optApply Model.initcondfun ()
 val dinitial  = optApply Model.dinitfun ()
 val rinitial  = optApply Model.initregfun ()
 val f = D.integral(Model.odefun(p),optApply Model.condfun p,optApply Model.posfun p,optApply Model.negfun p,
-                   optApply Model.dposfun p,optApply Model.regfun ())
+                   optApply Model.dposfun p,Model.regfun)
 val _ = start (f,initial,evinitial,dinitial,rinitial,tstop,h0)
 

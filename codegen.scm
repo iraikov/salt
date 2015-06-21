@@ -259,7 +259,7 @@
         )
     (let* (
            (invcindexmap
-            (map (lambda (x) (cons (cdr x) (car x))) cindexmap))
+            (map (lambda (x) (cons (cdr x) (car x))) (env->list cindexmap)))
            (ode-inds 
             (list->vector 
              (map (match-lambda [('setindex 'dy index val) #t] 
@@ -333,7 +333,7 @@
                    ))
             (V:Fn '(p) 
                   (E:Ret (cond ((pair? regblocks) 
-                                (V:Op 'RegimeStepper (V:Fn '(d r) (E:Ret (V:Op 'make_event_stepper (list fnval))))))
+                                (V:Op 'RegimeStepper (list (V:Fn '(d r) (E:Ret (V:Op 'make_event_stepper (list fnval)))))))
                                ((pair? condblock)
                                 (V:Op 'EventStepper (list (V:Op 'make_event_stepper (list fnval)))))
                                (else
@@ -413,18 +413,16 @@
                 (V:Op 'SOME
                       (list 
                        (let* ((blocks (fold-reinit-blocks ode-inds dposblocks))
-                              (fnval (V:Fn (if (null? regblocks) '(t y c) '(t y c d))
-                                                 (if (null? asgns)
-                                                     (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                                                     (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                                 asgns)
-                                                            (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks))))))))
-                         (V:Fn '(p) (E:Ret (if (null? regblocks)
-                                               (V:Op 'SResponse (list fnval))
-                                               (V:Op 'RegimeResponse (list fnval))))
-                               ))
-                       ))
-                ))
+                              (fnval (V:Fn '(t y c d)
+                                           (if (null? asgns)
+                                               (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
+                                               (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                           asgns)
+                                                      (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks))))))))
+                         (V:Fn '(p) (E:Ret fnval))
+                         ))
+                      ))
+            )
 
            (initregfun 
             (if (null? regblocks)

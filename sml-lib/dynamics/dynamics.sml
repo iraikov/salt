@@ -33,7 +33,6 @@ datatype model_response =
          RegimeResponse of (real * cont_state * event_state * dsc_state) -> cont_state
          | SResponse of (real * cont_state * event_state) -> cont_state
 
-
 val vsub = Unsafe.Vector.sub
 
 fun vmap2 f (v1,v2) = 
