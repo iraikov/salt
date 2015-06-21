@@ -6,5 +6,6 @@ $(SML_LIB)/basis/unsafe.mlb
 local
 	dynamics.sml
 in
-	structure FunctionalHybridDynamics
+	structure FunctionalHybridDynamics1
+	structure FunctionalHybridDynamics2
 end

@@ -1,8 +1,10 @@
-(* Compile with mlton -mlb-path-var 'RK_LIB $(CHICKEN_HOME)/share/chicken/salt/sml-lib/rk' *)
+(* Compile with mlton -mlb-path-var 'SALT_HOME $(CHICKEN_HOME)/share/chicken/salt' -mlb-path-map $(CHICKEN_HOME)/share/chicken/salt/mlb-path-map *)
 
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/unsafe.mlb
 $(RK_LIB)/rk.mlb
+$(DYNAMICS_LIB)/dynamics.mlb
+structure Dynamics = FunctionalHybridDynamics1
 
 local
 	iaf.sml

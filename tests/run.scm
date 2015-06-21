@@ -193,9 +193,9 @@
   )
 
 
-(test-model 'vdp vdp)
+;(test-model 'vdp vdp)
 
-;(test-model 'iaf iaf)
+(test-model 'iaf iaf)
 
 ;(test-model 'izhfs izhfs solver: 'rkoz)
 

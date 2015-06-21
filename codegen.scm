@@ -332,11 +332,15 @@
                            ))
                    ))
             (V:Fn '(p) 
-                  (E:Ret (if (null? regblocks) 
-                             (V:Op 'ContSolver (list (V:Op 'make_stepper (list fnval))))
-                             (V:Op 'RegimeSolver (V:Fn '(d r) (E:Ret (V:Op 'make_stepper (list fnval)))))
-                             )))
-            ))
+                  (E:Ret (cond ((pair? regblocks) 
+                                (V:Op 'RegimeStepper (V:Fn '(d r) (E:Ret (V:Op 'make_event_stepper (list fnval))))))
+                               ((pair? condblock)
+                                (V:Op 'EventStepper (list (V:Op 'make_event_stepper (list fnval)))))
+                               (else
+                                (V:Op 'ContStepper (list (V:Op 'make_stepper (list fnval)))))
+                               ))
+                  ))
+            )
 
            (initcondfun 
             (if (null? condblock)
@@ -349,56 +353,77 @@
            (condfun     
             (if (null? condblock)
                 (V:C 'NONE)
-                (V:Op 'SOME
-                      (list 
-                       (V:Fn '(p) 
-                             (E:Ret (V:Fn '(d) 
-                                          (E:Ret (V:Fn '(t y c) 
-                                                       (if (null? asgns)
-                                                           (E:Ret (V:Vec (map codegen-expr1 condblock)))
-                                                           (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                                       asgns)
-                                                                  (E:Ret (V:Vec (map codegen-expr1 condblock))))))))
-                                    ))
-                       ))
+                (let ((fnval (V:Fn '(t y c) 
+                                   (if (null? asgns)
+                                       (E:Ret (V:Vec (map codegen-expr1 condblock)))
+                                       (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                   asgns)
+                                              (E:Ret (V:Vec (map codegen-expr1 condblock))))))))
+                  (V:Op 'SOME
+                        (list 
+                         (V:Fn '(p) 
+                               (E:Ret (if (null? regblocks)
+                                          (V:Op 'SCondition (list fnval))
+                                          (V:Op 'RegimeCondition (list (V:Fn '(d) (E:Ret fnval))))))
+                               ))
+                        ))
                 ))
 
            (posfun      
             (if (null? posblocks)
                 (V:C 'NONE)
-                (let ((blocks (fold-reinit-blocks ode-inds posblocks)))
-                  (V:Fn '(p) (E:Ret (V:Fn '(t y c d) 
-                                          (if (null? asgns)
-                                              (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                                              (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                          asgns)
-                                                     (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))))
+                (V:Op 'SOME
+                      (list 
+                       (let* ((blocks (fold-reinit-blocks ode-inds posblocks))
+                              (fnval (V:Fn (if (null? regblocks) '(t y c) '(t y c d))
+                                                 (if (null? asgns)
+                                                     (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
+                                                     (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                                 asgns)
+                                                            (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks))))))))
+                         (V:Fn '(p) (E:Ret (if (null? regblocks)
+                                               (V:Op 'SResponse (list fnval))
+                                               (V:Op 'RegimeResponse (list fnval))))
+                               ))
+                       ))
+                ))
+
+           (negfun      
+            (if (null? negblocks)
+                (V:C 'NONE)
+                (V:Op 'SOME
+                      (list 
+                       (let* ((blocks (fold-reinit-blocks ode-inds negblocks))
+                              (fnval (V:Fn (if (null? regblocks) '(t y c) '(t y c d))
+                                                 (if (null? asgns)
+                                                     (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
+                                                     (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                                 asgns)
+                                                            (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks))))))))
+                         (V:Fn '(p) (E:Ret (if (null? regblocks)
+                                               (V:Op 'SResponse (list fnval))
+                                               (V:Op 'RegimeResponse (list fnval))))
+                               ))
+                       ))
+                ))
+
            (dposfun      
             (if (null? dposblocks)
                 (V:C 'NONE)
                 (V:Op 'SOME
                       (list 
-                       (let ((blocks (fold-reinit-blocks ode-inds dposblocks)))
-                         (V:Fn '(p) (E:Ret (V:Fn '(t y c d) 
+                       (let* ((blocks (fold-reinit-blocks ode-inds dposblocks))
+                              (fnval (V:Fn (if (null? regblocks) '(t y c) '(t y c d))
                                                  (if (null? asgns)
                                                      (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
                                                      (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
                                                                  asgns)
-                                                            (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))))
-                ))
-
-           (negfun
-            (if (null? negblocks)
-                (V:C 'NONE)
-                (V:Op 'SOME
-                      (list 
-                       (let ((blocks (fold-reinit-blocks ode-inds negblocks)))
-                         (V:Fn '(p) (E:Ret (V:Fn '(t y c d) 
-                                                 (if (null? asgns)
-                                                     (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                                                     (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                                 asgns)
-                                                            (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))))
+                                                            (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks))))))))
+                         (V:Fn '(p) (E:Ret (if (null? regblocks)
+                                               (V:Op 'SResponse (list fnval))
+                                               (V:Op 'RegimeResponse (list fnval))))
+                               ))
+                       ))
                 ))
 
            (initregfun 
@@ -649,7 +674,7 @@ struct
 open Real
 open Math
 open RungeKutta
-open FunctionalHybridDynamics
+open Dynamics
 
 fun putStrLn str = 
   (TextIO.output (TextIO.stdOut, str);
@@ -691,12 +716,12 @@ EOF
        . ,(case solver  
             ;; adaptive solvers
             ((rkoz rkdp)
-             (let ((esolver (sprintf "ce~A" solver)))
+             (let ((cesolver (sprintf "ce~A" solver)))
              `(
                ("val " ,solver ": (real vector) stepper2 = make_" ,solver "()" ,nl)
                ("fun make_stepper (deriv) = " ,solver " (scaler,summer,deriv)" ,nl)
-               ("val " ,esolver ": (real vector) stepper3 = make_" ,esolver "()" ,nl)
-               ("fun make_estepper (deriv) = " ,esolver " (scaler,summer,deriv)" ,nl)
+               ("val " ,cesolver ": (real vector) stepper3 = make_" ,cesolver "()" ,nl)
+               ("fun make_event_stepper (deriv) = " ,cesolver " (scaler,summer,deriv)" ,nl)
                (,nl)
                )
              ))
@@ -704,6 +729,7 @@ EOF
              `(
                ("val " ,solver ": (real vector) stepper1 = make_" ,solver "()" ,nl)
                ("fun make_stepper (deriv) = " ,solver " (scaler,summer,deriv)" ,nl)
+               ("fun make_event_stepper (deriv) = " ,solver " (scaler,summer,deriv)" ,nl)
                (,nl)
                ))
             ))
