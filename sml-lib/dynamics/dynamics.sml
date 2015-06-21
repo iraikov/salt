@@ -14,8 +14,8 @@ datatype model_state =
          | ContState of real * real vector
 
 datatype model_solver = 
-         RegimeSolver of (real vector * bool vector) -> (real * real vector) -> real -> real vector
-         | ContSolver of (real * real vector) -> real -> real vector
+         RegimeSolver of real -> (real vector * bool vector) -> (real * real vector) -> real vector
+         | ContSolver of real -> (real * real vector) -> real vector
 
 datatype model_condition = 
          RegimeCondition of real vector -> (real * real vector * real vector) -> real vector
@@ -85,7 +85,7 @@ fun integral1 (RegimeSolver solver,SOME (RegimeCondition fcond),
                SOME fdiscrete,SOME fregime,h) =
     (fn(RegimeState (x,y,e,d,r)) => 
         let val x'  = x + h
-            val y'  = solver (d,r) (x,y) h
+            val y'  = solver h (d,r) (x,y)
             val e'  = fcond d (x',y',e)
             val pos = vfind2 thr (e, e') 
             val r'  = fregime (e',r)
@@ -106,7 +106,7 @@ fun integral1 (RegimeSolver solver,SOME (RegimeCondition fcond),
 | integral1 (ContSolver solver,SOME (SCondition fcond),SOME (SResponse fpos),fneg,NONE,NONE,h) =
   (fn(EventState(x,y,e)) => 
       let val x'  = x + h
-          val y'  = solver (x,y) h
+          val y'  = solver h (x,y)
           val e'  = fcond (x',y',e)
           val pos = vfind2 thr (e, e') 
           val y'' = case pos of SOME i => fpos(x',y',e') | _ => y'
@@ -124,7 +124,7 @@ fun integral1 (RegimeSolver solver,SOME (RegimeCondition fcond),
 | integral1 (ContSolver solver,NONE,NONE,_,NONE,NONE,h) =
   (fn(ContState(x,y)) => 
       let val x'  = x + h
-          val y'  = solver (x,y) h
+          val y'  = solver h (x,y)
       in
           ContState(x',y')
       end

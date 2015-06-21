@@ -1,0 +1,3 @@
+RK_LIB $(SALT_HOME)/sml-lib/rk
+DYNAMICS_LIB $(SALT_HOME)/sml-lib/dynamics
+

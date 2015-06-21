@@ -24,7 +24,6 @@
   (V:Var     (name symbol?))
   (V:Sub     (v value?) (index (lambda (x) (and (integer? x) (or (zero? x) (positive? x))))) )
   (V:Vec     (vals (lambda (x) (every value? x))))
-  (V:Update  (v value?) (i integer?) (x value?))
   (V:Fn      (args list?) (body stmt?))
   (V:Op      (name symbol?)  (args (lambda (x) (every value? x))))
   (V:Ifv     (test value?)  (ift value?) (iff value?))
@@ -38,7 +37,6 @@
 		  (V:Var (n)     (sprintf "(V:Var ~A)" n))
 		  (V:Sub (v i)   (sprintf "(V:Sub ~A ~A)" v i))
                   (V:Vec  (lst)  (sprintf "(V:Vec ~A)" lst))
-                  (V:Update  (v i x)  (sprintf "(V:Update ~A ~A ~A)" v i x))
 		  (V:Ifv (test tv fv) (sprintf  "(V:Ifv ~A ~A ~A)" test tv fv))
 		  (V:Fn  (args body) (sprintf "(V:Fn ~A = ~A)" args body))
 		  (V:Op (name args) (sprintf "(V:Op ~A ~A)" name args))
@@ -312,42 +310,62 @@
                                    asgn-defs)
                               (E:Ret (V:Vec (map codegen-expr1 ode-defs)))))))
            (dinitfun  
-            (V:Fn '(p) (if (null? asgn-defs)
-                           (E:Ret (V:Vec (map codegen-expr1 discrete-defs)))
-                           (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                   asgn-defs)
-                              (E:Ret (V:Vec (map codegen-expr1 discrete-defs)))))))
+            (if (null? discrete-defs)
+                (V:C 'NONE)
+                (V:Op 'SOME
+                      (list 
+                       (V:Fn '(p) (if (null? asgn-defs)
+                                      (E:Ret (V:Vec (map codegen-expr1 discrete-defs)))
+                                      (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                  asgn-defs)
+                                             (E:Ret (V:Vec (map codegen-expr1 discrete-defs))))))
+                       ))
+                ))
            (odefun    
-            (V:Fn '(p) 
-                  (E:Ret
-                   (V:Fn '(d r)
-                         (E:Ret
-                          (V:Fn '(t y) 
-                                (let ((resval (V:Vec (map (match-lambda [('setindex 'dy index val) (codegen-expr1 val)]) odeblock))))
-                                  (if (null? asgns)
-                                      (E:Ret resval)
-                                      (E:Let (map (lambda (asgn) (B:Val (car asgn) (codegen-expr1 (cdr asgn)))) asgns)
-                                             (E:Ret resval)))
-                                  ))
-                          ))
+            (let ((fnval
+                   (V:Fn '(t y) 
+                         (let ((resval (V:Vec (map (match-lambda [('setindex 'dy index val) (codegen-expr1 val)]) odeblock))))
+                           (if (null? asgns)
+                               (E:Ret resval)
+                               (E:Let (map (lambda (asgn) (B:Val (car asgn) (codegen-expr1 (cdr asgn)))) asgns)
+                                      (E:Ret resval)))
+                           ))
                    ))
-            )
+            (V:Fn '(p) 
+                  (E:Ret (if (null? regblocks) 
+                             (V:Op 'ContSolver (list (V:Op 'make_stepper (list fnval))))
+                             (V:Op 'RegimeSolver (V:Fn '(d r) (E:Ret (V:Op 'make_stepper (list fnval)))))
+                             )))
+            ))
 
            (initcondfun 
-            (V:Fn '() (E:Ret (V:Vec (map (lambda (x) (V:C 'posInf)) condblock)))))
+            (if (null? condblock)
+                (V:C 'NONE)
+                (V:Op 'SOME
+                      (list 
+                       (V:Fn '() (E:Ret (V:Vec (map (lambda (x) (V:C 'posInf)) condblock))))))
+                ))
 
            (condfun     
-            (V:Fn '(p) 
-                  (E:Ret (V:Fn '(d) 
-                               (E:Ret (V:Fn '(t y c) 
-                                    (if (null? asgns)
-                                        (E:Ret (V:Vec (map codegen-expr1 condblock)))
-                                        (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                    asgns)
-                                               (E:Ret (V:Vec (map codegen-expr1 condblock)))))))))))
+            (if (null? condblock)
+                (V:C 'NONE)
+                (V:Op 'SOME
+                      (list 
+                       (V:Fn '(p) 
+                             (E:Ret (V:Fn '(d) 
+                                          (E:Ret (V:Fn '(t y c) 
+                                                       (if (null? asgns)
+                                                           (E:Ret (V:Vec (map codegen-expr1 condblock)))
+                                                           (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                                       asgns)
+                                                                  (E:Ret (V:Vec (map codegen-expr1 condblock))))))))
+                                    ))
+                       ))
+                ))
+
            (posfun      
             (if (null? posblocks)
-                (V:Fn '(p) (E:Ret (V:Fn '(t y c d) (E:Ret (V:Var 'y)))))
+                (V:C 'NONE)
                 (let ((blocks (fold-reinit-blocks ode-inds posblocks)))
                   (V:Fn '(p) (E:Ret (V:Fn '(t y c d) 
                                           (if (null? asgns)
@@ -357,38 +375,52 @@
                                                      (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))))
            (dposfun      
             (if (null? dposblocks)
-                (V:Fn '(p) (E:Ret (V:Fn '(t y c d) (E:Ret (V:Var 'd)))))
-                (let ((blocks (fold-reinit-blocks ode-inds dposblocks)))
-                  (V:Fn '(p) (E:Ret (V:Fn '(t y c d) 
-                                          (if (null? asgns)
-                                              (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                                              (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                          asgns)
-                                                     (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))))
+                (V:C 'NONE)
+                (V:Op 'SOME
+                      (list 
+                       (let ((blocks (fold-reinit-blocks ode-inds dposblocks)))
+                         (V:Fn '(p) (E:Ret (V:Fn '(t y c d) 
+                                                 (if (null? asgns)
+                                                     (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
+                                                     (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                                 asgns)
+                                                            (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))))
+                ))
+
            (negfun
             (if (null? negblocks)
-                (V:Fn '(p) (E:Ret (V:Fn '(t y c d) (E:Ret (V:Var 'y)))))
-                (let ((blocks (fold-reinit-blocks ode-inds negblocks)))
-                  (V:Fn '(p) (E:Ret (V:Fn '(t y c d) 
-                                          (if (null? asgns)
-                                              (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                                              (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                          asgns)
-                                                     (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))))
+                (V:C 'NONE)
+                (V:Op 'SOME
+                      (list 
+                       (let ((blocks (fold-reinit-blocks ode-inds negblocks)))
+                         (V:Fn '(p) (E:Ret (V:Fn '(t y c d) 
+                                                 (if (null? asgns)
+                                                     (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
+                                                     (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                                 asgns)
+                                                            (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))))
+                ))
+
            (initregfun 
             (if (null? regblocks)
-                (V:Fn '() (E:Ret (V:Vec '())))
-                (V:Fn '() (E:Ret (V:Vec (cons (V:C #t) (map (lambda (x) (V:C #f)) (cdr regblocks))))))))
+                (V:C 'NONE)
+                (V:Op 'SOME
+                      (list 
+                       (V:Fn '() (E:Ret (V:Vec (cons (V:C #t) (map (lambda (x) (V:C #f)) (cdr regblocks))))))))
+                ))
 
            (regfun      
             (if (null? regblocks)
-                (V:Fn '(c r) (E:Ret (V:Var 'r)))
-                (let ((blocks (fold-regime-reinit-blocks regblocks)))
-                  (V:Fn '(c r) 
-                        (if (null? asgns)
-                            (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                            (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x)))) asgns)
-                                   (E:Ret  (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))
+                (V:C 'NONE)
+                (V:Op 'SOME
+                      (list 
+                       (let ((blocks (fold-regime-reinit-blocks regblocks)))
+                         (V:Fn '(c r) 
+                               (if (null? asgns)
+                                   (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
+                                   (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x)))) asgns)
+                                          (E:Ret  (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))
+                ))
            )
 
       (list paramfun initfun dinitfun odefun initcondfun condfun posfun negfun dposfun initregfun regfun)
@@ -450,8 +482,6 @@
 		    (list "(vector-ref " (value->scheme v) " " index ")"))
 	 (V:Vec     (lst) 
 		    (list "(vector " (intersperse (map value->scheme lst) " ") ")"))
-         (V:Update (v i x) 
-                   (list "(vector-update " (value->scheme v) " " (->string i) " " (value->scheme x) ") "))
 	 (V:Fn      (args body) 
 		    (list "(lambda (" (intersperse (map name/scheme args) " ") ") "
 			  (stmt->scheme body #f) ")"))
@@ -548,8 +578,6 @@
 	 (V:Vec   (lst) 
 		    (let ((n (length lst)))
 		      (list "(Vector.fromList [" (intersperse (map (lambda (v) (value->ML v)) lst) ", ") "])")))
-	 (V:Update  (v i x) 
-                    (list "(Vector.update (" (intersperse (list (value->ML v) (number->string i) (value->ML x)) ", ") ")"))
 	 (V:Fn      (args body) 
 		    (list "(fn (" (intersperse (map name/ML args) ",") ") => "
 			  (stmt->ML body #f) ")"))
@@ -669,12 +697,14 @@ EOF
                ("fun make_stepper (deriv) = " ,solver " (scaler,summer,deriv)" ,nl)
                ("val " ,esolver ": (real vector) stepper3 = make_" ,esolver "()" ,nl)
                ("fun make_estepper (deriv) = " ,esolver " (scaler,summer,deriv)" ,nl)
+               (,nl)
                )
              ))
             (else
              `(
                ("val " ,solver ": (real vector) stepper1 = make_" ,solver "()" ,nl)
                ("fun make_stepper (deriv) = " ,solver " (scaler,summer,deriv)" ,nl)
+               (,nl)
                ))
             ))
      )

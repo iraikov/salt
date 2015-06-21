@@ -53,6 +53,8 @@
   (let ([fn (->string fn)])
     (copy-file fn (make-pathname SALT-DIR fn)) ) )
 
+(copy-file-to-salt-dir "sml-lib/mlb-path-map")
+
 (copy-file-to-salt-dir "sml-lib/rk/rk.sml")
 (copy-file-to-salt-dir "sml-lib/rk/rk.mlb")
 
