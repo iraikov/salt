@@ -47,6 +47,6 @@ val initial = Model.initfun(p)
 val evinitial = Model.initcondfun()
 val dinitial = Model.dinitfun()
 val rinitial = Model.initregfun()
-val f = Model.eintegral(Model.odefun(p),Model.condfun(p),Model.posfun(p),Model.negfun(p),Model.dposfun(p),Model.regfun)
+val f = Model.integral(Model.odefun(p),Model.condfun(p),Model.posfun(p),Model.negfun(p),Model.dposfun(p),Model.regfun)
 val _ = start (f,initial,evinitial,dinitial,rinitial,tstop,h0)
 
