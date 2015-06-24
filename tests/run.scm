@@ -193,6 +193,43 @@
   )
 
 
+
+(define morris-lecar 
+  (parse
+  `(
+    (define Istim =  parameter 50.0)
+    (define c     =  parameter 20.0)
+    (define vk    =  parameter -70.0)
+    (define vl    =  parameter -50.0)
+    (define vca   =  parameter 100.0)
+    (define gk    =  parameter 8.0)
+    (define gl    =  parameter 2.0)
+    (define gca   =  parameter 4.0)
+    (define v1    =  parameter -1.0)
+    (define v2    =  parameter 15.0)
+    (define v3    =  parameter 10.0)
+    (define v4    =  parameter 14.5)
+    (define phi   =  parameter 0.0667)
+
+    
+    (define v   = unknown -60.899)
+                     
+    (fun (minf v) = (0.5 * (1.0 + tanh ((v - v1) / v2))))
+    (fun (winf v) = (0.5 * (1.0 + tanh ((v - v3) / v4))))
+    (fun lamw (v) = (phi * cosh ((v - v3) / (2.0 * v4))))
+
+    (define w   = unknown 0.0149)
+    (define ica = unknown)
+    (define ik  = unknown)
+
+    ((der(v)) = (Istim + (gl * (vl - v)) + ica + ik) / c )
+    ((der(w)) = lamw (v) * (winf(v) - w))
+    ((ica)    = gca * (minf (v) * (vca - v)))
+    ((ik)     = gk * (w * (vk - v)))
+    ))
+)
+
+
 (test-model 'vdp vdp)
 
 (test-model 'iaf iaf)
