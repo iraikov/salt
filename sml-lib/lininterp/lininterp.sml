@@ -36,9 +36,8 @@ fun interpolate1 a x =
             end)
 
        val A =  Real./ (Real.- (y2, y1), Real.- (x2, x1))
-       val B =  Real.~ (Real./ (Real.- (Real.* (x1, y2), (Real.* (y1, x2))), Real.- (x2, x1)))
    in
-       Real.+ (Real.* (A, x), B)
+       Real.+ (y1, Real.* (A, Real.-(x, x1)))
    end
 
  
@@ -58,5 +57,7 @@ fun table f a b n =
 
 
 end
-
-
+(*
+val t = LinearInterpolation.table Real.Math.sin 0.0 180.0 20
+val fi = LinearInterpolation.interpolate1 t
+*)
