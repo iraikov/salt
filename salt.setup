@@ -60,3 +60,6 @@
 
 (copy-file-to-salt-dir "sml-lib/dynamics/dynamics.sml")
 (copy-file-to-salt-dir "sml-lib/dynamics/dynamics.mlb")
+
+(copy-file-to-salt-dir "sml-lib/lininterp/lininterp.sml")
+(copy-file-to-salt-dir "sml-lib/lininterp/lininterp.mlb")

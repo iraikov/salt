@@ -1,0 +1,9 @@
+(* import libraries *)
+
+$(SML_LIB)/basis/basis.mlb
+
+local
+	lininterp.sml
+in
+	structure LinearInterpolation
+end
