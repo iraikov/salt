@@ -15,7 +15,7 @@
 
 )
 
-(verbose 0)
+(verbose 1)
 
 (define vdp 
   (parse 
@@ -194,7 +194,7 @@
 
 
 
-(define morris-lecar 
+(define ml 
   (parse
   `(
     (define Istim =  parameter 50.0)
@@ -214,29 +214,32 @@
     
     (define v   = unknown -60.899)
                      
-    (fun (minf v) = (0.5 * (1.0 + tanh ((v - v1) / v2))))
-    (fun (winf v) = (0.5 * (1.0 + tanh ((v - v3) / v4))))
-    (fun lamw (v) = (phi * cosh ((v - v3) / (2.0 * v4))))
+    (fun (minf v) = 0.5 * (1.0 + tanh ((v - v1) / v2)))
+    (fun (winf v) = 0.5 * (1.0 + tanh ((v - v3) / v4)))
+    (fun (lamw v) = phi * cosh ((v - v3) / (2.0 * v4)))
 
     (define w   = unknown 0.0149)
-    (define ica = unknown)
-    (define ik  = unknown)
+    (define ica = unknown 0.0)
+    (define ik  = unknown 0.0)
 
-    ((der(v)) = (Istim + (gl * (vl - v)) + ica + ik) / c )
-    ((der(w)) = lamw (v) * (winf(v) - w))
+    ((der (v)) = (Istim + (gl * (vl - v)) + ica + ik) / c )
+    ((der (w)) = lamw (v) * (winf(v) - w))
     ((ica)    = gca * (minf (v) * (vca - v)))
     ((ik)     = gk * (w * (vk - v)))
-    ))
-)
+    )
+  ))
 
 
-(test-model 'vdp vdp)
 
-(test-model 'iaf iaf)
+;(test-model 'vdp vdp)
 
-(test-model 'izhfs izhfs solver: 'rkdp)
+;(test-model 'iaf iaf)
 
-(test-model 'iafrefr iafrefr solver: 'rkoz)
+;(test-model 'izhfs izhfs solver: 'rkdp)
+
+;(test-model 'iafrefr iafrefr solver: 'rkoz)
+
+(test-model 'ml ml solver: 'rkdp)
 
 ;(test-model 'iafsyn iafsyn)
 

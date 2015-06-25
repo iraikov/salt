@@ -759,6 +759,20 @@
       (make-pair-arg (recur (pair-arg-fst e))
                      (recur (pair-arg-snd e))))
 
+     ((function? e)
+      (let ((name    (function-name e))
+            (formals (function-formals e))
+            (body    (function-body e)))
+        (let* ((env-stack1 (push-env-stack
+                            (function-formal-env formals empty-env) 
+                            env-stack))
+               (body1 (resolve body env-stack1)))
+          (d 'resolve "function: name = ~A body = ~A~%" name body)
+          (d 'resolve "function: body1 = ~A~%" body1)
+          (function name formals body1)
+          ))
+      )
+
      ((pair? e)
       (let ((op (car e)) (args (cdr e)))
         (d 'resolve "op = ~A~%" op)
@@ -774,7 +788,6 @@
           (else   (map recur e)))))
 
      (else e)
-
      ))
   )
 
@@ -1059,21 +1072,32 @@
 
 
 
+(define (function-formal-env formals env)
+  (d 'function-formal-env "formals = ~A~%" formals)
+  (match formals
+         (($ pair-formal x rst)
+          (let ((b (gen-binding (var-def-sym x) x)))
+            (function-formal-env rst (extend-env-with-binding env b))))
+         (($ null-formal)
+          env)
+         ))
+
+
 (define (function-call-env formals args env)
   (d 'function-call-env "formals = ~A args = ~A~%" formals args)
   (match formals
          (($ pair-formal x frst)
           (match args
-                 (($ pair-arg xv arst)
+                 ((or ($ pair-arg xv arst) (xv . arst))
                   (let ((b (gen-binding (var-def-sym x) xv)))
                     (function-call-env frst arst (extend-env-with-binding env b))))
-                 (($ null-arg)
+                 ((or ($ null-arg) ())
                   (error 'function-call-env
                          "function arity mismatch"))
                  ))
          (($ null-formal)
           (match args
-                 (($ null-arg) env)
+                 ((or ($ null-arg) ()) env)
                  (else 
                   (error 'function-call-env
                          "function arity mismatch"))
@@ -1081,11 +1105,23 @@
          ))
 
 
-(define (subst-symbol sym env-stack)
-  (let ((assoc-var-def (env-stack-lookup sym env-stack)))
+(define (subst-symbol sym env-or-env-stack)
+  (let ((assoc-var-def   (if (env-stack? env-or-env-stack)
+                             (env-stack-lookup sym env-or-env-stack)
+                             (env-lookup sym env-or-env-stack))))
     (if assoc-var-def
         (binding-value assoc-var-def) 
         sym)))
+        
+
+(define (subst-symbol* sym env-or-env-stack)
+  (let ((assoc-var-def   (if (env-stack? env-or-env-stack)
+                             (env-stack-lookup sym env-or-env-stack)
+                             (env-lookup sym env-or-env-stack))))
+    (if assoc-var-def
+        (binding-value assoc-var-def) 
+        (error 'subst-symbol* "symbol not found" sym))))
+        
 
 (define (subst-if args env-stack)
   (map (lambda (x) (subst-expr x env-stack)) args))
@@ -1123,12 +1159,17 @@
       (let ((args (subst-pair-arg arg env-stack)))
         `(signal.primop ,f . ,args))
       (match f (($ function name formals body)
-                 (let ((fenv (function-call-env formals arg empty-env)))
-                   (d 'subst-function-call "fenv = ~A~%" fenv)
-                   (subst-expr body (push-env-stack fenv env-stack)))
-                 )
+                (let ((args (subst-pair-arg arg env-stack)))
+                  (let ((fenv (function-call-env formals args empty-env)))
+                    (d 'subst-function-call "fenv = ~A~%" (map car (env->list fenv)))
+                    (let ((expr1 (subst-expr body (push-env-stack fenv env-stack))))
+                      (d 'subst-function-call "expr1 = ~A~%" expr1)
+                      expr1))
+                  ))
              (($ free-variable name)
-              (error 'subset-function-call "undefined function" name))
+              (error 'subst-function-call "undefined function" name))
+             (else
+              (error 'subst-function-call "unknown callable object" f))
              )
       ))
 
@@ -1153,15 +1194,20 @@
                 (d 'subst-expr "f = ~A fargs = ~A~%" f args)
                 (subst-function-call f fargs env-stack)
                 ))
+             ((signal.primop)  
+              (let ((op (car args))
+                    (opargs (cdr args)))
+                `(signal.primop ,op . ,(map (lambda (x) (subst-expr x env-stack)) opargs))))
              (else e)
              )))
         ((var-def? e)
-         (subst-symbol (var-def-sym e) env-stack))
+         (subst-symbol* (var-def-sym e) env-stack))
         ((free-variable? e)
          (subst-symbol (free-variable-name e) env-stack))
         ((left-var? e)
          (subst-expr (left-var-u e) env-stack))
-        (else e)))
+        (else e)
+        ))
 
 
 (define (units-reinit args env)
@@ -1290,7 +1336,8 @@
          (expr-units (left-var-u e) env))
         ((constant? e)
          (constant-unit e)) 
-        (else e)))
+        (else e))
+  )
          
 
 (define (reduce-expr expr indexmaps )
@@ -1379,9 +1426,12 @@
            empty-env-stack))
 
          (('signal.call f args)
-          (subst-expr 
-           `(signal.call ,f ,(reduce-expr args indexmaps))
-           empty-env-stack))
+          (reduce-expr
+           (subst-expr 
+            `(signal.call 
+              ,f ,(reduce-expr args indexmaps))
+            empty-env-stack)
+           indexmaps))
 
          (('signal.reinit e x y)
           (let ((eindex (env-lookup e evindexmap)))
@@ -1392,11 +1442,12 @@
              empty-env-stack)))
 
          ((op . args)
-          (subst-expr
-           (cons op (map (lambda (x) (reduce-expr x indexmaps)) args))
-           empty-env-stack))
+           (subst-expr
+            (cons op (map (lambda (x) (reduce-expr x indexmaps)) args))
+            empty-env-stack))
 
-         (else expr)
+         (else (subst-expr expr empty-env-stack))
+
          ))
 )
 

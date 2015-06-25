@@ -2,11 +2,39 @@
  * Definitions for fixed-step simulations of functional hybrid dynamical systems.
 *)
 
+structure SignalMath =
+struct
+
+open Real
+open Math
+
+val signal_sign = sign
+val signal_eqnum = (op ==)
+val signal_neg = (op ~)
+val signal_add = (op +)
+val signal_sub = (op -)
+val signal_mul = (op *)
+val signal_div = (op /)
+val signal_pow = pow
+
+val signal_sin = sin
+val signal_cos = cos
+val signal_cosh = cosh
+val signal_tanh = tanh
+                      
+val signal_max = max
+val signal_min = min
+val signal_gt = (op >)
+val signal_gte = (op >=)
+
+end
+
 structure FunctionalHybridDynamics1 =
 struct
 
 open Real
 open Math
+open SignalMath
 
 type regime_state  = bool vector
 type dsc_state     = real vector
@@ -65,19 +93,6 @@ fun vfoldpi2 f (v1,v2) =
     end 
 
 val equal = fn (x,y) => (x = y) 
-
-val signal_sign = sign
-val signal_eqnum = (op ==)
-val signal_neg = (op ~)
-val signal_add = (op +)
-val signal_sub = (op -)
-val signal_mul = (op *)
-val signal_div = (op /)
-val signal_pow = pow
-val signal_max = max
-val signal_min = min
-val signal_gt = (op >)
-val signal_gte = (op >=)
 
 (* Fixed time step integrator *)
 
@@ -151,6 +166,7 @@ struct
 
 open Real
 open Math
+open SignalMath
 
 type regime_state  = bool vector
 type dsc_state     = real vector
@@ -169,7 +185,7 @@ datatype model_stepper =
          | EventStepper of real -> (real * cont_state) -> 
                                    (cont_state * error_state * (real -> cont_state))
          | ContStepper of real -> (real * cont_state) -> 
-                                  (cont_state * error_state * (real -> cont_state))
+                                  (cont_state * error_state)
 
 datatype model_condition = 
          RegimeCondition of dsc_state -> (real * cont_state * event_state) -> event_state
@@ -212,19 +228,6 @@ fun vfoldpi2 f (v1,v2) =
     end 
 
 val equal = fn (x,y) => (x = y) 
-
-val signal_sign = sign
-val signal_eqnum = (op ==)
-val signal_neg = (op ~)
-val signal_add = (op +)
-val signal_sub = (op -)
-val signal_mul = (op *)
-val signal_div = (op /)
-val signal_pow = pow
-val signal_max = max
-val signal_min = min
-val signal_gt = (op >)
-val signal_gte = (op >=)
 
 (* Adaptive time step integrator *)
 
@@ -354,7 +357,7 @@ fun adaptive_solver stepper  =
     let open Real
         fun f (x,ys,h) =
             (let
-                val (ys',e,finterp) = stepper h (x,ys)
+                val (ys',e) = stepper h (x,ys)
             in
                 case predictor tol (h,e) of
                     Right h' => 

@@ -31,7 +31,7 @@
 ;; extend-env-stack-with-binding: Stack Env x Binding -> Stack Env
 ;; extend-env-stack-with-env: Stack Env x Env -> Stack Env
 ;; pop-env-stack: Stack Env -> Stack Env
-;; push-env-stack: Stack Env x Env -> Stack Env
+;; push-env-stack: Env x Stack Env -> Stack Env
 ;; env-stack-lookup: Key x Env -> (Binding + False)
 
 

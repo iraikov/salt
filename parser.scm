@@ -523,11 +523,17 @@
                  (formals-env (car env-ast))
                  (formals-ast (cdr env-ast)))
             (d 'parse-function "formals-ast = ~A formals-env = ~A~%" formals-ast formals-env)
-            (function
-             (free-variable-name 
-              (parse-variable env function-name))
-             formals-ast
-             (parse-expression (extend-env-with-env env formals-env) (parse-sym-infix-expr exp-or-body)))))
+            (match exp-or-body
+                   (('= . expr)
+                    (function
+                     (free-variable-name 
+                      (parse-variable env function-name))
+                     formals-ast
+                     (parse-expression (extend-env-with-env env formals-env) 
+                                       (parse-sym-infix-expr expr))))
+                   (else (salt:error 'parse-function "Not a valid function body: " exp-or-body))
+                   ))
+          )
          (else (salt:error 'parse-function "Not a valid pattern: " pattern))))
       (salt:error 'parse-function "Not a valid definition: " args)))
 
@@ -686,7 +692,7 @@
             (args (cdr c)))
         (d 'parse-declaration "op = ~A args = ~A~%" op args)
         (case op
-          ((function)    
+          ((fun function)    
            (parse-function env args))
           ((define)      
            (parse-definition env args))
