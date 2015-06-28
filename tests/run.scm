@@ -15,7 +15,7 @@
 
 )
 
-(verbose 1)
+(verbose 0)
 
 (define vdp 
   (parse 
@@ -89,11 +89,13 @@
 (define izhfs 
   (parse 
    `(
+     (define millivolt = unit Potential (1e-3 * volt))
+
      (define Isyn = parameter (dim Current) 0.0 * nA)
      (define Iext = parameter (dim Current) 400.0 * nA)
 
      (define k     = parameter 1.0)
-     (define Vinit = parameter (dim Potential)  -65.0 * mV)
+     (define Vinit = parameter (dim Potential)  -65.0 * millivolt)
      (define Vpeak = parameter (dim Potential)   25.0 * mV)
      (define Vt    = parameter (dim Potential)  -55.0 * mV)
      (define Vr    = parameter (dim Potential)  -40.0 * mV)
@@ -211,7 +213,6 @@
     (define v4    =  parameter 14.5)
     (define phi   =  parameter 0.0667)
 
-    
     (define v   = unknown -60.899)
                      
     (fun (minf v) = 0.5 * (1.0 + tanh ((v - v1) / v2)))

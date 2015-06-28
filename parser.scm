@@ -538,6 +538,32 @@
       (salt:error 'parse-function "Not a valid definition: " args)))
 
 
+;; The number of base quantities defined
+(define Q 9)
+
+(define (parse-dim-vector dims)
+  (let ((n (length dims)))
+    (if (< n Q)
+        (parse-dim-vector (append dims (list-tabulate (- Q n) (lambda (x) 0))))
+        (dimint (list->s32vector dims))
+        )))
+  
+(define (parse-define-unit pattern rhs env)
+  (match rhs 
+         ((('dim-vector . dims) factor-expr)
+          (make-unit (free-variable-name (parse-variable env pattern))
+                     (parse-dim-vector dims)
+                     (parse-sym-infix-expr factor-expr) '()))
+         ((dim-expr factor-expr)
+          (d 'parse-define-unit "dim-expr = ~A~%" dim-expr)
+          (make-unit (free-variable-name (parse-variable env pattern))
+                     (parse-sym-infix-expr dim-expr)
+                     (parse-sym-infix-expr factor-expr) '()))
+         (else
+          (salt:error 'parse-define-unit "Not a valid unit definition: " rhs))
+         ))
+  
+
 (define (parse-definition env args)
   (if (pair? args)
       (let ((pattern (car args))
@@ -601,7 +627,9 @@
                    (parse-expression env (parse-sym-infix-expr expr))
                    Unity
                    ))
-                  (else (salt:error 'parse-define "Not a valid definition expression: " exp-or-body))
+                 (('= 'unit . args)
+                  (parse-define-unit pattern args env))
+                 (else (salt:error 'parse-define "Not a valid definition expression: " exp-or-body))
                  ))
          (else (salt:error 'parse-define "Not a valid pattern: " pattern))))
       (salt:error 'parse-define "Not a valid definition: " args)))
@@ -669,21 +697,6 @@
         (make-structural-event (gensym 'se) (free-variable-name label) equations transition))
       (salt:error 'parse-event "Not a valid structural event: " args)))
 
-
-;; (define (parse-define-unit env args)
-;;   (if (pair? args)
-;;       (let ((pattern (car args))
-;;             (rhs (cdr args)))
-;;         (match rhs 
-;;                ((name dims factor)
-;;                 (unit (parse-variable env name)
-;;                       (parse-dim-expression env (parse-sym-infix-expr dims))
-;;                       (parse-unit-factor-expression env (parse-sym-infix-expr factor))))
-;;                (else
-;;                 (salt:error 'parse-define-unit "Not a valid unit definitions: " rhs))
-;;                ))
-;;       (salt:error 'parse-define-unit "Not a valid unit: " args)))
-  
 
 (define (parse-declaration env c)
   (d 'parse-declaration "c = ~A~%" c)
