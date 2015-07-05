@@ -38,6 +38,7 @@
 	(
 
          parse elaborate simcreate codegen-ODE codegen-ODE/ML
+         math-constant-env math-binop-env math-unop-env 
          verbose
 
 	 )
@@ -606,14 +607,16 @@
 
 ;; Equation parsing
 
-(define (parse decls) 
-  (let ((parse-env
-         (fold (lambda (ext-env env) (extend-env-with-env env ext-env))
-               empty-env
-               (list math-constant-env
-                     math-binop-env
-                     math-unop-env
-                     ))))
+(define default-parse-env
+  (fold (lambda (ext-env env) (extend-env-with-env env ext-env))
+        empty-env
+        (list math-constant-env
+              math-binop-env
+              math-unop-env)
+        ))
+
+
+(define (parse decls #!key (env default-parse-env))
     (letrec
         ((parse0
           (lambda (decls)
@@ -621,12 +624,12 @@
             (map (lambda (x) 
                    (cond
                     ((astdecls? x) x)
-                    (else (parse-declaration parse-env x))
+                    (else (parse-declaration env x))
                     ))
                  decls))
           ))
       (make-astdecls (parse0 decls)))
-    ))
+    )
 
 
 ;; Expression resolution
