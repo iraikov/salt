@@ -41,6 +41,9 @@
          math-constant-env math-binop-env math-unop-env 
          verbose
 
+         constant
+         empty-env env-lookup extend-env-with-binding env->list
+         gen-binding binding-key binding-value
 	 )
 
 	(import scheme chicken)
