@@ -238,9 +238,9 @@
 
 ;(test-model 'izhfs izhfs solver: 'rkdp)
 
-;(test-model 'iafrefr iafrefr solver: 'rkoz)
+(test-model 'iafrefr iafrefr solver: 'rkoz)
 
-(test-model 'ml ml solver: 'rkdp)
+;(test-model 'ml ml solver: 'rkdp)
 
 ;(test-model 'iafsyn iafsyn)
 

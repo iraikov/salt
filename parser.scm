@@ -672,30 +672,42 @@
 (define (parse-transition env args)
   (d 'parse-transition "args = ~A~%" args)
 
-  (if (pair? args)
-      (let* (
-             (target (parse-variable env (car args)))
-             (condition (parse-expression env (parse-sym-infix-expr (cadr args))))
-             (response (map (lambda (x) (parse-reinit env x)) (caddr args)))
-             )
-        (make-transition target condition response)
+  (match-let (((event target condition response)
+               (match args
+                      ((event target condition response) args)
+                      ((target condition response)
+                       (cons (gensym 'trevn) args))
+                      (else (error 'parse-transition "Not a valid transition: " args)))))
+      (let (
+            (event1 (parse-variable env event))
+            (target1 (parse-variable env target))
+            (condition1 (parse-expression env (parse-sym-infix-expr condition)))
+            (response1 (map (lambda (x) (parse-reinit env x)) response))
+            )
+        (make-transition event1 target1 condition1 response1)
         )
-      (error 'parse-transition "Not a valid transition: " args)
+      
       ))
 
 
 (define (parse-structural-event env args)
+
   (d 'parse-structural-event "(cadr args) = ~A~%" (cadr args))
   (d 'parse-structural-event "(caddr args) = ~A~%" (caddr args))
 
-  (if (pair? args)
-      (let (
-            (label (parse-variable env (car args)))
-            (equations (map (lambda (x) (parse-equation env x)) (cadr args)))
-            (transition (parse-transition env (caddr args)))
-            )
-        (make-structural-event (gensym 'se) (free-variable-name label) equations transition))
-      (salt:error 'parse-event "Not a valid structural event: " args)))
+  (match-let 
+
+   (((label equations transition) args))
+
+   (let (
+         (name1 (gensym 'se))
+         (label1 (parse-variable env label))
+         (equations1 (map (lambda (x) (parse-equation env x)) equations))
+         (transition1 (parse-transition env transition))
+         )
+
+     (make-structural-event name1 (free-variable-name label1) equations1 transition1)))
+  )
 
 
 (define (parse-declaration env c)

@@ -387,8 +387,9 @@
 
 
 (define-record-type transition 
-  (make-transition target condition response)
+  (make-transition event target condition response)
   transition?
+  (event transition-event)
   (target transition-target)
   (condition transition-condition)
   (response transition-response)
@@ -969,23 +970,24 @@
                              functions nodemap regimemap dimenv
                              )
                       )
-                     (($ structural-event name label regime ($ transition target condition pos))
+                     (($ structural-event name label regime ($ transition event target condition pos))
                       (let (
                             (condition-index (length conditions))
                             )
-                        (d 'elaborate "structural-event: name = ~A label = ~A~%" name label)
+                        (d 'elaborate "structural-event: name = ~A label = ~A event = ~A ~%" name label event)
                         (d 'elaborate "structural-event: target = ~A~%" target)
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions parameters
                                (fold (lambda (eq ax) (merge-regime-eq name eq ax env-stack)) equations regime) initial
-                               (cons (make-evcondition name (resolve condition env-stack)) conditions) 
+                               (cons (make-evcondition event (resolve condition env-stack)) conditions)
                                (append (cons
-                                        (make-evresponse name (resolve-reinit name `(reinit ,(make-regime-variable name) #f)))
+                                        (make-evresponse event (resolve-reinit event `(reinit ,(make-regime-variable name) #f)))
                                          (cons
-                                          (make-evresponse name (resolve-reinit name `(reinit ,(resolve target env-stack) #t)))
+                                          (make-evresponse event (resolve-reinit event `(reinit ,(resolve target env-stack) #t)))
                                           (map
                                            (lambda (x) 
-                                             (make-evresponse name (resolve-reinit name (resolve x env-stack)))) pos)))
+                                             (make-evresponse event (resolve-reinit event (resolve x env-stack))))
+                                           pos)))
                                          pos-responses)
                                neg-responses
                                functions 
