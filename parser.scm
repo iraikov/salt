@@ -678,6 +678,8 @@
                       ((target condition response)
                        (cons (gensym 'trevn) args))
                       (else (error 'parse-transition "Not a valid transition: " args)))))
+
+             (d 'parse-transition "response = ~A~%" response)
       (let (
             (event1 (parse-variable env event))
             (target1 (parse-variable env target))
