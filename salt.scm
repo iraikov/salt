@@ -1065,9 +1065,9 @@
                                )
                         ))
 
-                     (($ external name label initial dim)
-                      (d 'elaborate "external: label = ~A initial = ~A~%" label initial)
-                      (let* ((resolved-initial (resolve initial env-stack))
+                     (($ external name label initial-value dim)
+                      (d 'elaborate "external: label = ~A initial-value = ~A~%" label initial-value)
+                      (let* ((resolved-initial (resolve initial-value env-stack))
                              (en1 (external name label resolved-initial dim)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
@@ -1743,7 +1743,8 @@
                 empty-env 
                 (append
                  (equation-set-parameters eqset)
-                 (equation-set-fields eqset))))
+                 (equation-set-fields eqset)
+                 (equation-set-externals eqset))))
 
          (cindexmap 
            (let recur ((nodelst nodelst)

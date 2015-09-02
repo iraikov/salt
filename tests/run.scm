@@ -4,9 +4,10 @@
   (pp model)
 
   (define elab (elaborate model))
-  (define sim (simcreate elab))
-  
+  (print "elaborate is done")
   (pp elab)
+
+  (define sim (simcreate elab))
   (pp sim)
   (pp (codegen-ODE sim))
   (let ((port (open-output-file (string-append (->string name) ".sml"))))
@@ -15,7 +16,7 @@
 
 )
 
-(verbose 0)
+(verbose 1)
 
 (define vdp 
   (parse 
@@ -243,9 +244,9 @@
 
 ;(test-model 'iafrefr iafrefr solver: 'rkoz)
 
-(test-model 'ml ml solver: 'rk3)
+;(test-model 'ml ml solver: 'rk3)
 
-;(test-model 'iafsyn iafsyn)
+(test-model 'iafsyn iafsyn)
 
 
 
