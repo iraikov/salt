@@ -50,6 +50,7 @@
          equation-set-discrete-definitions
          equation-set-parameters
          equation-set-fields
+         equation-set-externals
          equation-set-equations
          equation-set-initial
          equation-set-conditions
@@ -267,6 +268,7 @@
   )
 
 
+
 (define-record-printer (constant x out)
   (if (constant-unit x)
       (fprintf out "#(constant ~S = ~A ~A)"
@@ -278,6 +280,25 @@
                (constant-type x)
                (constant-value x)
                )))
+
+
+(define-record-type external
+  (external name label initial dim)
+  external?
+  (name external-name)
+  (label external-label)
+  (initial external-initial)
+  (dim external-dim)
+  )
+
+
+(define-record-printer (external x out)
+  (fprintf out "#(external ~S (~A) [~A] = ~A)"
+	   (external-name x)
+	   (external-dim x)
+	   (external-label x)
+	   (external-initial x)
+           ))
 
 
 (define-record-type left-var
@@ -543,7 +564,7 @@
 
 
 (define-record-type equation-set
-  (make-equation-set model definitions discrete-definitions parameters fields 
+  (make-equation-set model definitions discrete-definitions parameters fields externals
                      equations initial conditions pos-responses neg-responses 
                      functions nodemap regimemap dimenv)
   equation-set?
@@ -552,6 +573,7 @@
   (discrete-definitions equation-set-discrete-definitions)
   (parameters equation-set-parameters)
   (fields equation-set-fields)
+  (externals equation-set-externals)
   (equations equation-set-equations)
   (initial equation-set-initial)
   (conditions equation-set-conditions)
@@ -572,6 +594,7 @@
     (discrete-definitions=,(equation-set-discrete-definitions x))
     (parameters=,(equation-set-parameters x))
     (fields=,(equation-set-fields x))
+    (externals=,(equation-set-externals x))
     (equations=,(equation-set-equations x))
     (functions=,(equation-set-functions x))
     (conditions=,(equation-set-conditions x))
@@ -584,16 +607,18 @@
 
 ;; runtime representation of a simulation object
 (define-record-type simruntime
-  (make-simruntime eqset cindexmap dindexmap evindexmap rindexmap parameters defs discrete-defs eqblock condblock posresp negresp)
+  (make-simruntime eqset cindexmap dindexmap evindexmap rindexmap exindexmap parameters defs discrete-defs external-defs eqblock condblock posresp negresp)
   simruntime?
   (eqset simruntime-eqset)
   (cindexmap simruntime-cindexmap)
   (dindexmap simruntime-dindexmap)
   (evindexmap simruntime-evindexmap)
   (rindexmap simruntime-rindexmap)
+  (exindexmap simruntime-exindexmap)
   (parameters simruntime-parameters)
   (defs simruntime-definitions)
   (discrete-defs simruntime-discrete-definitions)
+  (external-defs simruntime-external-definitions)
   (eqblock simruntime-eqblock)
   (condblock simruntime-condblock)
   (posresp simruntime-posresp)
@@ -607,8 +632,10 @@
           (cindexmap=,(simruntime-cindexmap x))
           (dindexmap=,(simruntime-dindexmap x))
           (evindexmap=,(simruntime-evindexmap x))
+          (exindexmap=,(simruntime-exindexmap x))
           (parameters=,(simruntime-parameters x))
           (defs=,(simruntime-definitions x))
+          (external-defs=,(simruntime-external-definitions x))
           (eqblock=,(simruntime-eqblock x))
           (evblock=,(simruntime-condblock x))
           (posresp=,(simruntime-posresp x))
@@ -746,6 +773,16 @@
             (dim     (field-dim e)))
         (field name label value dim)))
 
+     ((external? e)
+      (let ((name    (external-name e))
+            (label   (external-label e))
+            (initial (let recur ((resval (external-initial e)))
+                       (let ((resval1 (resolve resval env-stack)))
+                         (if (equal? resval resval1) resval
+                             (recur resval1)))))
+            (dim     (external-dim e)))
+        (external name label initial dim)))
+
      ((pair-arg? e)
       (make-pair-arg (recur (pair-arg-fst e))
                      (recur (pair-arg-snd e))))
@@ -839,7 +876,7 @@
 ;;
 ;; The main steps in flattening are:
 ;;
-;; Creates a name resolution environment (parameters,fields,constants,variables,functions).
+;; Creates a name resolution environment (parameters,fields,externals,constants,variables,functions).
 ;; Replaces fixed initial values.
 ;; Flattens models and populates equation, definition, function lists.
 ;; Pulls out initial equations and populate initial list.
@@ -879,6 +916,10 @@
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
+                       (($ external name label initial dim)
+                        (recur (cdr decls)
+                               (extend-env-with-binding env (gen-binding label decl))
+                               ))
                        (($ function name formals expr)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding name decl))
@@ -913,6 +954,7 @@
               (discrete-definitions '()) 
               (parameters     '())
               (fields         '())
+              (externals      '())
               (equations      '())
               (initial        '())
               (conditions     '())
@@ -931,6 +973,7 @@
                              (reverse discrete-definitions)
                              (reverse parameters)
                              (reverse fields)
+                             (reverse externals)
                              (reverse equations)
                              (map-equations replace-fixed initial)
                              (reverse conditions)
@@ -950,7 +993,7 @@
               
               (recur (append (astdecls-decls en) (cons 'pop-env-stack (cdr entries)))
                      (push-env-stack (model-env (astdecls-decls en)) env-stack)
-                     definitions discrete-definitions parameters fields
+                     definitions discrete-definitions parameters fields externals
                      equations initial conditions pos-responses neg-responses 
                      functions nodemap regimemap dimenv)
 
@@ -958,7 +1001,7 @@
 
                      ('pop-env-stack
                       (recur (cdr entries) (pop-env-stack env-stack)
-                             definitions discrete-definitions parameters fields
+                             definitions discrete-definitions parameters fields externals
                              equations initial conditions pos-responses neg-responses 
                              functions nodemap regimemap dimenv
                              )
@@ -970,7 +1013,7 @@
                         (recur (cdr entries) env-stack
                                (cons (cons name resolved-value) definitions)
                                discrete-definitions
-                               parameters fields equations initial conditions 
+                               parameters fields externals equations initial conditions 
                                pos-responses neg-responses functions
                                (extend-env-with-binding nodemap (gen-binding name en1))
                                regimemap
@@ -984,7 +1027,7 @@
                         (recur (cdr entries) env-stack
                                definitions
                                (cons (cons name resolved-value) discrete-definitions)
-                               parameters fields equations initial conditions 
+                               parameters fields externals equations initial conditions 
                                pos-responses neg-responses functions
                                (extend-env-with-binding nodemap (gen-binding name en1))
                                regimemap
@@ -998,7 +1041,7 @@
                              (en1 (parameter name label resolved-value dim)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
-                               (cons (cons name resolved-value) parameters) fields
+                               (cons (cons name resolved-value) parameters) fields externals
                                equations initial conditions pos-responses neg-responses 
                                functions
                                (extend-env-with-binding nodemap (gen-binding name en1))
@@ -1008,12 +1051,27 @@
                         ))
 
                      (($ field name label value dim)
-                      (d 'elaborate "fields: label = ~A value = ~A~%" label value)
+                      (d 'elaborate "field: label = ~A value = ~A~%" label value)
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (field name label resolved-value dim)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
-                               parameters (cons (cons name resolved-value) fields) 
+                               parameters (cons (cons name resolved-value) fields) externals
+                               equations initial conditions pos-responses neg-responses 
+                               functions
+                               (extend-env-with-binding nodemap (gen-binding name en1))
+                               regimemap
+                               (extend-env-with-binding dimenv (gen-binding name dim))
+                               )
+                        ))
+
+                     (($ external name label initial dim)
+                      (d 'elaborate "external: label = ~A initial = ~A~%" label initial)
+                      (let* ((resolved-initial (resolve initial env-stack))
+                             (en1 (external name label resolved-initial dim)))
+                        (recur (cdr entries) env-stack
+                               definitions discrete-definitions
+                               parameters fields (cons (cons name resolved-initial) externals)
                                equations initial conditions pos-responses neg-responses 
                                functions
                                (extend-env-with-binding nodemap (gen-binding name en1))
@@ -1026,7 +1084,7 @@
                       (d 'elaborate "equation: unresolved rhs = ~A~%" expr)
                       (d 'elaborate "equation: rhs = ~A~%" (resolve expr env-stack))
                       (recur (cdr entries) env-stack
-                             definitions discrete-definitions parameters fields
+                             definitions discrete-definitions parameters fields externals
                              (cons (list (resolve s env-stack) (resolve expr env-stack)) equations)
                              initial conditions pos-responses neg-responses 
                              functions nodemap regimemap dimenv
@@ -1034,7 +1092,7 @@
                       )
                      (($ initial-equation s expr)
                       (recur (cdr entries) env-stack
-                             definitions discrete-definitions parameters fields  
+                             definitions discrete-definitions parameters fields  externals
                              equations (cons (cons s (resolve expr env-stack)) initial) 
                              conditions pos-responses neg-responses 
                              functions nodemap regimemap dimenv
@@ -1047,7 +1105,7 @@
                         (d 'elaborate "structural-event: name = ~A label = ~A event = ~A ~%" name label event)
                         (d 'elaborate "structural-event: target = ~A~%" target)
                         (recur (cdr entries) env-stack
-                               definitions discrete-definitions parameters fields
+                               definitions discrete-definitions parameters fields externals
                                (fold (lambda (eq ax) (merge-regime-eq name eq ax env-stack)) equations regime) initial
                                (cons (make-evcondition event (resolve condition env-stack)) conditions)
                                (append (cons
@@ -1068,7 +1126,7 @@
                       )
                      (($ event name condition pos neg)
                       (recur (cdr entries) env-stack
-                             definitions discrete-definitions parameters fields
+                             definitions discrete-definitions parameters fields externals
                              equations initial 
                              (cons (make-evcondition name (resolve condition env-stack)) conditions) 
                              (append (map (lambda (x) 
@@ -1082,14 +1140,14 @@
                              ))
                      (($ function name formals expr)
                       (recur (cdr entries) env-stack
-                             definitions discrete-definitions parameters fields
+                             definitions discrete-definitions parameters fields externals
                              equations initial conditions pos-responses neg-responses 
                              (cons (list name formals (resolve expr env-stack)) functions)
                              nodemap regimemap dimenv
                              ))
                      ((or (? unit?) (? quantity?))
                       (recur (cdr entries) env-stack
-                             definitions discrete-definitions parameters fields
+                             definitions discrete-definitions parameters fields externals
                              equations initial conditions pos-responses neg-responses 
                              functions nodemap regimemap dimenv
                              ))
@@ -1365,6 +1423,8 @@
          (expr-units (parameter-value e) env))
         ((field? e)
          (expr-units (field-value e) env))
+        ((external? e)
+         (expr-units (external-initial e) env))
         ((left-var? e)
          (expr-units (left-var-u e) env))
         ((constant? e)
@@ -1380,6 +1440,7 @@
         (dindexmap  (alist-ref 'dindexmap indexmaps))
         (rindexmap  (alist-ref 'rindexmap indexmaps))
         (evindexmap (alist-ref 'evindexmap indexmaps))
+        (exindexmap (alist-ref 'exindexmap indexmaps))
         )
   (d 'reduce-expr "expr = ~A~%" expr)
   (d 'reduce-expr "cindexmap = ~A~%" cindexmap)
@@ -1457,6 +1518,14 @@
             (if (not yindex)
                 (error 'reduce-expr "parameter not in index" name)
                 `(getindex p ,(cdr yindex)))
+            ))
+
+         (($ external name label initial dim)
+          (let ((yindex (env-lookup name exindexmap)))
+            (d 'reduce-expr "exindexmap = ~A~%" exindexmap)
+            (if (not yindex)
+                (error 'reduce-expr "external not in index" name)
+                `(getindex ext ,(cdr yindex)))
             ))
 
          (('signal.let lbnds body)
@@ -1737,12 +1806,30 @@
                         (+ 1 index)))
              ))
 
+         (exindexmap 
+           (let recur ((nodelst nodelst)
+                       (indexmap  empty-env)
+                       (index     0))
+             (if (null? nodelst)
+                 indexmap
+                 (let ((node (car nodelst)))
+                   (cond ((external? (cdr node))
+                          (recur (cdr nodelst)
+                                 (extend-env-with-binding indexmap (gen-binding (car node) index))
+                                 (+ 1 index)))
 
-         (indexmaps `((cindexmap . ,cindexmap)
-                      (pindexmap . ,pindexmap)
-                      (dindexmap . ,dindexmap)
-                      (rindexmap . ,regimemap)
-                      (evindexmap . ,evindexmap)))
+                         (else
+                          (recur (cdr nodelst) indexmap index)))))
+             ))
+          
+
+         (indexmaps `((cindexmap  . ,cindexmap)
+                      (pindexmap  . ,pindexmap)
+                      (dindexmap  . ,dindexmap)
+                      (rindexmap  . ,regimemap)
+                      (evindexmap . ,evindexmap)
+                      (exindexmap . ,exindexmap)
+                      ))
                       
 
          (param-block 
@@ -1757,6 +1844,10 @@
          (discrete-init-block
           (map (lambda (x) (reduce-expr (cdr x) indexmaps))
                (equation-set-discrete-definitions eqset)))
+         
+         (external-init-block
+          (map (lambda (x) (reduce-expr (cdr x) indexmaps))
+               (equation-set-externals eqset)))
          
          (eq-block
           (map (lambda (x) (reduce-eq x indexmaps unit-env)) 
@@ -1780,9 +1871,11 @@
      eqset
      cindexmap dindexmap 
      evindexmap regimemap
+     exindexmap
      param-block
      init-block
      discrete-init-block
+     external-init-block
      eq-block 
      cond-block
      pos-responses

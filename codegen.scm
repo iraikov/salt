@@ -207,6 +207,7 @@
         (defs      (simruntime-definitions sim))
         (discrete-defs  (simruntime-discrete-definitions sim))
         (params    (simruntime-parameters sim))
+        (externals (simruntime-external-definitions sim))
         (eqblock   (simruntime-eqblock sim))
         (condblock (let ((sorted-eqs 
                           (sort (simruntime-condblock sim) 
@@ -321,6 +322,10 @@
                                              (E:Ret (V:Vec (map codegen-expr1 discrete-defs))))))
                        ))
                 ))
+
+           (initextfun  
+            (V:Fn '(p) (E:Ret (V:Vec (map codegen-expr1 externals)))))
+
            (odefun    
             (let ((fnval
                    (V:Fn '(t y) 
@@ -333,11 +338,11 @@
                    ))
             (V:Fn '(p) 
                   (E:Ret (cond ((pair? regblocks) 
-                                (V:Op 'RegimeStepper (list (V:Fn '(d r) (E:Ret (V:Op 'make_event_stepper (list fnval)))))))
+                                (V:Op 'RegimeStepper (list (V:Fn '(d r) (E:Ret (V:Fn '(ext) (E:Ret (V:Op 'make_event_stepper (list fnval)))))))))
                                ((pair? condblock)
-                                (V:Op 'EventStepper (list (V:Op 'make_event_stepper (list fnval)))))
+                                (V:Op 'EventStepper (list (V:Fn '(ext) (E:Ret (V:Op 'make_event_stepper (list fnval)))))))
                                (else
-                                (V:Op 'ContStepper (list (V:Op 'make_stepper (list fnval)))))
+                                (V:Op 'ContStepper (list  (V:Fn '(ext) (E:Ret (V:Op 'make_stepper (list fnval)))))))
                                ))
                   ))
             )
@@ -353,7 +358,7 @@
            (condfun     
             (if (null? condblock)
                 (V:C 'NONE)
-                (let ((fnval (V:Fn '(t y c) 
+                (let ((fnval (V:Fn '(t y c ext) 
                                    (if (null? asgns)
                                        (E:Ret (V:Vec (map codegen-expr1 condblock)))
                                        (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
@@ -375,12 +380,12 @@
                 (V:Op 'SOME
                       (list 
                        (let* ((blocks (fold-reinit-blocks ode-inds posblocks))
-                              (fnval (V:Fn (if (null? regblocks) '(t y c) '(t y c d))
-                                                 (if (null? asgns)
-                                                     (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                                                     (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                                 asgns)
-                                                            (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks))))))))
+                              (fnval (V:Fn (if (null? regblocks) '(t y c ext) '(t y c d ext))
+                                           (if (null? asgns)
+                                               (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
+                                               (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                           asgns)
+                                                      (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks))))))))
                          (V:Fn '(p) (E:Ret (if (null? regblocks)
                                                (V:Op 'SResponse (list fnval))
                                                (V:Op 'RegimeResponse (list fnval))))
@@ -446,7 +451,20 @@
                 ))
            )
 
-      (list paramfun initfun dinitfun odefun initcondfun condfun posfun negfun dposfun initregfun regfun)
+      `(
+        (paramfun . ,paramfun)
+        (initfun  . ,initfun)
+        (dinitfun . ,dinitfun)
+        (odefun   . ,odefun)
+        (initcondfun . ,initcondfun)
+        (initextfun  . ,initextfun)
+        (condfun . ,condfun)
+        (posfun  . ,posfun)
+        (negfun  . ,negfun)
+        (dposfun . ,dposfun)
+        (initregfun . ,initregfun)
+        (regfun . ,regfun)
+        )
 
     ))
 )
@@ -624,18 +642,7 @@
 
 (define (codegen-ODE/ML sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
 
-  (match-let (((paramfun    
-                initfun     
-                dinitfun 
-                odefun      
-                initcondfun 
-                condfun     
-                posfun      
-                negfun
-                dposfun
-                initregfun
-                regfun)
-               (codegen-ODE sim)))
+  (let ((fundefs (codegen-ODE sim)))
 
     (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkoz rkdp))))
         (error 'codegen-ODE/ML "unknown solver" solver))
@@ -643,19 +650,10 @@
     (if mod (print-fragments (prelude/ML solver: solver libs: libs) out))
     
     (print-fragments
-     (list 
-           (binding->ML (B:Val 'paramfun paramfun)) nl
-           (binding->ML (B:Val 'initfun initfun)) nl
-           (binding->ML (B:Val 'dinitfun dinitfun)) nl
-           (binding->ML (B:Val 'odefun odefun)) nl
-           (binding->ML (B:Val 'initcondfun initcondfun)) nl
-           (binding->ML (B:Val 'condfun condfun)) nl
-           (binding->ML (B:Val 'posfun posfun)) nl
-           (binding->ML (B:Val 'negfun negfun)) nl
-           (binding->ML (B:Val 'dposfun dposfun)) nl
-           (binding->ML (B:Val 'initregfun initregfun)) nl
-           (binding->ML (B:Val 'regfun regfun)) nl
-           )
+     (map (match-lambda
+           ((name . def)  
+            (list (binding->ML (B:Val name def)) nl)))
+          fundefs)
      out)
     
     (if mod (print-fragments (list nl "end" nl) out))

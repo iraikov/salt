@@ -30,26 +30,27 @@ fun printstate (t,input) =
     end
       
 
-fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,tmax,h0) =
+fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,tmax,h0) =
     let
-	fun run (rs as D.RegimeState (t, input, ev, d, regime, h)) =
+	fun run (rs as D.RegimeState (t, input, ev, d, regime, ext, h)) =
             (case f rs of
-	         rs' as D.RegimeState (t',nstate,ev',d',regime',h') =>
+	         rs' as D.RegimeState (t',nstate,ev',d',regime',_,h') =>
                  (printstate (t',nstate); 
 	          if (t'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
 	          else (run rs'))
+
                | _ => raise Domain)
             | run _ = raise Domain
     in
 	printstate (0.0, initial);
-	run (D.RegimeState (0.0, initial, evinitial, dinitial, rinitial, h0))
+	run (D.RegimeState (0.0, initial, evinitial, dinitial, rinitial, extinitial, h0))
     end
-|  start (f,initial,SOME evinitial,NONE,NONE,tmax,h0) =
+|  start (f,initial,SOME evinitial,NONE,NONE,extinitial,tmax,h0) =
     let
-	fun run (es as D.EventState (t, input, ev, h)) =
+	fun run (es as D.EventState (t, input, ev, ext, h)) =
             (case f es of
-	         es' as D.EventState (t',nstate,ev',h') =>
+	         es' as D.EventState (t',nstate,ev',_,h') =>
                  (printstate (t',nstate); 
 	          if (t'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -58,13 +59,13 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,tmax,h0) =
             | run _ = raise Domain
     in
 	printstate (0.0, initial);
-	run (D.EventState (0.0, initial, evinitial, h0))
+	run (D.EventState (0.0, initial, evinitial, extinitial,h0))
     end
-|  start (f,initial,NONE,NONE,NONE,tmax,h0) =
+|  start (f,initial,NONE,NONE,NONE,ext,tmax,h0) =
     let
-	fun run (cs as D.ContState (t, input, h)) =
+	fun run (cs as D.ContState (t, input, ext, h)) =
             (case f cs of
-	         cs' as D.ContState (t',nstate,h') =>
+	         cs' as D.ContState (t',nstate,_,h') =>
                  (printstate (t',nstate); 
 	          if (t'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -73,19 +74,20 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,tmax,h0) =
             | run _ = raise Domain
     in
 	printstate (0.0, initial);
-	run (D.ContState (0.0, initial, h0))
+	run (D.ContState (0.0, initial, ext, h0))
     end
 |  start _ = raise Domain
 
 
-val h0        = 0.01
-val tstop     = 1500.0
-val p         = Model.paramfun()
-val initial   = Model.initfun(p)
-val evinitial = optApply Model.initcondfun ()
-val dinitial  = optApply Model.dinitfun ()
-val rinitial  = optApply Model.initregfun ()
+val h0          = 0.01
+val tstop       = 150.0
+val p           = Model.paramfun()
+val initial     = Model.initfun(p)
+val evinitial   = optApply Model.initcondfun ()
+val dinitial    = optApply Model.dinitfun ()
+val rinitial    = optApply Model.initregfun ()
+val extinitial  = Model.initextfun ()
 val f = D.integral(Model.odefun(p),optApply Model.condfun p,optApply Model.posfun p,optApply Model.negfun p,
                    optApply Model.dposfun p,Model.regfun)
-val _ = start (f,initial,evinitial,dinitial,rinitial,tstop,h0)
+val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial,tstop,h0)
 

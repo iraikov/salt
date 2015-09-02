@@ -86,6 +86,7 @@
 
 
 
+
 (define izhfs 
   (parse 
    `(
@@ -159,6 +160,8 @@
 
      (define gsyn  = unknown 0.0)
 
+     (define grid_input = external 0.0)
+
      ((der (S)) = (alpha * (1 - S) - beta * S))
      ((der (SS)) = ((s0 - SS) / taus))
         
@@ -171,7 +174,7 @@
              (SS := 0))
             )
 
-     (event (grid_input (t))
+     (event (grid_input)
             (
              (S := S)
              (SS := (SS + f * (1 - SS)))
@@ -238,9 +241,9 @@
 
 ;(test-model 'izhfs izhfs solver: 'rkdp)
 
-(test-model 'iafrefr iafrefr solver: 'rkoz)
+;(test-model 'iafrefr iafrefr solver: 'rkoz)
 
-;(test-model 'ml ml solver: 'rkdp)
+(test-model 'ml ml solver: 'rk3)
 
 ;(test-model 'iafsyn iafsyn)
 

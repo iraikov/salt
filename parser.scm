@@ -613,6 +613,22 @@
                    (parse-expression env (parse-sym-infix-expr expr))
                    Unity
                    ))
+                 (('= 'external ('dim u) . expr)
+                  (external
+                   (gensym 'ext)
+                   (free-variable-name 
+                    (parse-variable env pattern))
+                   (parse-expression env (parse-sym-infix-expr expr))
+                   (cdr (assv u (model-quantities)))
+                   ))
+                 (('= 'external . expr)
+                  (external
+                   (gensym 'ext)
+                   (free-variable-name 
+                    (parse-variable env pattern))
+                   (parse-expression env (parse-sym-infix-expr expr))
+                   Unity
+                   ))
                  (('= 'constant ('unit u) . expr)
                   (constant
                    (free-variable-name

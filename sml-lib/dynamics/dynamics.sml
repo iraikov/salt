@@ -41,25 +41,26 @@ type dsc_state     = real vector
 type event_state   = real vector
 type cont_state    = real vector
 type error_state   = real vector
+type external_state = real vector
 
 datatype model_state = 
-         RegimeState of real * cont_state * event_state * dsc_state * regime_state
-         | EventState  of real * cont_state * event_state
-         | ContState   of real * cont_state
+         RegimeState of real * cont_state * event_state * dsc_state * regime_state * external_state
+         | EventState of real * cont_state * event_state * external_state
+         | ContState  of real * cont_state * external_state
 
 datatype model_stepper = 
-         RegimeStepper of real -> dsc_state * regime_state -> 
-                            (real * cont_state) -> cont_state
-         | EventStepper of real -> (real * cont_state) -> cont_state
-         | ContStepper of real -> (real * cont_state) -> cont_state
+         RegimeStepper of external_state -> real -> dsc_state * regime_state -> 
+                          (real * cont_state) -> cont_state
+         | EventStepper of external_state -> real -> (real * cont_state) -> cont_state
+         | ContStepper of external_state -> real -> (real * cont_state) -> cont_state
 
 datatype model_condition = 
-         RegimeCondition of dsc_state -> (real * cont_state * event_state) -> event_state
-         | SCondition of (real * cont_state * event_state) -> event_state
+         RegimeCondition of dsc_state -> (real * cont_state * event_state * external_state) -> event_state
+         | SCondition of (real * cont_state * event_state * external_state) -> event_state
 
 datatype model_response = 
-         RegimeResponse of (real * cont_state * event_state * dsc_state) -> cont_state
-         | SResponse of (real * cont_state * event_state) -> cont_state
+         RegimeResponse of (real * cont_state * event_state * dsc_state * external_state) -> cont_state
+         | SResponse of (real * cont_state * event_state * external_state) -> cont_state
 
 val vsub = Unsafe.Vector.sub
 
@@ -103,52 +104,52 @@ fun thr (v1,v2) = case (Real.sign(v1),Real.sign(v2)) of
 
 
 fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
-               SOME (RegimeResponse fpos),fneg,
-               SOME fdiscrete,SOME fregime,h) =
-    (fn(RegimeState (x,y,e,d,r)) => 
+              SOME (RegimeResponse fpos),fneg,
+              SOME fdiscrete,SOME fregime,h) =
+    (fn(RegimeState (x,y,e,d,r,ext)) => 
         let val x'  = x + h
-            val y'  = stepper h (d,r) (x,y)
-            val e'  = fcond d (x',y',e)
+            val y'  = stepper ext h (d,r) (x,y)
+            val e'  = fcond d (x',y',e,ext)
             val pos = vfind2 thr (e, e') 
             val r'  = fregime (e',r)
-            val y'' = case pos of SOME i => fpos(x',y',e',d) | _ => y'
+            val y'' = case pos of SOME i => fpos(x',y',e',d,ext) | _ => y'
             val y'' = case fneg of 
                           SOME (RegimeResponse f) => 
                           (case vfind2 thr (e', e) of 
-                               SOME i => f(x',y'',e',d) 
+                               SOME i => f(x',y'',e',d,ext) 
                              | _ => y'')
                         | SOME _ => raise Domain
                         | NONE => y''
             val d'  = fdiscrete (x',y',e',d)
         in
-            RegimeState(x',y'',e',d',r')
+            RegimeState(x',y'',e',d',r',ext)
         end
     | _ => raise Domain)
                
 | integral (EventStepper stepper,SOME (SCondition fcond),SOME (SResponse fpos),fneg,NONE,NONE,h) =
-  (fn(EventState(x,y,e)) => 
+  (fn(EventState(x,y,e,ext)) => 
       let val x'  = x + h
-          val y'  = stepper h (x,y)
-          val e'  = fcond (x',y',e)
+          val y'  = stepper ext h (x,y)
+          val e'  = fcond (x',y',e,ext)
           val pos = vfind2 thr (e, e') 
-          val y'' = case pos of SOME i => fpos(x',y',e') | _ => y'
+          val y'' = case pos of SOME i => fpos(x',y',e',ext) | _ => y'
           val y'' = case fneg of 
                         SOME (SResponse f) => 
                         (case vfind2 thr (e', e) of 
-                             SOME i => f(x',y'',e') | _ => y'')
+                             SOME i => f(x',y'',e',ext) | _ => y'')
                       | SOME _ => raise Domain
                       | NONE => y''
       in
-          EventState(x',y'',e')
+          EventState(x',y'',e',ext)
       end
   | _ => raise Domain)
 
 | integral (ContStepper stepper,NONE,NONE,_,NONE,NONE,h) =
-  (fn(ContState(x,y)) => 
+  (fn(ContState(x,y,ext)) => 
       let val x'  = x + h
-          val y'  = stepper h (x,y)
+          val y'  = stepper ext h (x,y)
       in
-          ContState(x',y')
+          ContState(x',y',ext)
       end
   | _ => raise Domain)
 
@@ -173,27 +174,28 @@ type dsc_state     = real vector
 type event_state   = real vector
 type cont_state    = real vector
 type error_state   = real vector
+type external_state = real vector
 
 datatype model_state = 
-         RegimeState  of real * cont_state * event_state * dsc_state * regime_state * real
-         | EventState of real * cont_state * event_state * real
-         | ContState  of real * cont_state * real
+         RegimeState  of real * cont_state * event_state * dsc_state * regime_state * external_state * real
+         | EventState of real * cont_state * event_state * external_state * real
+         | ContState  of real * cont_state * external_state * real
 
 datatype model_stepper = 
-         RegimeStepper of dsc_state * regime_state -> real -> real * cont_state -> 
-                                  (cont_state * error_state * (real -> cont_state))
-         | EventStepper of real -> (real * cont_state) -> 
+         RegimeStepper of dsc_state * regime_state -> external_state -> real -> real * cont_state -> 
+                          (cont_state * error_state * (real -> cont_state))
+         | EventStepper of external_state -> real -> (real * cont_state) -> 
                                    (cont_state * error_state * (real -> cont_state))
-         | ContStepper of real -> (real * cont_state) -> 
+         | ContStepper of external_state -> real -> (real * cont_state) -> 
                                   (cont_state * error_state)
 
 datatype model_condition = 
-         RegimeCondition of dsc_state -> (real * cont_state * event_state) -> event_state
-         | SCondition of (real * cont_state * event_state) -> event_state
+         RegimeCondition of dsc_state -> (real * cont_state * event_state * external_state) -> event_state
+         | SCondition of (real * cont_state * event_state * external_state) -> event_state
 
 datatype model_response = 
-         RegimeResponse of (real * cont_state * event_state * dsc_state) -> cont_state
-         | SResponse of (real * cont_state * event_state) -> cont_state
+         RegimeResponse of (real * cont_state * event_state * dsc_state * external_state) -> cont_state
+         | SResponse of (real * cont_state * event_state * external_state) -> cont_state
 
 
 val vsub = Unsafe.Vector.sub
@@ -267,7 +269,7 @@ fun secant tol f fg0 guess1 guess0 =
 
 datatype 'a result = Next of 'a | Root of 'a
 
-(* 1. Ensures that the event closest is time is selected, not just the first one in the event index.
+(* 1. Ensures that the event closest in time is selected, not just the first one in the event index.
    2. Determines the direction (positive or negative) of the event. *)
 fun adthreshold (i,v1,v2,ax) = 
     let
@@ -291,31 +293,31 @@ fun adthreshold (i,v1,v2,ax) =
 
 fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime)  =
     let open Real
-        fun f (x,ys,ev,d,r,h) =
+        fun f (x,ys,ev,d,r,ext,h) =
             (let
-                val (ys',e,finterp) = (stepper (d,r)) h (x,ys)
-                val ev' = fcond d (x+h,ys',ev)
+                val (ys',e,finterp) = (stepper (d,r)) ext h (x,ys)
+                val ev' = fcond d (x+h,ys',ev,ext)
             in
                 case predictor tol (h,e) of
                     Right h' => 
                     (case vfoldpi2 adthreshold (ev, ev') of
                          SOME (evdir,evind,evdiff) => 
                          (let
-                             fun fy (theta) = Vector.sub(fcond d (x+theta*h, finterp theta, ev), evind)
-                             val y0    = Vector.sub(fcond d (x,ys,ev), evind)
+                             fun fy (theta) = Vector.sub(fcond d (x+theta*h, finterp theta, ev, ext), evind)
+                             val y0    = Vector.sub(fcond d (x,ys,ev,ext), evind)
                              val theta = secant tol fy y0 1.0 0.0
                              val x'    = x+(theta+tol)*h
                              val ys''  = finterp (theta+tol)
-                             val ev''  = fcond d (x',ys'',ev)
+                             val ev''  = fcond d (x',ys'',ev,ext)
                              val d'    = fdiscrete (x',ys'',ev'',d)
                              val r'    = fregime (ev'',r)
                          in
-                             Root (x',ys'',evdir,ev'',d',r',h')
+                             Root (x',ys'',evdir,ev'',d',r',ext,h')
                          end)
                        | NONE => 
-                         Next (x+h,ys',0,ev',d,r,h'))
+                         Next (x+h,ys',0,ev',d,r,ext,h'))
                   | Left h'  => 
-                    f (x,ys,ev,d,r,h')
+                    f (x,ys,ev,d,r,ext,h')
             end)
     in
         f
@@ -324,29 +326,29 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime)  =
 
 fun adaptive_event_solver (stepper,fcond)  =
     let open Real
-        fun f (x,ys,ev,h) =
+        fun f (x,ys,ev,ext,h) =
             (let
-                val (ys',e,finterp) = stepper h (x,ys)
-                val ev' = fcond (x+h,ys',ev)
+                val (ys',e,finterp) = stepper ext h (x,ys)
+                val ev' = fcond (x+h,ys',ev,ext)
             in
                 case predictor tol (h,e) of
                     Right h' => 
                     (case vfoldpi2 adthreshold (ev, ev') of
                          SOME (evdir,evind,evdiff) => 
                          (let
-                             fun fy (theta) = Vector.sub(fcond (x+theta*h, finterp theta, ev), evind)
-                             val y0    = Vector.sub(fcond (x,ys,ev), evind)
+                             fun fy (theta) = Vector.sub(fcond (x+theta*h, finterp theta, ev, ext), evind)
+                             val y0    = Vector.sub(fcond (x,ys,ev,ext), evind)
                              val theta = secant tol fy y0 1.0 0.0
                              val x'    = x+(theta+tol)*h
                              val ys''  = finterp (theta+tol)
-                             val ev''  = fcond (x',ys'',ev)
+                             val ev''  = fcond (x',ys'',ev,ext)
                          in
-                             Root (x',ys'',evdir,ev'',h')
+                             Root (x',ys'',evdir,ev'',ext,h')
                          end)
                        | NONE => 
-                         Next (x+h,ys',0,ev',h'))
+                         Next (x+h,ys',0,ev',ext,h'))
                   | Left h'  => 
-                    f (x,ys,ev,h')
+                    f (x,ys,ev,ext,h')
             end)
     in
         f
@@ -355,15 +357,15 @@ fun adaptive_event_solver (stepper,fcond)  =
 
 fun adaptive_solver stepper  =
     let open Real
-        fun f (x,ys,h) =
+        fun f (x,ys,ext,h) =
             (let
-                val (ys',e) = stepper h (x,ys)
+                val (ys',e) = stepper ext h (x,ys)
             in
                 case predictor tol (h,e) of
                     Right h' => 
-                    Next (x+h,ys',h')
+                    Next (x+h,ys',ext,h')
                   | Left h'  => 
-                    f (x,ys,h')
+                    f (x,ys,ext,h')
             end)
     in
         f
@@ -377,20 +379,20 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
        (*fun fstepper (d,r) = make_stepper (f(d,r))*)
        val fsolver = adaptive_regime_solver (fstepper,fcond,fdiscrete,fregime)
     in
-        fn(RegimeState (x,y,e,d,r,h)) => 
-           (case fsolver (x,y,e,d,r,h) of
-                Next (xn,ysn,_,evn,dn,rn,hn) => 
-                RegimeState (xn,ysn,evn,dn,rn,hn)
-              | Root (xn,ysn,_,evn,dn,rn,hn) => 
+        fn(RegimeState (x,y,e,d,r,ext,h)) => 
+           (case fsolver (x,y,e,d,r,ext,h) of
+                Next (xn,ysn,_,evn,dn,rn,_,hn) => 
+                RegimeState (xn,ysn,evn,dn,rn,ext,hn)
+              | Root (xn,ysn,_,evn,dn,rn,ext,hn) => 
                 let 
                     val ysn' = case fneg of 
                                    SOME (RegimeResponse f) => 
-                                   f(xn,fpos(xn,ysn,evn,dn),evn,dn)
+                                   f(xn,fpos(xn,ysn,evn,dn,ext),evn,dn,ext)
                                  | NONE => 
-                                   fpos(xn,ysn,evn,dn)
+                                   fpos(xn,ysn,evn,ext,dn)
                                  | SOME _ => raise Domain
                 in
-                    RegimeState (xn,ysn',evn,dn,rn,hn)
+                    RegimeState (xn,ysn',evn,dn,rn,ext,hn)
                 end)
       | _ => raise Domain
     end
@@ -402,20 +404,20 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
        (*fun fstepper (d,r) = make_stepper (f(d,r))*)
        val fsolver = adaptive_event_solver (fstepper,fcond)
     in
-        fn(EventState (x,y,e,h)) => 
-           (case fsolver (x,y,e,h) of
-                Next (xn,ysn,_,evn,hn) => 
-                EventState (xn,ysn,evn,hn)
-              | Root (xn,ysn,_,evn,hn) => 
+        fn(EventState (x,y,e,ext,h)) => 
+           (case fsolver (x,y,e,ext,h) of
+                Next (xn,ysn,_,evn,ext,hn) => 
+                EventState (xn,ysn,evn,ext,hn)
+              | Root (xn,ysn,_,evn,ext,hn) => 
                 let 
                     val ysn' = case fneg of 
                                    SOME (SResponse f) => 
-                                   f(xn,fpos(xn,ysn,evn),evn)
+                                   f(xn,fpos(xn,ysn,evn,ext),evn,ext)
                                  | NONE => 
-                                   fpos(xn,ysn,evn)
+                                   fpos(xn,ysn,evn,ext)
                                  | SOME _ => raise Domain
                 in
-                    EventState (xn,ysn',evn,hn)
+                    EventState (xn,ysn',evn,ext,hn)
                 end)
       | _ => raise Domain
     end
@@ -425,12 +427,12 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
        (*fun fstepper (d,r) = make_stepper (f(d,r))*)
        val fsolver = adaptive_solver fstepper
     in
-        fn(ContState (x,y,h)) => 
-           (case fsolver (x,y,h) of
-                Next (xn,ysn,hn) => 
-                ContState (xn,ysn,hn)
-              | Root (xn,ysn,hn) => 
-                ContState (xn,ysn,hn))
+        fn(ContState (x,y,ext,h)) => 
+           (case fsolver (x,y,ext,h) of
+                Next (xn,ysn,_,hn) => 
+                ContState (xn,ysn,ext,hn)
+              | Root (xn,ysn,_,hn) => 
+                ContState (xn,ysn,ext,hn))
       | _ => raise Domain
     end
 
