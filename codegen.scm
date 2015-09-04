@@ -76,6 +76,80 @@
 		  )))
 
 
+(define (codegen-primop op args)
+  (case op
+    ((signal.mul)
+     (match args
+            ((($ value 'V:C 1.0) right) right)
+            ((left ($ value 'V:C 1.0)) left)
+            (else (V:Op op args))))
+    ((signal.div)
+     (match args
+            ((left ($ value 'V:C 1.0)) left)
+            (else (V:Op op args))))
+    (else (V:Op op args))
+    ))
+      
+
+
+(define (codegen-expr ode-inds invcindexmap)
+  (lambda (expr)
+    (let recur ((expr expr))
+      (match expr
+             ((? symbol?)
+              (V:Var expr))
+             ((? boolean?)
+              (V:C expr))
+             (('signal.primop op . args)
+              (codegen-primop op (map recur args)))
+             (('getindex vect index)
+              (case vect
+                ((y)
+                 (if (vector-ref ode-inds index)
+                     (V:Sub (recur vect) index)
+                     (V:Var (cdr (assv index invcindexmap)))))
+                (else (V:Sub (recur vect) index))))
+             (($ constant 'number val unit)
+              (V:C val))
+             (('signal.if test ift iff)
+              (let ((test1 (recur test))
+                    (ift1 (recur ift))
+                    (iff1 (recur iff)))
+                (let ((ret (V:Ifv test1 ift1 iff1)))
+                  ret)))
+             (('signal.reinit test dflt upd)
+              (V:Ifv (V:Op 'signal.gte (list (recur test) (V:C 0.0)))
+                     (recur upd)
+                     (recur dflt)))
+             (else expr))
+      )))
+
+
+(define (codegen-const-expr expr)
+  (let recur ((expr expr))
+    (match expr
+           ((? symbol?)
+            (V:Var expr))
+           ((? boolean?)
+            (V:C expr))
+           (('signal.primop op . args)
+            (codegen-primop op (map recur args)))
+           (('getindex vect index)
+            (error 'codegen-const-expr "not a const expr" expr))
+           (($ constant 'number val unit)
+            (V:C val))
+           (('signal.if test ift iff)
+            (let ((test1 (recur test))
+                  (ift1 (recur ift))
+                  (iff1 (recur iff)))
+              (let ((ret (V:Ifv test1 ift1 iff1)))
+                ret)))
+           (('signal.reinit test dflt upd)
+            (error 'codegen-const-expr "not a const expr" expr))
+           (else expr))
+      ))
+
+
 (define (codegen-ODE sim)
 
   (define (update-bucket k v alst)
@@ -151,53 +225,6 @@
              (index (cdr (assv name cindexmap))))
         (vector-ref ode-inds index))
       ))
-
-  (define (codegen-primop op args)
-    (case op
-      ((signal.mul)
-       (match args
-              ((($ value 'V:C 1.0) right) right)
-              ((left ($ value 'V:C 1.0)) left)
-              (else (V:Op op args))))
-      ((signal.div)
-       (match args
-              ((left ($ value 'V:C 1.0)) left)
-              (else (V:Op op args))))
-      (else (V:Op op args))
-      ))
-      
-
-  (define (codegen-expr ode-inds invcindexmap)
-    (lambda (expr)
-      (let recur ((expr expr))
-        (match expr
-               ((? symbol?)
-                (V:Var expr))
-               ((? boolean?)
-                (V:C expr))
-               (('signal.primop op . args)
-                (codegen-primop op (map recur args)))
-               (('getindex vect index)
-                (case vect
-                  ((y)
-                   (if (vector-ref ode-inds index)
-                       (V:Sub (recur vect) index)
-                       (V:Var (cdr (assv index invcindexmap)))))
-                  (else (V:Sub (recur vect) index))))
-               (($ constant 'number val unit)
-                (V:C val))
-               (('signal.if test ift iff)
-                (let ((test1 (recur test))
-                      (ift1 (recur ift))
-                      (iff1 (recur iff)))
-                  (let ((ret (V:Ifv test1 ift1 iff1)))
-                    ret)))
-               (('signal.reinit test dflt upd)
-                (V:Ifv (V:Op 'signal.gte (list (recur test) (V:C 0.0)))
-                       (recur upd)
-                       (recur dflt)))
-               (else expr))
-        )))
 
 
   (let (

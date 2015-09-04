@@ -63,3 +63,8 @@
 
 (copy-file-to-salt-dir "sml-lib/lininterp/lininterp.sml")
 (copy-file-to-salt-dir "sml-lib/lininterp/lininterp.mlb")
+
+(copy-file-to-salt-dir "sml-lib/randmtzig/randmtzig.sml")
+(copy-file-to-salt-dir "sml-lib/randmtzig/randmtziglib.c")
+(copy-file-to-salt-dir "sml-lib/randmtzig/randmtzig.mlb")
+

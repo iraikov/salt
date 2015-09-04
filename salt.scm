@@ -61,6 +61,9 @@
          equation-set-regimemap
          equation-set-dimenv
 
+         codegen-primop codegen-expr codegen-const-expr codegen-ODE
+         name/ML binding->ML stmt->ML value->ML codegen-ODE/ML
+
          model-time
 	 )
 
