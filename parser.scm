@@ -399,6 +399,16 @@
                  (if assoc-var-def
                      (binding-value assoc-var-def)
                      (make-free-variable x)))))
+             (('reduce ((and op (? symbol?)) (and x (? symbol?))))
+              (let ((assoc-var-def (env-lookup x env))
+                    (assoc-op (env-lookup op env)))
+                (make-reduce-variable
+                 (if assoc-op
+                     (binding-value assoc-op)
+                     (make-free-variable op))
+                 (if assoc-var-def
+                     (binding-value assoc-var-def)
+                     (make-free-variable x)))))
              (((and x (? symbol?)))
               (let ((assoc-var-def (env-lookup x env)))
                 (if assoc-var-def

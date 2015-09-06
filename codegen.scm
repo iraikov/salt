@@ -105,7 +105,7 @@
              (('getindex vect index)
               (case vect
                 ((y)
-                 (if (vector-ref ode-inds index)
+                 (if (member index ode-inds)
                      (V:Sub (recur vect) index)
                      (V:Var (cdr (assv index invcindexmap)))))
                 (else (V:Sub (recur vect) index))))
@@ -165,7 +165,6 @@
             ))
     )
 
-
   (define (bucket f lst)
     (let recur ((lst lst)
                 (res '()))
@@ -175,6 +174,9 @@
           ))
       )
 
+
+  (define (update-edge e dag)
+    (update-bucket (car e) (cdr e) dag))
 
   (define (fold-reinits lst)
     (let recur ((lst (cdr lst)) (expr (car lst)))
@@ -193,7 +195,7 @@
         (let ((reinits 
                (filter-map 
                 (match-lambda
-                 [('setindex 'y index val) (and (vector-ref ode-inds index) val)]
+                 [('setindex 'y index val) (and (member index ode-inds) val)]
                  [('setindex 'd index val) val]
                  [else #f])
                 (cdr x))))
@@ -218,12 +220,28 @@
      (lambda (x y) (< (car x) (car y))))
     )
     
+  (define (fold-asgns asgn-idxs expr)
+    (let recur ((expr expr) (ax '()))
+      (match expr
+             ((? symbol?) ax)
+             ((? boolean?) ax)
+             (('signal.primop op . args)
+              (fold recur ax args))
+             (('getindex 'y index)
+              (if (member index asgn-idxs)
+                  (cons index ax) ax))
+             (($ constant 'number val unit) ax)
+             (('signal.if test ift iff)
+              (recur iff (recur ift (recur test ax))))
+             (else ax))
+      ))
+
 
   (define (ode-def? cindexmap ode-inds)
     (lambda (def)
       (let* ((name (car def))
              (index (cdr (assv name cindexmap))))
-        (vector-ref ode-inds index))
+        (member index ode-inds))
       ))
 
 
@@ -288,39 +306,94 @@
     (let* (
            (invcindexmap
             (map (lambda (x) (cons (cdr x) (car x))) (env->list cindexmap)))
+
            (ode-inds 
-            (list->vector 
-             (map (match-lambda [('setindex 'dy index val) #t] 
-                                [('setindex 'y index val)  #f] 
-                                [eq (error 'codegen "unknown equation type" eq)]) 
-                  eqblock)))
+            (filter-map 
+             (match-lambda [('setindex 'dy index val) index] 
+                           [('setindex 'y index val)  #f] 
+                           [('reduceindex 'y index val)  #f] 
+                           [eq (error 'codegen "unknown equation type" eq)])
+             eqblock))
 
            (codegen-expr1 (codegen-expr ode-inds invcindexmap))
 
            (ode-defs (filter-map (lambda (index) 
-                                   (and (vector-ref ode-inds index)
+                                   (and (member index ode-inds)
                                         (list-ref defs index))) 
-                                 (list-tabulate (vector-length ode-inds) 
+                                 (list-tabulate (length invcindexmap) 
                                                 (lambda (x) x))))
            (asgn-defs (filter-map (lambda (index) 
-                                    (and (not (vector-ref ode-inds index))
-                                         (cons (cdr (assv index invcindexmap))
-                                               (list-ref defs index))))
-                                  (list-tabulate (vector-length ode-inds) 
+                                    (and (not (member index ode-inds))
+                                         (let ((invassoc (assv index invcindexmap)))
+                                           (if (not invassoc)
+                                               (error 'codegen "unknown continuous quantity index" 
+                                                      index invcindexmap)
+                                               (list index
+                                                     (cdr invassoc)
+                                                     (list-ref defs index))))))
+                                  (list-tabulate (length invcindexmap) 
                                                  (lambda (x) x))))
+                        
+           (asgn-idxs (delete-duplicates
+                       (filter-map
+                        (match-lambda [('setindex 'dy index val) #f]
+                                      [(or ('setindex 'y index val)
+                                           ('reduceindex 'y index val)) index]
+                                      [eq (error 'codegen "unknown equation type" eq)])
+                        eqblock)))
+
+           (asgn-dag (fold (match-lambda* 
+                            [(('setindex 'dy index val) dag) dag]
+                            [(('setindex 'y index val) dag)
+                             (let ((edges (map (lambda (src) (cons src index)) 
+                                               (fold-asgns asgn-idxs val))))
+                               (if (null? edges) (cons `(,index) dag)
+                                   (fold (lambda (e dag) (update-edge e dag))  
+                                         dag edges)))]
+                            [(('reduceindex 'y index val) dag)
+                             (let ((edges (filter-map (lambda (src) (and (not (= src index)) (cons src index))) 
+                                                      (fold-asgns asgn-idxs val))))
+                               (if (null? edges) (cons `(,index) dag)
+                                   (fold (lambda (e dag) (update-edge e dag)) 
+                                         dag edges)))]
+                            [eq (error 'codegen "unknown equation type" eq)])
+                           '() eqblock))
+
+           (asgn-order (topological-sort asgn-dag eq?))
+           
            (asgns 
-            (filter-map
-             (match-lambda [('setindex 'dy index val) #f] 
-                           [('setindex 'y index val)  
-                            (cons (cdr (assv index invcindexmap)) val)]
-                           [eq (error 'codegen "unknown equation type" eq)])
-             eqblock))
+            (append 
+             (delete-duplicates
+              (filter-map
+               (match-lambda [('setindex 'dy index val) #f] 
+                             [('setindex 'y index val) #f] 
+                             [('reduceindex 'y index val)
+                              (let ((asgn-def (assv index asgn-defs)))
+                                (match asgn-def
+                                       ((_ name rhs) asgn-def)
+                                       (else (error 'codegen "unknown asgn index" index)))
+                                )]
+                             [eq (error 'codegen "unknown equation type" eq)])
+               eqblock))
+             (fold-right
+              (lambda (ordindex ax)
+                (append 
+                 (filter-map
+                  (match-lambda [('setindex 'dy index val) #f] 
+                                [(or ('setindex 'y index val)  
+                                     ('reduceindex 'y index val))
+                                 (and (= index ordindex) 
+                                      (list index (cdr (assv index invcindexmap)) val))]
+                                [eq (error 'codegen "unknown equation type" eq)])
+                  eqblock) ax))
+              '() asgn-order)))
 
            (odeblock 
             (sort 
              (filter-map
               (match-lambda [(and ode ('setindex 'dy index val)) ode] 
                             [('setindex 'y index val)  #f]
+                            [('reduceindex 'y index val)  #f]
                             [eq (error 'codegen "unknown equation type" eq)])
               eqblock)
              (match-lambda*
@@ -334,7 +407,7 @@
            (initfun  
             (V:Fn '(p) (if (null? asgn-defs)
                            (E:Ret (V:Vec (map codegen-expr1 ode-defs)))
-                           (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                           (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
                                    asgn-defs)
                               (E:Ret (V:Vec (map codegen-expr1 ode-defs)))))))
            (dinitfun  
@@ -359,7 +432,7 @@
                          (let ((resval (V:Vec (map (match-lambda [('setindex 'dy index val) (codegen-expr1 val)]) odeblock))))
                            (if (null? asgns)
                                (E:Ret resval)
-                               (E:Let (map (lambda (asgn) (B:Val (car asgn) (codegen-expr1 (cdr asgn)))) asgns)
+                               (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) asgns)
                                       (E:Ret resval)))
                            ))
                    ))
@@ -383,23 +456,31 @@
                 ))
 
            (condfun     
-            (if (null? condblock)
-                (V:C 'NONE)
-                (let ((fnval (V:Fn '(t y c ext) 
-                                   (if (null? asgns)
-                                       (E:Ret (V:Vec (map codegen-expr1 condblock)))
-                                       (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                   asgns)
-                                              (E:Ret (V:Vec (map codegen-expr1 condblock))))))))
-                  (V:Op 'SOME
-                        (list 
-                         (V:Fn '(p) 
-                               (E:Ret (if (null? regblocks)
-                                          (V:Op 'SCondition (list fnval))
-                                          (V:Op 'RegimeCondition (list (V:Fn '(d) (E:Ret fnval))))))
-                               ))
-                        ))
-                ))
+            (let ((used-asgns
+                   (map
+                    (lambda (index) (assv index asgns))
+                    (delete-duplicates
+                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
+                           '() condblock)))))
+
+              (if (null? condblock)
+                  (V:C 'NONE)
+                  (let ((fnval (V:Fn '(t y c ext) 
+                                     (if (null? used-asgns)
+                                         (E:Ret (V:Vec (map codegen-expr1 condblock)))
+                                         (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                     used-asgns)
+                                                (E:Ret (V:Vec (map codegen-expr1 condblock))))))))
+                    (V:Op 'SOME
+                          (list 
+                           (V:Fn '(p) 
+                                 (E:Ret (if (null? regblocks)
+                                            (V:Op 'SCondition (list fnval))
+                                            (V:Op 'RegimeCondition (list (V:Fn '(d) (E:Ret fnval))))))
+                                 ))
+                          ))
+                  ))
+            )
 
            (posfun      
             (if (null? posblocks)
@@ -407,11 +488,16 @@
                 (V:Op 'SOME
                       (list 
                        (let* ((blocks (fold-reinit-blocks ode-inds posblocks))
+                              (used-asgns
+                               (map (lambda (index) (assv index asgns))
+                                    (delete-duplicates
+                                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
+                                           '() blocks))))
                               (fnval (V:Fn (if (null? regblocks) '(t y c ext) '(t y c d ext))
-                                           (if (null? asgns)
+                                           (if (null? used-asgns)
                                                (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                                               (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                           asgns)
+                                               (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                           used-asgns)
                                                       (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks))))))))
                          (V:Fn '(p) (E:Ret (if (null? regblocks)
                                                (V:Op 'SResponse (list fnval))
@@ -426,11 +512,16 @@
                 (V:Op 'SOME
                       (list 
                        (let* ((blocks (fold-reinit-blocks ode-inds negblocks))
+                              (used-asgns
+                               (map (lambda (index) (assv index asgns))
+                                    (delete-duplicates
+                                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
+                                           '() blocks))))
                               (fnval (V:Fn (if (null? regblocks) '(t y c) '(t y c d))
-                                                 (if (null? asgns)
+                                                 (if (null? used-asgns)
                                                      (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                                                     (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                                 asgns)
+                                                     (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                                 used-asgns)
                                                             (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks))))))))
                          (V:Fn '(p) (E:Ret (if (null? regblocks)
                                                (V:Op 'SResponse (list fnval))
@@ -445,11 +536,16 @@
                 (V:Op 'SOME
                       (list 
                        (let* ((blocks (fold-reinit-blocks ode-inds dposblocks))
+                              (used-asgns
+                               (map (lambda (index) (assv index asgns))
+                                    (delete-duplicates
+                                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
+                                           '() blocks))))
                               (fnval (V:Fn '(t y c d)
-                                           (if (null? asgns)
+                                           (if (null? used-asgns)
                                                (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                                               (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                           asgns)
+                                               (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                           used-asgns)
                                                       (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks))))))))
                          (V:Fn '(p) (E:Ret fnval))
                          ))
@@ -469,11 +565,17 @@
                 (V:C 'NONE)
                 (V:Op 'SOME
                       (list 
-                       (let ((blocks (fold-regime-reinit-blocks regblocks)))
+                       (let* ((blocks (fold-regime-reinit-blocks regblocks))
+                              (used-asgns
+                               (map (lambda (index) (assv index asgns))
+                                    (delete-duplicates
+                                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
+                                          '() blocks)))))
                          (V:Fn '(c r) 
-                               (if (null? asgns)
+                               (if (null? used-asgns)
                                    (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
-                                   (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x)))) asgns)
+                                   (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                               used-asgns)
                                           (E:Ret  (V:Vec (map (compose codegen-expr1 cdr) blocks)))))))))
                 ))
            )

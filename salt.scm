@@ -71,10 +71,10 @@
         
 	(require-extension matchable datatype lalr-driver mathh unitconv with-units)
 	(require-library data-structures extras srfi-1 srfi-4 srfi-13)
-	(import (only srfi-1 zip fold fold-right filter filter-map list-tabulate every)
+	(import (only srfi-1 zip fold fold-right filter filter-map list-tabulate every delete-duplicates)
                 (only srfi-4 list->s32vector)
                 (only srfi-13 string-null? string-concatenate string<)
-		(only data-structures ->string alist-ref conc intersperse compose sort)
+		(only data-structures ->string alist-ref conc intersperse compose sort topological-sort)
                 (only extras pp fprintf)
                 (only ports with-output-to-port)
 		)
@@ -190,6 +190,7 @@
            ))
 
 
+
 (define-record-type discrete-variable
   (make-discrete-variable name label value dim)
   discrete-variable?
@@ -221,6 +222,21 @@
 (define-record-printer (regime-variable x out)
   (fprintf out "#(regime-variable ~S)"
 	   (regime-variable-name x)
+           ))
+
+
+(define-record-type reduce-variable
+  (make-reduce-variable op parent)
+  reduce-variable?
+  (op          reduce-variable-op)
+  (parent      reduce-variable-parent)
+  )
+
+
+(define-record-printer (reduce-variable x out)
+  (fprintf out "#(reduce ~S ~S)"
+	   (reduce-variable-op x)
+	   (reduce-variable-parent x)
            ))
 
 
@@ -491,8 +507,11 @@
          (reinit e (left-var x) y))
         ((regime-variable? x)   
          (reinit e (left-var x) y))
+        ((reduce-variable? x)   
+         (reinit e (left-var (reduce-variable-parent x)) y))
         (else (error 'reinit "invalid argument to reinit" x))
         ))
+
 
 
 (define math-constant-env
@@ -776,6 +795,11 @@
             (dim     (field-dim e)))
         (field name label value dim)))
 
+     ((reduce-variable? e)
+      (make-reduce-variable
+       (resolve (reduce-variable-op e) env-stack)
+       (resolve (reduce-variable-parent e) env-stack)))
+
      ((external? e)
       (let ((name    (external-name e))
             (label   (external-label e))
@@ -890,6 +914,46 @@
 
 (define (elaborate model)
 
+  (define (rename-decls decls)
+
+    (let recur ((decls decls) (ax '()))
+
+      (if (null? decls) (reverse ax)
+
+          (let ((decl (car decls)))
+      
+            (if (pair? decl)
+                
+                (recur (append decl (cdr decls)) ax)
+                
+                (match decl  
+                       (($ discrete-variable name label value dim)
+                        (let ((decl1 (make-discrete-variable (gensym 'dvar) label value dim)))
+                          (recur (cdr decls) (cons decl1 ax))
+                          ))
+                       (($ variable name label value has-history dim)
+                        (let ((decl1 (make-variable (gensym 'var) label value has-history dim)))
+                          (recur (cdr decls) (cons decl1 ax))))
+                       (($ parameter name label value dim)
+                        (let ((decl1 (parameter (gensym 'p) label value dim)))
+                          (recur (cdr decls) (cons decl1 ax))))
+                       (($ field name label value dim)
+                        (let ((decl1 (field (gensym 'fld) label value dim)))
+                          (recur (cdr decls) (cons decl1 ax))))
+                       (($ external name label initial dim)
+                        (let ((decl1 (external (gensym 'ext) label initial dim)))
+                          (recur (cdr decls) (cons decl1 ax))))
+                       (($ function name formals expr)
+                        (recur (cdr decls) (cons decl ax)))
+                       (($ structural-event name label regime transition)
+                        (let ((decl1 (make-structural-event (gensym 'sevn) label regime transition)))
+                          (recur (cdr decls) (cons decl1 ax))))
+                       (else (recur (cdr decls) (cons decl ax))
+                       ))
+            ))
+      ))
+    )
+
   (define (model-env decls)
 
     (let recur ((decls decls) (env empty-env))
@@ -946,28 +1010,29 @@
             ))
       ))
 
+  (let ((decls (rename-decls (astdecls-decls model))))
 
-  (let recur (
-              (entries        (astdecls-decls model))
-              (env-stack      (extend-env-stack-with-binding
-                               (push-env-stack (model-env (astdecls-decls model)) empty-env-stack)
-                               (gen-binding (variable-label model-time) model-time)
-                               ))
-              (definitions    '()) 
-              (discrete-definitions '()) 
-              (parameters     '())
-              (fields         '())
-              (externals      '())
-              (equations      '())
-              (initial        '())
-              (conditions     '())
-              (pos-responses  '())
-              (neg-responses  '())
-              (functions      '())
-              (nodemap        empty-env)
-              (regimemap      empty-env)
-              (dimenv         empty-env)
-              )
+    (let recur (
+                (entries        decls)
+                (env-stack      (extend-env-stack-with-binding
+                                 (push-env-stack (model-env decls) empty-env-stack)
+                                 (gen-binding (variable-label model-time) model-time)
+                                 ))
+                (definitions    '()) 
+                (discrete-definitions '()) 
+                (parameters     '())
+                (fields         '())
+                (externals      '())
+                (equations      '())
+                (initial        '())
+                (conditions     '())
+                (pos-responses  '())
+                (neg-responses  '())
+                (functions      '())
+                (nodemap        empty-env)
+                (regimemap      empty-env)
+                (dimenv         empty-env)
+                )
       
     (if (null? entries)
         (begin
@@ -993,12 +1058,14 @@
           (d 'elaborate "en = ~A~%" en)
 
           (if (astdecls? en)
+
+              (let ((decls1 (rename-decls (astdecls-decls en))))
               
-              (recur (append (astdecls-decls en) (cons 'pop-env-stack (cdr entries)))
-                     (push-env-stack (model-env (astdecls-decls en)) env-stack)
-                     definitions discrete-definitions parameters fields externals
-                     equations initial conditions pos-responses neg-responses 
-                     functions nodemap regimemap dimenv)
+                (recur (append decls1 (cons 'pop-env-stack (cdr entries)))
+                       (push-env-stack (model-env decls1) env-stack)
+                       definitions discrete-definitions parameters fields externals
+                       equations initial conditions pos-responses neg-responses 
+                       functions nodemap regimemap dimenv))
 
               (match en  
 
@@ -1160,7 +1227,7 @@
                      ))
           ))
     ))
-
+  )
 
 
 
@@ -1493,6 +1560,13 @@
                 `(getindex y ,(cdr yindex)))
             ))
 
+         (($ reduce-variable op y)
+          (let ((yindex (env-lookup (variable-name y) cindexmap)))
+            (if (not yindex)
+                (error 'reduce-expr "variable not in index" y)
+                `(getindex y ,(cdr yindex)))
+            ))
+         
          (($ discrete-variable name label value dim)
           (let ((dindex (env-lookup name dindexmap)))
             (if (not dindex)
@@ -1615,6 +1689,10 @@
 
 
 (define (reduce-eq eq indexmaps unit-env)
+
+  (define (make-call fn a b)
+    `(signal.call ,fn ,(make-pair-arg a (make-pair-arg b (make-null-arg)))))
+
   (let (
         (pindexmap  (alist-ref 'pindexmap indexmaps))
         (cindexmap  (alist-ref 'cindexmap indexmaps))
@@ -1659,6 +1737,25 @@
                   ))
             )
 
+           ((($ reduce-variable op y) rhs)
+            (let ((yindex (env-lookup (variable-name y) cindexmap))
+                  (dim (variable-dim y)))
+              (if (not yindex)
+                  (error 'reduce-eq "variable not in index" y)
+                  (let ((expr (reduce-expr (make-call op `(getindex y ,(cdr yindex)) rhs) indexmaps))
+                        (ddim (if (equal? (quantity-int dim) (quantity-int Unity))
+                                  (quantity-int dim)
+                                  (- (quantity-int dim) (quantity-int Time)))))
+                    (let ((rhs-units (expr-units rhs unit-env)))
+                      (d 'reduce-eq "ddim = ~A dims(rhs-units) = ~A ~%" ddim (unit-dims rhs-units))
+                      (if (equal? ddim (quantity-int (unit-dims rhs-units)))
+                          `(reduceindex y ,(cdr yindex) ,expr)
+                          (error 'reduce-eq "dimension mismatch in rhs" 
+                                 (variable-name y) (variable-label y)))
+                      ))
+                  ))
+            )
+           
            (($ evcondition name rhs)
             (let ((evindex (env-lookup name evindexmap))
                   (expr (reduce-expr rhs indexmaps)))
@@ -1730,7 +1827,6 @@
          (conditions (equation-set-conditions eqset))
 
          (nodelst   (reverse (env->list nodemap)))
-
          (unit-env
           (fold (lambda (p env)
                   (let* ((name (car p)) (rhs (cdr p))

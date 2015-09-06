@@ -1,6 +1,9 @@
 
 structure D = Dynamics
 
+fun optApply fopt args =
+    case fopt of SOME f => SOME (f args) | NONE => NONE
+
 fun putStrLn str = 
     (TextIO.output (TextIO.stdOut, str);
      TextIO.output (TextIO.stdOut, "\n"))

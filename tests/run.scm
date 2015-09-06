@@ -1,6 +1,31 @@
-(use extras salt)
+(use setup-api extras salt)
 
-(define (test-model name model #!key (solver 'rk4b))
+(define (installation-chicken-home)
+  (if (not (installation-prefix)) (chicken-home)
+    (make-pathname `(,(installation-prefix) "share") "chicken") ) )
+
+
+(define SHARED-DIR (installation-chicken-home))
+(define SALT-DIR (make-pathname SHARED-DIR "salt"))
+
+
+(define (run:execute* explist)
+  (define (smooth lst)
+    (let ((slst (map ->string lst)))
+      (string-intersperse (cons (car slst) (cdr slst)) " ")))
+  (for-each (lambda (cmd)
+	      (printf "  ~A~%~!" cmd)
+	      (system* "~a" cmd))
+	    (map smooth explist)))
+
+
+(define-syntax run
+  (syntax-rules ()
+    ((_ exp ...)
+     (run:execute* (list `exp ...)))))
+
+
+(define (test-model name model #!key (solver 'rk4b) (compile #f) (dir "tests"))
   (pp model)
 
   (define elab (elaborate model))
@@ -10,13 +35,20 @@
   (define sim (simcreate elab))
   (pp sim)
   (pp (codegen-ODE sim))
-  (let ((port (open-output-file (string-append (->string name) ".sml"))))
+  (let* ((sml-path (make-pathname dir (string-append (->string name) ".sml")))
+         (mlb-path (make-pathname dir (string-append (->string name) "_run.mlb")))
+         (port (open-output-file sml-path)))
     (codegen-ODE/ML sim out: port solver: solver)
-    (close-output-port port))
+    (close-output-port port)
+    (if compile
+        (run (mlton -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
+                    -mlb-path-var ,(sprintf "'RK_LIB $(SALT_HOME)/sml-lib/rk'")
+                    -mlb-path-var ,(sprintf "'DYNAMICS_LIB $(SALT_HOME)/sml-lib/dynamics'")
+                    ,mlb-path))))
 
 )
 
-(verbose 1)
+;(verbose 1)
 
 (define vdp 
   (parse 
@@ -166,7 +198,7 @@
      ((der (S)) = (alpha * (1 - S) - beta * S))
      ((der (SS)) = ((s0 - SS) / taus))
         
-     ((Isyn) = (gsyn * (v - vsyn)))
+     ((reduce (+ Isyn)) = (gsyn * (v - vsyn)))
      ((gsyn) = (gsmax * S * SS))
 
      (event (v - theta)
@@ -194,6 +226,7 @@
      (define v     = unknown -35.0)
      
      ,iaf0
+     ,alphasyn
      ,alphasyn
      ))
   )
@@ -236,17 +269,17 @@
 
 
 
-;(test-model 'vdp vdp)
+(test-model 'vdp vdp compile: #t)
 
-;(test-model 'iaf iaf)
+(test-model 'iaf iaf)
 
-;(test-model 'izhfs izhfs solver: 'rkdp)
+(test-model 'izhfs izhfs solver: 'rkdp compile: #t)
 
-;(test-model 'iafrefr iafrefr solver: 'rkoz)
+(test-model 'iafrefr iafrefr solver: 'rkoz compile: #t)
 
-;(test-model 'ml ml solver: 'rk3)
+(test-model 'ml ml solver: 'rk3 compile: #t)
 
-(test-model 'iafsyn iafsyn)
+;(test-model 'iafsyn iafsyn)
 
 
 
