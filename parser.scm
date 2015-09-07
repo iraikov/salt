@@ -232,6 +232,7 @@
 					  ((or 'let 'LET)     (tok loc LET))
 					  ((or 'if  'IF)      (tok loc IF))
 					  ((or 'else 'ELSE)   (tok loc ELSE))
+					  ((or 'then 'THEN)   (tok loc THEN))
 					  ((? number?)  (tok loc NUM x))
 					  ((? symbol?)  (tok loc ID x))
 					  ((? list?)    (begin 
@@ -427,7 +428,7 @@
 (define (parse-if env args)
   (cond
    ((list-of-3? args)
-    `(signal.ifelse
+    `(signal.if
       ,(parse-expression env (car args))
       ,(parse-expression env (cadr args))
       ,(parse-expression env (caddr args))))

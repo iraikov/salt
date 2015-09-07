@@ -532,8 +532,9 @@
      
 
 (define math-binop-env
-  (let ((function-names `(+ - * / pow max min ==))
-        (op-names `(signal.add signal.sub signal.mul signal.div signal.pow signal.max signal.min signal.eqnum)))
+  (let ((function-names `(+ - * / pow max min == < <= > >=))
+        (op-names `(signal.add signal.sub signal.mul signal.div signal.pow signal.max signal.min signal.eqnum 
+                               signal.lt signal.lte signal.gt signal.gte)))
     (fold (lambda (k v env)
             (let ((binding (gen-binding k v)))
               (extend-env-with-binding env binding)))

@@ -26,6 +26,8 @@ val signal_max = max
 val signal_min = min
 val signal_gt = (op >)
 val signal_gte = (op >=)
+val signal_lt = (op <)
+val signal_lte = (op <=)
 
 end
 
@@ -44,8 +46,8 @@ type error_state   = real vector
 type external_state = real vector
 
 datatype model_state = 
-         RegimeState of real * cont_state * event_state * dsc_state * regime_state * external_state
-         | EventState of real * cont_state * event_state * external_state
+         RegimeState of real * cont_state * event_state * dsc_state * regime_state * external_state * bool
+         | EventState of real * cont_state * event_state * external_state * bool
          | ContState  of real * cont_state * external_state
 
 datatype model_stepper = 
@@ -103,44 +105,48 @@ fun thr (v1,v2) = case (Real.sign(v1),Real.sign(v2)) of
                     | _ => false
 
 
-fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
+fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),                          
               SOME (RegimeResponse fpos),fneg,
               SOME fdiscrete,SOME fregime,h) =
-    (fn(RegimeState (x,y,e,d,r,ext)) => 
+    (fn(RegimeState (x,y,e,d,r,ext,root)) => 
         let val x'  = x + h
-            val y'  = stepper ext h (d,r) (x,y)
+            val y'  = (case root of
+                           true => (case fneg of 
+                                        NONE => fpos(x',y,e,d,ext)
+                                      | SOME (RegimeResponse f) => f (x',fpos(x',y,e,d,ext),e,d,ext)
+                                      | _ => raise Domain)
+                         | false => stepper ext h (d,r) (x,y))
             val e'  = fcond d (x',y',e,ext)
             val pos = vfind2 thr (e, e') 
             val r'  = fregime (e',r)
-            val y'' = case pos of SOME i => fpos(x',y',e',d,ext) | _ => y'
-            val y'' = case fneg of 
-                          SOME (RegimeResponse f) => 
-                          (case vfind2 thr (e', e) of 
-                               SOME i => f(x',y'',e',d,ext) 
-                             | _ => y'')
-                        | SOME _ => raise Domain
-                        | NONE => y''
             val d'  = fdiscrete (x',y',e',d)
+            val root' = (case (vfind2 thr (e, e'), vfind2 thr (e', e)) of
+                             (SOME _, SOME _) => true
+                           | (SOME _, NONE) => true
+                           | (NONE, SOME _) => true
+                           | (NONE, NONE) => false)
         in
-            RegimeState(x',y'',e',d',r',ext)
+            RegimeState(x',y',e',d',r',ext,root')
         end
     | _ => raise Domain)
                
 | integral (EventStepper stepper,SOME (SCondition fcond),SOME (SResponse fpos),fneg,NONE,NONE,h) =
-  (fn(EventState(x,y,e,ext)) => 
+  (fn(EventState(x,y,e,ext,root)) => 
       let val x'  = x + h
-          val y'  = stepper ext h (x,y)
-          val e'  = fcond (x',y',e,ext)
-          val pos = vfind2 thr (e, e') 
-          val y'' = case pos of SOME i => fpos(x',y',e',ext) | _ => y'
-          val y'' = case fneg of 
-                        SOME (SResponse f) => 
-                        (case vfind2 thr (e', e) of 
-                             SOME i => f(x',y'',e',ext) | _ => y'')
-                      | SOME _ => raise Domain
-                      | NONE => y''
+          val y'  = (case root of
+                         true => (case fneg of
+                                      NONE => fpos(x',y,e,ext) 
+                                    | SOME (SResponse f) => f(x',fpos(x',y,e,ext),e,ext)
+                                    | _ => raise Domain)
+                       | false => stepper ext h (x,y))
+          val e'    = fcond (x',y',e,ext)
+          val root' = (case (vfind2 thr (e, e'), vfind2 thr (e', e)) of
+                           (SOME _, SOME _) => true
+                         | (SOME _, NONE) => true
+                         | (NONE, SOME _) => true
+                         | (NONE, NONE) => false)
       in
-          EventState(x',y'',e',ext)
+          EventState(x',y',e',ext,root')
       end
   | _ => raise Domain)
 
@@ -169,6 +175,20 @@ open Real
 open Math
 open SignalMath
 
+fun putStrLn str = 
+    (TextIO.output (TextIO.stdOut, str);
+     TextIO.output (TextIO.stdOut, "\n"))
+    
+fun putStr str = 
+    (TextIO.output (TextIO.stdOut, str))
+    
+fun showReal n = 
+    let open StringCvt
+	open Real
+    in
+	(if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
+    end
+
 type regime_state  = bool vector
 type dsc_state     = real vector
 type event_state   = real vector
@@ -177,8 +197,8 @@ type error_state   = real vector
 type external_state = real vector
 
 datatype model_state = 
-         RegimeState  of real * cont_state * event_state * dsc_state * regime_state * external_state * real
-         | EventState of real * cont_state * event_state * external_state * real
+         RegimeState  of real * cont_state * event_state * dsc_state * regime_state * external_state * real * bool
+         | EventState of real * cont_state * event_state * external_state * real * bool
          | ContState  of real * cont_state * external_state * real
 
 datatype model_stepper = 
@@ -379,21 +399,25 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
        (*fun fstepper (d,r) = make_stepper (f(d,r))*)
        val fsolver = adaptive_regime_solver (fstepper,fcond,fdiscrete,fregime)
     in
-        fn(RegimeState (x,y,e,d,r,ext,h)) => 
-           (case fsolver (x,y,e,d,r,ext,h) of
-                Next (xn,ysn,_,evn,dn,rn,_,hn) => 
-                RegimeState (xn,ysn,evn,dn,rn,ext,hn)
-              | Root (xn,ysn,_,evn,dn,rn,ext,hn) => 
-                let 
-                    val ysn' = case fneg of 
-                                   SOME (RegimeResponse f) => 
-                                   f(xn,fpos(xn,ysn,evn,dn,ext),evn,dn,ext)
-                                 | NONE => 
-                                   fpos(xn,ysn,evn,ext,dn)
-                                 | SOME _ => raise Domain
+        fn(RegimeState (x,y,e,d,r,ext,h,root)) => 
+           (case root of
+                true =>
+                (let
+                    val y' = case fneg of 
+                                 SOME (RegimeResponse f) => 
+                                 f(x,fpos(x,y,e,d,ext),e,d,ext)
+                               | NONE => 
+                                 fpos(x,y,e,ext,d)
+                               | SOME _ => raise Domain
                 in
-                    RegimeState (xn,ysn',evn,dn,rn,ext,hn)
+                    RegimeState (x,y',e,d,r,ext,h,false) 
                 end)
+             | false =>  
+                case fsolver (x,y,e,d,r,ext,h) of
+                    Next (xn,ysn,_,evn,dn,rn,_,hn) => 
+                    RegimeState (xn,ysn,evn,dn,rn,ext,hn,false)
+                  | Root (xn,ysn,_,evn,dn,rn,ext,hn) => 
+                    RegimeState (xn,ysn,evn,dn,rn,ext,hn,true))                          
       | _ => raise Domain
     end
 
@@ -404,21 +428,25 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
        (*fun fstepper (d,r) = make_stepper (f(d,r))*)
        val fsolver = adaptive_event_solver (fstepper,fcond)
     in
-        fn(EventState (x,y,e,ext,h)) => 
-           (case fsolver (x,y,e,ext,h) of
-                Next (xn,ysn,_,evn,ext,hn) => 
-                EventState (xn,ysn,evn,ext,hn)
-              | Root (xn,ysn,_,evn,ext,hn) => 
-                let 
-                    val ysn' = case fneg of 
-                                   SOME (SResponse f) => 
-                                   f(xn,fpos(xn,ysn,evn,ext),evn,ext)
-                                 | NONE => 
-                                   fpos(xn,ysn,evn,ext)
-                                 | SOME _ => raise Domain
-                in
-                    EventState (xn,ysn',evn,ext,hn)
-                end)
+        fn(EventState (x,y,e,ext,h,root)) => 
+           (case root of
+                true => (let
+                            val y' = case fneg of 
+                                         SOME (SResponse f) => 
+                                         f(x,fpos(x,y,e,ext),e,ext)
+                                       | NONE => 
+                                         fpos(x,y,e,ext)
+                                       | SOME _ => raise Domain
+                            val  e' = fcond(x,y',e,ext)
+                        in
+                            EventState (x,y',e',ext,h,false)
+                        end)
+               | false => 
+                 (case fsolver (x,y,e,ext,h) of
+                      Next (xn,ysn,_,evn,ext,hn) => 
+                      EventState (xn,ysn,evn,ext,hn,false)
+                    | Root (xn,ysn,_,evn,ext,hn) => 
+                      EventState (xn,ysn,evn,ext,hn,true)))
       | _ => raise Domain
     end
 
