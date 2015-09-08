@@ -9,10 +9,9 @@
 
    ;; --- token definitions
    ( NUM ID LET IF THEN ELSE LPAREN RPAREN 
+        (left: + - * /)
         (right: QUESTION COLON ) 
         (left: < > = <= >= ==)
-        (left: + -)
-        (left: * /)
         (left: uminus)
         (right: ^) 
         (left: COMMA)

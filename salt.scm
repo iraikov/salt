@@ -46,6 +46,8 @@
          empty-env env-lookup extend-env-with-binding env->list
          gen-binding binding-key binding-value
 
+         astdecls? make-astdecls astdecls-decls
+
          equation-set-model
          equation-set-definitions
          equation-set-discrete-definitions
@@ -506,6 +508,20 @@
         (else x)))
 
 
+(define (variable-identity x)
+  (cond ((variable? x)  
+         (variable-name x))
+        ((derivative-variable? x)   
+         (variable-identity (derivative-variable-parent x)))
+        ((discrete-variable? x)   
+         (discrete-variable-name x))
+        ((regime-variable? x)   
+         (regime-variable-name x))
+        ((reduce-variable? x)   
+         (variable-identity (reduce-variable-parent x)))
+        (else (error 'variable-identity "invalid argument" x))
+        ))
+
 (define (reinit e x y)
   (cond ((left-var? x) `(signal.reinit ,e ,x ,y))
         ((variable? x)  (reinit e (left-var x) y))
@@ -887,39 +903,43 @@
 ;; Merge the equations of the particular regime into the main list of
 ;; equations with the requisite conditionals.
 (define (merge-regime-eq name regime-eq equations env-stack)
-  (d 'merge-regime-eq "regime-eq = ~A equations = ~A~%" regime-eq equations)
+  (d 'merge-regime-eq "regime-eq = ~A~%equations = ~A~%" regime-eq equations)
   (match-let ((($ equation s expr) regime-eq))
-             (let ((s1 (resolve s env-stack))
-                   (expr1 (resolve expr env-stack)))
-               (if (null? equations)
-                   (list (list s1 `(signal.if ,(make-regime-variable name) 
-                                              ,expr1 ,(constant 'number 0.0 unitless))))
-                   (match-let
-                    (((equations1 found?)
-                      (fold (match-lambda* 
-                             ((eq (eqs found?))
-                              (match eq
-                                     (($ equation s2 expr2)
-                                      (d 'merge-regime-eq "s1 = ~A s2 = ~A~%" s1 s2)
-                                      (d 'merge-regime-eq "expr1 = ~A expr2 = ~A~%" expr1 expr2)
-                                      (if (equal? s2 s1)
-                                          (list (cons (list s1 `(signal.if ,(make-regime-variable name) 
-                                                                           ,expr1 ,expr2)) eqs)
-                                                #t)
-                                          (list (cons eq eqs) found?)))
-                                     (else (list (cons eq eqs) found?))
-                                     ))
-                             )
-                            '(() #f) 
-                            equations)))
-                    (if found? 
-                        equations1 
-                        (cons (list s1 `(signal.if ,(make-regime-variable name) 
-                                                   ,expr1 ,(constant 'number 0.0 unitless)))
-                              equations1))
-                    ))
-               ))
-  )
+             (let (
+                   (equations1
+                    (let ((s1 (resolve s env-stack))
+                          (expr1 (resolve expr env-stack)))
+                      (d 'merge-regime-eq "s1 = ~A~%expr1 = ~A~%" s1 expr1) 
+                      (if (null? equations)
+                          (list (list s1 `(signal.if ,(make-regime-variable name) 
+                                                     ,expr1 ,(constant 'number 0.0 unitless))))
+                          (match-let
+                           (((equations1 found?)
+                             (fold (match-lambda* 
+                                    [((and eq (s2 expr2)) (eqs found?))
+                                     (begin
+                                       (d 'merge-regime-eq "s1 = ~A~%s2 = ~A~%" s1 s2)
+                                       (d 'merge-regime-eq "expr1 = ~A expr2 = ~A~%" expr1 expr2)
+                                       (if (equal? (variable-identity s2) (variable-identity s1))
+                                           (list (cons (list s1 `(signal.if ,(make-regime-variable name) 
+                                                                            ,expr1 ,expr2)) eqs)
+                                                 #t)
+                                           (list (cons eq eqs) found?)))]
+                                     [(eq (eqs found?))
+                                      (list (cons eq eqs) found?)])
+                                   '(() #f)
+                                   equations)))
+                           (if found? 
+                               equations1 
+                               (cons (list s1 `(signal.if ,(make-regime-variable name) 
+                                                          ,expr1 ,(constant 'number 0.0 unitless)))
+                                     equations1))
+                           ))
+                      ))
+                   )
+               (d 'merge-regime-eq "regime-eq = ~A equations1 = ~A~%" regime-eq equations1)
+               equations1)
+  ))
   
 
 ;;
@@ -1221,6 +1241,7 @@
                         (d 'elaborate "structural-event: target = ~A~%" target)
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions parameters fields externals
+                               ;; TODO: merge units of regime quantities properly
                                (fold (lambda (eq ax) (merge-regime-eq name eq ax env-stack)) equations regime) initial
                                (cons (make-evcondition event (resolve condition env-stack)) conditions)
                                (append (cons
@@ -1433,8 +1454,13 @@
                 (xu (expr-units x env))
                 (yu (expr-units y env)))
             (d 'units-if "cu = ~A xu = ~A yu = ~A~%" cu xu yu)
-            (if (unit-equal? xu yu)
-                xu (error 'units-reinit "units mismatch in if" args))
+            ;; TODO: this is not necessary if regime equations take
+            ;; into account units of quantities
+            (if (or (unit-equal? xu yu)
+                    (and (not (unitless? xu)) (unitless? yu))
+                    (and (unitless? xu) (not (unitless? yu))))
+                (if (unitless? xu) yu xu)
+                (error 'units-reinit "units mismatch in if" args))
             ))
          (else (error 'units-reinit "invalid arguments to if" args))
          ))
@@ -1763,10 +1789,11 @@
                       (if (equal? ddim (quantity-int (unit-dims rhs-units)))
                           `(setindex dy ,(cdr yindex) ,expr)
                           (error 'reduce-eq "dimension mismatch in rhs" 
-                                 (variable-name y) (variable-label y)))
-                      ))
-                  ))
-            )
+                                 (variable-name y) (variable-label y)
+                                 dim (unit-dims rhs-units)))
+                    ))
+              ))
+           )
            
            ((($ variable name label value has-history dim) rhs)
             (let ((yindex (env-lookup name cindexmap)))
@@ -1777,26 +1804,27 @@
                       (d 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
                       (if (equal? dim (unit-dims rhs-units))
                           `(setindex y ,(cdr yindex) ,expr)
-                          (error 'reduce-eq "dimension mismatch in rhs" name label))
-                      ))
-                  ))
-            )
+                          (error 'reduce-eq "dimension mismatch in rhs" 
+                                 name label
+                                 dim (unit-dims rhs-units)))
+                          ))
+                    ))
+              )
 
            ((($ reduce-variable op y) rhs)
             (let ((yindex (env-lookup (variable-name y) cindexmap))
                   (dim (variable-dim y)))
               (if (not yindex)
                   (error 'reduce-eq "variable not in index" y)
-                  (let ((expr (reduce-expr (make-call op `(getindex y ,(cdr yindex)) rhs) indexmaps))
-                        (ddim (if (equal? (quantity-int dim) (quantity-int Unity))
-                                  (quantity-int dim)
-                                  (- (quantity-int dim) (quantity-int Time)))))
+                  (let ((expr (reduce-expr (make-call op `(getindex y ,(cdr yindex)) rhs) indexmaps)))
                     (let ((rhs-units (expr-units rhs unit-env)))
-                      (d 'reduce-eq "ddim = ~A dims(rhs-units) = ~A ~%" ddim (unit-dims rhs-units))
-                      (if (equal? ddim (quantity-int (unit-dims rhs-units)))
+                      (d 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
+                      (if (equal? dim (unit-dims rhs-units))
                           `(reduceindex y ,(cdr yindex) ,expr)
                           (error 'reduce-eq "dimension mismatch in rhs" 
-                                 (variable-name y) (variable-label y)))
+                                 (variable-name y)
+                                 (variable-label y)
+                                 dim (unit-dims rhs-units)))
                       ))
                   ))
             )

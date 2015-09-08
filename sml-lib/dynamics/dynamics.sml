@@ -50,8 +50,9 @@ datatype model_state =
          | EventState of real * cont_state * event_state * external_state * bool
          | ContState  of real * cont_state * external_state
 
+
 datatype model_stepper = 
-         RegimeStepper of external_state -> real -> dsc_state * regime_state -> 
+         RegimeStepper of dsc_state * regime_state -> external_state -> real -> 
                           (real * cont_state) -> cont_state
          | EventStepper of external_state -> real -> (real * cont_state) -> cont_state
          | ContStepper of external_state -> real -> (real * cont_state) -> cont_state
@@ -115,7 +116,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                                         NONE => fpos(x',y,e,d,ext)
                                       | SOME (RegimeResponse f) => f (x',fpos(x',y,e,d,ext),e,d,ext)
                                       | _ => raise Domain)
-                         | false => stepper ext h (d,r) (x,y))
+                         | false => stepper (d,r) ext h (x,y))
             val e'  = fcond d (x',y',e,ext)
             val pos = vfind2 thr (e, e') 
             val r'  = fregime (e',r)

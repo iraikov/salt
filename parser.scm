@@ -685,6 +685,7 @@
   (if (pair? args)
       (let ((pattern (car args))
             (rhs (cdr args)))
+        (d 'parse-equations "pattern = ~A~%rhs = ~A~%" pattern rhs)
         (match rhs 
                (('= . rhs)
                 (eq (parse-variable env pattern)
