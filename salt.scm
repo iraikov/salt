@@ -39,6 +39,7 @@
 
          parse elaborate simcreate codegen-ODE codegen-ODE/ML
          math-constant-env math-binop-env math-unop-env 
+         model-quantities model-units
          verbose
 
          constant
@@ -276,6 +277,14 @@
 	   (field-label x)
 	   (field-value x)
            ))
+
+
+(define-record-type declared-constant
+  (declared-constant label content)
+  declared-constant?
+  (label declared-constant-label)
+  (content declared-constant-content)
+  )
 
 
 (define-record-type constant
@@ -554,12 +563,14 @@
   (let ((function-names
          `(neg abs atan asin acos sin cos exp ln
                sqrt tan cosh sinh tanh hypot gamma lgamma log10 log2 log1p ldexp cube
-               round ceiling floor))
+               round ceiling floor 
+               random.uniform random.exponential))
         (op-names
          `(signal.neg signal.abs signal.atan signal.asin signal.acos signal.sin signal.cos signal.exp signal.ln
                       signal.sqrt signal.tan signal.cosh signal.sinh signal.tanh signal.hypot signal.gamma signal.lgamma signal.log10
                       signal.log2 signal.log1p signal.ldexp signal.cube
-                      signal.round signal.ceiling signal.floor)))
+                      signal.round signal.ceiling signal.floor
+                      random.uniform random.exponential)))
     (fold (lambda (k v env)
             (let ((binding (gen-binding k v)))
               (extend-env-with-binding env binding)))
@@ -829,6 +840,7 @@
           ))
       )
 
+
      ((pair? e)
       (let ((op (car e)) (args (cdr e)))
         (d 'resolve "op = ~A~%" op)
@@ -882,21 +894,32 @@
                (if (null? equations)
                    (list (list s1 `(signal.if ,(make-regime-variable name) 
                                               ,expr1 ,(constant 'number 0.0 unitless))))
-                   (map (lambda (eq)
-                          (match eq
-                                 (($ equation s2 expr2)
-                                  (d 'merge-regime-eq "s1 = ~A s2 = ~A~%" s1 s2)
-                                  (d 'merge-regime-eq "expr1 = ~A expr2 = ~A~%" expr1 expr2)
-                                  (if (equal? s2 s1)
-                                      (list s1 `(signal.if ,(make-regime-variable name) 
-                                                           ,expr1 ,expr2))
-                                      eq))
-                                 (else eq)
-                                 ))
-                        equations))
+                   (match-let
+                    (((equations1 found?)
+                      (fold (match-lambda* 
+                             ((eq (eqs found?))
+                              (match eq
+                                     (($ equation s2 expr2)
+                                      (d 'merge-regime-eq "s1 = ~A s2 = ~A~%" s1 s2)
+                                      (d 'merge-regime-eq "expr1 = ~A expr2 = ~A~%" expr1 expr2)
+                                      (if (equal? s2 s1)
+                                          (list (cons (list s1 `(signal.if ,(make-regime-variable name) 
+                                                                           ,expr1 ,expr2)) eqs)
+                                                #t)
+                                          (list (cons eq eqs) found?)))
+                                     (else (list (cons eq eqs) found?))
+                                     ))
+                             )
+                            '(() #f) 
+                            equations)))
+                    (if found? 
+                        equations1 
+                        (cons (list s1 `(signal.if ,(make-regime-variable name) 
+                                                   ,expr1 ,(constant 'number 0.0 unitless)))
+                              equations1))
+                    ))
                ))
   )
-  
   
 
 ;;
@@ -980,6 +1003,10 @@
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
+                       (($ declared-constant label content)
+                        (recur (cdr decls)
+                               (extend-env-with-binding env (gen-binding label content))
+                               ))
                        (($ field name label value dim)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
@@ -1013,6 +1040,8 @@
 
   (let ((decls (rename-decls (astdecls-decls model))))
 
+    (pp `(elaborate-decls = ,decls) (current-error-port))
+
     (let recur (
                 (entries        decls)
                 (env-stack      (extend-env-stack-with-binding
@@ -1037,6 +1066,7 @@
       
     (if (null? entries)
         (begin
+          (pp `(elaborate-equations = ,equations) (current-error-port))
           (make-equation-set model
                              (reverse definitions)
                              (reverse discrete-definitions)
@@ -1061,6 +1091,8 @@
           (if (astdecls? en)
 
               (let ((decls1 (rename-decls (astdecls-decls en))))
+
+                (pp `(elaborate-decls1 = ,decls1) (current-error-port))
               
                 (recur (append decls1 (cons 'pop-env-stack (cdr entries)))
                        (push-env-stack (model-env decls1) env-stack)
@@ -1120,6 +1152,18 @@
                                (extend-env-with-binding dimenv (gen-binding name dim))
                                )
                         ))
+
+                     (($ declared-constant label content)
+                      (recur (cdr entries) env-stack
+                             definitions discrete-definitions
+                             parameters fields externals
+                             equations initial conditions pos-responses neg-responses 
+                             functions
+                             nodemap
+                             regimemap
+                             dimenv
+                             )
+                      )
 
                      (($ field name label value dim)
                       (d 'elaborate "field: label = ~A value = ~A~%" label value)
@@ -1514,7 +1558,7 @@
         (exindexmap (alist-ref 'exindexmap indexmaps))
         )
   (d 'reduce-expr "expr = ~A~%" expr)
-  (d 'reduce-expr "cindexmap = ~A~%" cindexmap)
+  (d 'reduce-expr "cindexmap = ~A~%" (env->list cindexmap))
   (match expr
 
          (($ pair-arg fst snd)
@@ -1650,7 +1694,7 @@
         )
 
   (d 'reduce-constant-expr "expr = ~A~%" expr)
-  (d 'reduce-constant-expr "cindexmap = ~A~%" cindexmap)
+  (d 'reduce-constant-expr "cindexmap = ~A~%" (env->list cindexmap))
   (match expr
 
          (($ pair-arg fst snd)
@@ -1785,7 +1829,8 @@
                       (let ((expr (reduce-expr rhs indexmaps)))
                         (if (equal? dim (unit-dims (expr-units rhs unit-env)))
                             `(setindex y ,(cdr yindex) ,expr)
-                            (error 'reduce-eq "variable mismatch in event response" y))
+                            (error 'reduce-eq "variable dimension mismatch in event response" 
+                                   y dim (unit-dims (expr-units rhs unit-env))))
                         ))
                   ))
                ((discrete-variable? y)
@@ -1798,7 +1843,7 @@
                       (let ((expr (reduce-expr rhs indexmaps)))
                         (if (equal? dim (unit-dims (expr-units rhs unit-env)))
                             `(setindex d ,(cdr yindex) ,expr)
-                            (error 'reduce-eq "variable mismatch in event response" y))
+                            (error 'reduce-eq "variable dimension mismatch in event response" y))
                         ))
                   ))
                ((regime-variable? y)
@@ -1838,7 +1883,9 @@
                                 (quantity-int (unit-dims rhs-units)))
                         (extend-env-with-binding
                          env (gen-binding name rhs-units))
-                        (error 'simcreate "dimension mismatch in initial value" name rhs-units))
+                        (error 'simcreate "dimension mismatch in initial value" 
+                               name (binding-value (env-lookup name dimenv))
+                               rhs rhs-units))
                     ))
                 empty-env 
                 (append
@@ -1950,6 +1997,8 @@
           (map (lambda (x) (reduce-expr (cdr x) indexmaps))
                (equation-set-externals eqset)))
          
+         (dd         (d 'simcreate "equations = ~A~%" (equation-set-equations eqset) ))
+
          (eq-block
           (map (lambda (x) (reduce-eq x indexmaps unit-env)) 
                (equation-set-equations eqset)))

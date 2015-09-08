@@ -462,7 +462,6 @@
                     (delete-duplicates
                      (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
                            '() condblock)))))
-
               (if (null? condblock)
                   (V:C 'NONE)
                   (let ((fnval (V:Fn '(t y c ext) 

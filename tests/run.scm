@@ -141,19 +141,23 @@
      (define FS_c = parameter  (dim Potential) -45.0 * mV)
      (define FS_U = parameter  (dim Current) FS_b * (Vinit / mV))
 
-     (define v  = unknown (dim Potential) -60.899 * mV)
+     (define v  = unknown (dim Potential) -65.0 * mV)
      (define u  = unknown (dim Current) FS_U)
-     (define s  = unknown (dim Current) 0.0 * nA)
+     ;(define s  = unknown (dim Current) 0.0 * nA)
+
+     (function (UU v) = (if (v < Vb) then (0.0 * nA) else (FS_b * ((v - Vb) / mV) ^ 3)))
+
 
      ((der(v)) = (((k * (v - Vr) * (v - Vt)) / mV + ((- u) + Iext) * megaohm) / Cm) / megaohm)
-     ((der(u)) = (FS_a * (s - u)) / ms)
-     ((s) = FS_b * ((v - Vb) / mV) ^ 3)
+     ((der(u)) = (FS_a * (UU(v) - u)) / ms)
+     ;((s) = FS_b * ((v - Vb) / mV) ^ 3)
 
 
      (event (v - Vpeak)
             ((v := FS_c)
              (u := u)
-             (s := s))
+             ;(s := s)
+             )
             )
      ))
   )
@@ -269,15 +273,15 @@
 
 
 
-(test-model 'vdp vdp compile: #t)
+;(test-model 'vdp vdp compile: #t)
 
-(test-model 'iaf iaf)
+;(test-model 'iaf iaf)
 
 (test-model 'izhfs izhfs solver: 'rkdp compile: #t)
 
-(test-model 'iafrefr iafrefr solver: 'rkoz compile: #t)
+;(test-model 'iafrefr iafrefr solver: 'rkoz compile: #t)
 
-(test-model 'ml ml solver: 'rk3 compile: #t)
+;(test-model 'ml ml solver: 'rk3 compile: #t)
 
 ;(test-model 'iafsyn iafsyn)
 

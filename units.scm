@@ -33,13 +33,15 @@
 (define-unit /mV     InversePotential 1000.0)
 (define-unit /mV-ms  InversePotentialTime 1000000.0)
 
+(define-unit Hz Frequency 1.0)
+
 (define model-units
   (make-parameter
    (map cons
     `(second kilogram volt ampere coulomb farad ohm siemens mole molarity hertz
-      ms mV mA/cm2 pA nA uA mA mM uF uf/cm2 um S/cm2 uS mS ohm.cm ohm kohm megaohm degC /ms /mM-ms /mV /mV-ms)
+      ms mV mA/cm2 pA nA uA mA mM uF uf/cm2 um S/cm2 uS mS ohm.cm ohm kohm megaohm degC /ms /mM-ms /mV /mV-ms Hz)
     (list second kilogram volt ampere coulomb farad ohm siemens mole molarity hertz
-          ms mV mA/cm2 pA nA uA mA mM uF uf/cm2 um S/cm2 uS mS ohm.cm ohm kohm megaohm degC /ms /mM-ms /mV /mV-ms))
+          ms mV mA/cm2 pA nA uA mA mM uF uf/cm2 um S/cm2 uS mS ohm.cm ohm kohm megaohm degC /ms /mM-ms /mV /mV-ms Hz))
    ))
 
 (define model-quantities

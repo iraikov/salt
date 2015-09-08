@@ -596,12 +596,16 @@
                     (parse-variable env pattern))
                    Unity))
                  (('= 'unknown ('dim u) . expr)
-                  (unknown
-                   (parse-expression env (parse-sym-infix-expr expr))
-                   (free-variable-name 
-                    (parse-variable env pattern))
-                   (cdr (assv u (model-quantities)))
-                   ))
+                  (let ((dim-assoc (assv u (model-quantities))))
+                    (if (not dim-assoc)
+                        (salt:error 'parse-definition "unknown dimension in definition"
+                                    pattern u))
+                    (unknown
+                     (parse-expression env (parse-sym-infix-expr expr))
+                     (free-variable-name 
+                      (parse-variable env pattern))
+                     (cdr dim-assoc))
+                    ))
                  (('= 'unknown . expr)
                   (unknown
                    (parse-expression env (parse-sym-infix-expr expr))
@@ -609,13 +613,17 @@
                     (parse-variable env pattern))
                    Unity))
                  (('= 'parameter ('dim u) . expr)
-                  (parameter
-                   (gensym 'p)
-                   (free-variable-name 
-                    (parse-variable env pattern))
-                   (parse-expression env (parse-sym-infix-expr expr))
-                   (cdr (assv u (model-quantities)))
-                   ))
+                  (let ((dim-assoc (assv u (model-quantities))))
+                    (if (not dim-assoc)
+                        (salt:error 'parse-definition "unknown dimension in parameter definition"
+                                    pattern u))
+                    (parameter
+                     (gensym 'p)
+                     (free-variable-name 
+                      (parse-variable env pattern))
+                     (parse-expression env (parse-sym-infix-expr expr))
+                     (cdr dim-assoc))
+                    ))
                  (('= 'parameter . expr)
                   (parameter
                    (gensym 'p)
@@ -625,13 +633,17 @@
                    Unity
                    ))
                  (('= 'external ('dim u) . expr)
-                  (external
-                   (gensym 'ext)
-                   (free-variable-name 
-                    (parse-variable env pattern))
-                   (parse-expression env (parse-sym-infix-expr expr))
-                   (cdr (assv u (model-quantities)))
-                   ))
+                  (let ((dim-assoc (assv u (model-quantities))))
+                    (if (not dim-assoc)
+                        (salt:error 'parse-definition "unknown dimension in external definition"
+                                    pattern u))
+                    (external
+                     (gensym 'ext)
+                     (free-variable-name 
+                      (parse-variable env pattern))
+                     (parse-expression env (parse-sym-infix-expr expr))
+                     (cdr dim-assoc))
+                     ))
                  (('= 'external . expr)
                   (external
                    (gensym 'ext)
@@ -641,25 +653,32 @@
                    Unity
                    ))
                  (('= 'constant ('unit u) . expr)
-                  (constant
-                   (free-variable-name
-                    (parse-variable env pattern))
-                   (parse-expression env (parse-sym-infix-expr expr))
-                   (cdr (assv u (model-units)))
-                   ))
+                  (let ((unit-assoc (assv u (model-units)))
+                        (cvalue (parse-expression env (parse-sym-infix-expr expr))))
+                    (if (not unit-assoc)
+                        (salt:error 'parse-definition "unknown unit in constant definition"
+                                    pattern u))
+                    (declared-constant
+                     (free-variable-name
+                      (parse-variable env pattern))
+                     (constant
+                      'number
+                      (constant-value cvalue)
+                      (cdr unit-assoc))
+                     ))
+                  )
                  (('= 'constant . expr)
-                  (constant
+                  (declared-constant
                    (free-variable-name
                     (parse-variable env pattern))
                    (parse-expression env (parse-sym-infix-expr expr))
-                   Unity
                    ))
                  (('= 'unit . args)
                   (parse-define-unit pattern args env))
-                 (else (salt:error 'parse-define "Not a valid definition expression: " exp-or-body))
+                 (else (salt:error 'parse-definition "Not a valid definition expression: " exp-or-body))
                  ))
-         (else (salt:error 'parse-define "Not a valid pattern: " pattern))))
-      (salt:error 'parse-define "Not a valid definition: " args)))
+         (else (salt:error 'parse-definition "Not a valid pattern: " pattern))))
+      (salt:error 'parse-definition "Not a valid definition: " args)))
 
 
 (define (parse-equation env args)
