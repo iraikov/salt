@@ -167,8 +167,7 @@
     )
 
   (define (bucket f lst)
-    (let recur ((lst lst)
-                (res '()))
+    (let recur ((lst lst) (res '()))
       (if (null? lst) res
           (let ((k (f (car lst))))
             (recur (cdr lst) (if k (update-bucket k (car lst) res) res)))
@@ -246,8 +245,9 @@
       ))
 
 
-  (let (
+  (let* (
         (cindexmap (simruntime-cindexmap sim))
+        (invcindexmap (map (lambda (x) (cons (cdr x) (car x))) (env->list cindexmap)))
         (dindexmap (simruntime-dindexmap sim))
         (rindexmap (simruntime-rindexmap sim))
         (defs      (simruntime-definitions sim))
@@ -255,6 +255,22 @@
         (params    (simruntime-parameters sim))
         (externals (simruntime-external-definitions sim))
         (eqblock   (simruntime-eqblock sim))
+
+        (ode-inds 
+         (sort
+          (filter-map 
+           (match-lambda [('setindex 'dy index val) index] 
+                         [('setindex 'y index val)  #f] 
+                         [('reduceindex 'y index val)  #f] 
+                         [eq (error 'codegen "unknown equation type" eq)])
+           eqblock) <))
+
+        (ode-order 
+         (cadr (fold (match-lambda* [(index (order lst))
+                                     (list (+ 1 order) (cons (cons index order) lst))])
+                     (list 0 '()) ode-inds)))
+                    
+
         (condblock (let ((sorted-eqs 
                           (sort (simruntime-condblock sim) 
                                 (match-lambda*
@@ -284,6 +300,14 @@
                             [else #f])
                            (simruntime-posresp sim))))
                      bucket-eqs))
+        
+        (posblocks (list-tabulate
+                    (length eqblock)
+                    (lambda (i)
+                      (let ((posblock-assoc (assoc i posblocks)))
+                        (if (not posblock-assoc)
+                            (list i `(setindex y ,i (getindex y ,i)))
+                            posblock-assoc)))))
 
         (negblocks (let ((bucket-eqs 
                           (bucket 
@@ -293,6 +317,14 @@
                             [else #f])
                            (simruntime-negresp sim))))
                      bucket-eqs))
+
+        (negblocks (list-tabulate
+                    (length eqblock)
+                    (lambda (i)
+                      (let ((negblock-assoc (assoc i negblocks)))
+                        (if (not negblock-assoc)
+                            (list i `(setindex y ,i (getindex y ,i)))
+                            negblock-assoc)))))
 
         (regblocks (let ((bucket-eqs 
                           (bucket 
@@ -305,23 +337,6 @@
 
         )
     (let* (
-           (invcindexmap
-            (map (lambda (x) (cons (cdr x) (car x))) (env->list cindexmap)))
-
-           (ode-inds 
-            (sort
-             (filter-map 
-              (match-lambda [('setindex 'dy index val) index] 
-                            [('setindex 'y index val)  #f] 
-                            [('reduceindex 'y index val)  #f] 
-                            [eq (error 'codegen "unknown equation type" eq)])
-              eqblock) <))
-
-           (ode-order 
-            (cadr (fold (match-lambda* [(index (order lst))
-                                        (list (+ 1 order) (cons (cons index order) lst))])
-                        (list 0 '()) ode-inds)))
-                    
 
            (codegen-expr1 (codegen-expr ode-inds ode-order invcindexmap))
 
@@ -524,7 +539,7 @@
                                     (delete-duplicates
                                      (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
                                            '() blocks))))
-                              (fnval (V:Fn (if (null? regblocks) '(t y c) '(t y c d))
+                              (fnval (V:Fn (if (null? regblocks) '(t y c ext) '(t y c d ext))
                                                  (if (null? used-asgns)
                                                      (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
                                                      (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
