@@ -1060,8 +1060,6 @@
 
   (let ((decls (rename-decls (astdecls-decls model))))
 
-    (pp `(elaborate-decls = ,decls) (current-error-port))
-
     (let recur (
                 (entries        decls)
                 (env-stack      (extend-env-stack-with-binding
@@ -1086,7 +1084,6 @@
       
     (if (null? entries)
         (begin
-          (pp `(elaborate-equations = ,equations) (current-error-port))
           (make-equation-set model
                              (reverse definitions)
                              (reverse discrete-definitions)
@@ -1112,8 +1109,6 @@
 
               (let ((decls1 (rename-decls (astdecls-decls en))))
 
-                (pp `(elaborate-decls1 = ,decls1) (current-error-port))
-              
                 (recur (append decls1 (cons 'pop-env-stack (cdr entries)))
                        (push-env-stack (model-env decls1) env-stack)
                        definitions discrete-definitions parameters fields externals
@@ -1133,6 +1128,7 @@
                      (($ variable name label value has-history dim)
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (make-variable name label resolved-value has-history dim)))
+                        (d 'elaborate "variable: name = ~A label = ~A value = ~A~%" name label value)
                         (recur (cdr entries) env-stack
                                (cons (cons name resolved-value) definitions)
                                discrete-definitions
@@ -2025,7 +2021,6 @@
           (map (lambda (x) (reduce-expr (cdr x) indexmaps))
                (equation-set-externals eqset)))
          
-         (dd         (d 'simcreate "equations = ~A~%" (equation-set-equations eqset) ))
 
          (eq-block
           (map (lambda (x) (reduce-eq x indexmaps unit-env)) 

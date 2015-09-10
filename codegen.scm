@@ -92,7 +92,7 @@
       
 
 
-(define (codegen-expr ode-inds invcindexmap)
+(define (codegen-expr ode-inds ode-order invcindexmap)
   (lambda (expr)
     (let recur ((expr expr))
       (match expr
@@ -106,7 +106,8 @@
               (case vect
                 ((y)
                  (if (member index ode-inds)
-                     (V:Sub (recur vect) index)
+                     (let ((ode-index-assoc (assv index ode-order)))
+                       (V:Sub (recur vect) (cdr ode-index-assoc)))
                      (V:Var (cdr (assv index invcindexmap)))))
                 (else (V:Sub (recur vect) index))))
              (($ constant 'number val unit)
@@ -308,14 +309,21 @@
             (map (lambda (x) (cons (cdr x) (car x))) (env->list cindexmap)))
 
            (ode-inds 
-            (filter-map 
-             (match-lambda [('setindex 'dy index val) index] 
-                           [('setindex 'y index val)  #f] 
-                           [('reduceindex 'y index val)  #f] 
-                           [eq (error 'codegen "unknown equation type" eq)])
-             eqblock))
+            (sort
+             (filter-map 
+              (match-lambda [('setindex 'dy index val) index] 
+                            [('setindex 'y index val)  #f] 
+                            [('reduceindex 'y index val)  #f] 
+                            [eq (error 'codegen "unknown equation type" eq)])
+              eqblock) <))
 
-           (codegen-expr1 (codegen-expr ode-inds invcindexmap))
+           (ode-order 
+            (cadr (fold (match-lambda* [(index (order lst))
+                                        (list (+ 1 order) (cons (cons index order) lst))])
+                        (list 0 '()) ode-inds)))
+                    
+
+           (codegen-expr1 (codegen-expr ode-inds ode-order invcindexmap))
 
            (ode-defs (filter-map (lambda (index) 
                                    (and (member index ode-inds)
@@ -812,7 +820,7 @@ in
 (if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
 end
 
-val getindex = Unsafe.Vector.sub
+val getindex = Vector.sub
 
 EOF
 
