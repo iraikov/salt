@@ -52,6 +52,9 @@ fun showReal n =
 	(if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
     end
 
+fun showRealVector v = 
+    ("<" ^ (String.concatWith ", " (Vector.foldr (fn (x, ax) => (showReal x)::ax) [] v)) ^ ">")
+
 type regime_state  = bool vector
 type dsc_state     = real vector
 type event_state   = real vector
@@ -130,49 +133,60 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
               SOME (RegimeResponse fpos),fneg,
               fdiscrete,SOME fregime,h) =
     (fn(RegimeState (x,y,e,d,r,ext,root)) => 
-        let val x'  = x + h
-            val y'  = (case root of
-                           true => (case fneg of 
-                                        NONE => fpos(x',y,e,d,ext)
-                                      | SOME (RegimeResponse f) => f (x',fpos(x',y,e,d,ext),e,d,ext)
-                                      | _ => (putStrLn "FunctionalHybridDynamics1: RegimeState integral response"; 
-                                              raise Domain))
-                         | false => stepper (d,r) ext h (x,y))
-            val e'  = fcond d (x',y',e,ext)
-            val pos = vfind2 thr (e, e') 
-            val r'  = fregime (e',r)
-            val d'  = (case fdiscrete of 
-                           SOME f => f (x',y',e',d)
-                         | NONE => d)
-            val root' = (case (vfind2 thr (e, e'), vfind2 thr (e', e)) of
-                             (SOME _, SOME _) => true
-                           | (SOME _, NONE) => true
-                           | (NONE, SOME _) => true
-                           | (NONE, NONE) => false)
-        in
-            RegimeState(x',y',e',d',r',ext,root')
-        end
+        (case root of 
+             true => 
+             (let
+                 val y' = case fneg of 
+                              NONE => fpos(x,y,e,d,ext)
+                            | SOME (RegimeResponse f) => f (x,fpos(x,y,e,d,ext),e,d,ext)
+                            | _ => (putStrLn "FunctionalHybridDynamics1: RegimeState integral response"; 
+                                    raise Domain)
+             in
+                 RegimeState(x,y',e,d,r,ext,false)
+             end)
+           | false =>
+             (let val x'  = x + h
+                  val y'  = stepper (d,r) ext h (x,y)
+                  val e'  = fcond d (x',y',e,ext)
+                  val r'  = fregime (e',r)
+                  val d'  = (case fdiscrete of 
+                                 SOME f => f (x',y',e',d)
+                               | NONE => d)
+                  val root' = (case (vfind2 thr (e, e'), vfind2 thr (e', e)) of
+                                   (SOME _, SOME _) => true
+                                 | (SOME _, NONE) => true
+                                 | (NONE, SOME _) => true
+                                 | (NONE, NONE) => false)
+              in
+                  RegimeState(x',y',e',d',r',ext,root')
+              end))
     | _ => (putStrLn "FunctionalHybridDynamics1: invalid RegimeState"; raise Domain))
                
 | integral (EventStepper stepper,SOME (SCondition fcond),SOME (SResponse fpos),fneg,NONE,NONE,h) =
   (fn(EventState(x,y,e,ext,root)) => 
-      let val x'  = x + h
-          val y'  = (case root of
-                         true => (case fneg of
-                                      NONE => fpos(x',y,e,ext) 
-                                    | SOME (SResponse f) => f(x',fpos(x',y,e,ext),e,ext)
-                                    | _ => (putStrLn "FunctionalHybridDynamics1: EventState integral response"; 
-                                            raise Domain))
-                       | false => stepper ext h (x,y))
-          val e'    = fcond (x',y',e,ext)
-          val root' = (case (vfind2 thr (e, e'), vfind2 thr (e', e)) of
-                           (SOME _, SOME _) => true
-                         | (SOME _, NONE) => true
-                         | (NONE, SOME _) => true
-                         | (NONE, NONE) => false)
-      in
-          EventState(x',y',e',ext,root')
-      end
+      (case root of 
+           true => 
+           (let
+               val y' = case fneg of
+                            NONE => fpos(x,y,e,ext) 
+                          | SOME (SResponse f) => f(x,fpos(x,y,e,ext),e,ext)
+                          | _ => (putStrLn "FunctionalHybridDynamics1: EventState integral response"; 
+                                  raise Domain)
+           in
+               EventState(x,y',e,ext,false)
+           end)
+           | false =>
+             (let val x'    = x + h
+                  val y'    = stepper ext h (x,y)
+                  val e'    = fcond (x',y',e,ext)
+                  val root' = (case (vfind2 thr (e, e'), vfind2 thr (e', e)) of
+                                   (SOME _, SOME _) => true
+                                 | (SOME _, NONE) => true
+                                 | (NONE, SOME _) => true
+                                 | (NONE, NONE) => false)
+              in
+                  EventState(x',y',e',ext,root')
+              end))
   | _ => (putStrLn "FunctionalHybridDynamics1: invalid EventState"; 
           raise Domain))
 

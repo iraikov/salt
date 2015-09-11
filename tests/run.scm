@@ -277,13 +277,13 @@
 
 ;(test-model 'iaf iaf)
 
-(test-model 'izhfs izhfs solver: 'rkdp compile: #t)
+;(test-model 'izhfs izhfs solver: 'rkdp compile: #t)
 
 ;(test-model 'iafrefr iafrefr solver: 'rkoz compile: #t)
 
 ;(test-model 'ml ml solver: 'rk3 compile: #t)
 
-;(test-model 'iafsyn iafsyn)
+(test-model 'iafsyn iafsyn)
 
 
 
