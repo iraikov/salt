@@ -759,8 +759,9 @@
 
 (define (value->ML v)
   (cases value v
-	 (V:C       (v) (cond ((and (number? v) (negative? v))
-			       (list "~" (abs v)))
+	 (V:C       (v) (cond ((number? v) 
+                               (let ((str (number->string v)))
+                                 (string-map (lambda (c) (case c ((#\-) #\~) (else c))) str))) 
                               ((boolean? v)
                                (if v "true" "false"))
 			      (else v)))
@@ -835,7 +836,7 @@ in
 (if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
 end
 
-val getindex = Vector.sub
+val getindex = Unsafe.Vector.sub
 
 EOF
 

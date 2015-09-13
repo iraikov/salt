@@ -82,13 +82,13 @@ datatype model_response =
          RegimeResponse of (real * cont_state * event_state * dsc_state * external_state) -> cont_state
          | SResponse of (real * cont_state * event_state * external_state) -> cont_state
 
-val vsub = Vector.sub
+val getindex = Unsafe.Vector.sub
 
 fun vmap2 f (v1,v2) = 
     let 
         val n = Vector.length v1
     in
-        Vector.tabulate (n, fn (i) => f (vsub (v1,i), vsub (v2,i)))
+        Vector.tabulate (n, fn (i) => f (getindex (v1,i), getindex (v2,i)))
     end
 
 fun vfind2 f (v1,v2) = 
@@ -96,7 +96,7 @@ fun vfind2 f (v1,v2) =
         val n = Vector.length v1
         fun recur i = 
             (if Int.<(i, n)
-             then (if f (vsub (v1,i), vsub (v2,i)) then SOME(i) else recur (Int.+(i,1)))
+             then (if f (getindex (v1,i), getindex (v2,i)) then SOME(i) else recur (Int.+(i,1)))
              else NONE)
     in
         recur 0
@@ -107,7 +107,7 @@ fun vfoldpi2 f (v1,v2) =
         val n = Vector.length v1
         fun recur (i, ax) = 
             if Int.<(i, n)
-            then recur (Int.+(i,1), f (i, vsub (v1,i), vsub (v2,i), ax))
+            then recur (Int.+(i,1), f (i, getindex (v1,i), getindex (v2,i), ax))
             else ax
     in
       recur (0, NONE)
@@ -125,6 +125,7 @@ fun thr (v1,v2) =
         case (s1,s2) of
             (~1,1) => true
           | (~1,0) => true
+          | (1,1)  => true
           | (_,_)  => false
     end
 
@@ -260,13 +261,13 @@ datatype model_response =
          | SResponse of (real * cont_state * event_state * external_state) -> cont_state
 
 
-val vsub = Vector.sub
+val getindex = Unsafe.Vector.sub
 
 fun vmap2 f (v1,v2) = 
     let 
         val n = Vector.length v1
     in
-        Vector.tabulate (n, fn (i) => f (vsub (v1,i), vsub (v2,i)))
+        Vector.tabulate (n, fn (i) => f (getindex (v1,i), getindex (v2,i)))
     end
 
 fun vfind2 f (v1,v2) = 
@@ -274,7 +275,7 @@ fun vfind2 f (v1,v2) =
         val n = Vector.length v1
         fun recur i = 
             if Int.<(i, n)
-            then (if f (vsub (v1,i), vsub (v2,i)) then SOME(i) else recur (Int.+(i,1)))
+            then (if f (getindex (v1,i), getindex (v2,i)) then SOME(i) else recur (Int.+(i,1)))
             else NONE
     in
       recur 0
@@ -285,7 +286,7 @@ fun vfoldpi2 f (v1,v2) =
         val n = Vector.length v1
         fun recur (i, ax) = 
             if Int.<(i, n)
-            then recur (Int.+(i,1), f (i, vsub (v1,i), vsub (v2,i), ax))
+            then recur (Int.+(i,1), f (i, getindex (v1,i), getindex (v2,i), ax))
             else ax
     in
       recur (0, NONE)
