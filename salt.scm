@@ -580,13 +580,13 @@
          `(neg abs atan asin acos sin cos exp ln
                sqrt tan cosh sinh tanh hypot gamma lgamma log10 log2 log1p ldexp cube
                round ceiling floor 
-               random.uniform random.exponential))
+               random.exponential))
         (op-names
          `(signal.neg signal.abs signal.atan signal.asin signal.acos signal.sin signal.cos signal.exp signal.ln
                       signal.sqrt signal.tan signal.cosh signal.sinh signal.tanh signal.hypot signal.gamma signal.lgamma signal.log10
                       signal.log2 signal.log1p signal.ldexp signal.cube
                       signal.round signal.ceiling signal.floor
-                      random.uniform random.exponential)))
+                      random.exponential)))
     (fold (lambda (k v env)
             (let ((binding (gen-binding k v)))
               (extend-env-with-binding env binding)))
@@ -596,6 +596,27 @@
                  (function (make-free-variable f)
                            (make-pair-formal (make-var-def 'a) (make-null-formal))
                            `(signal.call ,fn ,(make-pair-arg (make-var-def 'a) (make-null-arg))))
+                 )
+               function-names
+               op-names)
+          ))
+  )
+  
+
+(define math-zop-env
+  (let ((function-names
+         `(random.uniform))
+        (op-names
+         `(random.uniform)))
+    (fold (lambda (k v env)
+            (let ((binding (gen-binding k v)))
+              (extend-env-with-binding env binding)))
+          empty-env
+          function-names
+          (map (lambda (f fn)
+                 (function (make-free-variable f)
+                           (make-null-formal)
+                           `(signal.call ,fn ,(make-null-arg)))
                  )
                function-names
                op-names)
@@ -731,7 +752,8 @@
         empty-env
         (list math-constant-env
               math-binop-env
-              math-unop-env)
+              math-unop-env
+              math-zop-env)
         ))
 
 
@@ -1493,7 +1515,9 @@
              ((signal.add signal.sub) 
               (if (unit-equal? (car units-args) (cadr units-args))
                   (car units-args) 
-                  (error 'units-primop "units mismatch" f units-args)))
+                  (error 'units-primop "units mismatch" f units-args
+                         (quantity-int (unit-dims (car units-args)))
+                         (quantity-int (unit-dims (cadr units-args))))))
              ((signal.mul) 
               (unit* (car units-args) (cadr units-args) ))
              ((signal.div) 

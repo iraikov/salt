@@ -21,6 +21,7 @@ val signal_sin = sin
 val signal_cos = cos
 val signal_cosh = cosh
 val signal_tanh = tanh
+val signal_ln = ln
                       
 val signal_max = max
 val signal_min = min
