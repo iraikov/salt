@@ -130,6 +130,8 @@ fun thr (v1,v2) =
           | (_,_)  => false
     end
 
+fun fixthr (v) =
+    Vector.map (fn(x) => if Real.>(Real.abs(x), 1e~6) then x else 0.0) v
 
 fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),                          
               SOME (RegimeResponse fpos),fneg,
@@ -149,7 +151,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
            | false =>
              (let val x'  = x + h
                   val y'  = stepper (d,r) ext h (x,y)
-                  val e'  = fcond d (x',y',e,ext)
+                  val e'  = fixthr (fcond d (x',y',e,ext))
                   val r'  = fregime (e',r)
                   val d'  = (case fdiscrete of 
                                  SOME f => f (x',y',e',d)
@@ -180,7 +182,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
            | false =>
              (let val x'    = x + h
                   val y'    = stepper ext h (x,y)
-                  val e'    = fcond (x',y',e,ext)
+                  val e'    = fixthr (fcond (x',y',e,ext))
                   val root' = (case (vfind2 thr (e, e'), vfind2 thr (e', e)) of
                                    (SOME _, SOME _) => true
                                  | (SOME _, NONE) => true
