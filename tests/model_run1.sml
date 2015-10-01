@@ -20,10 +20,10 @@ fun showReal n =
 
 fun printstate (t,input) = 
     let
-        val n = Vector.length input
+        val n = Array.length input
         fun fshow i =
             if i < n
-            then (putStr(showReal (Vector.sub(input,i))  ^ " ");
+            then (putStr(showReal (Array.sub(input,i))  ^ " ");
                   fshow(i+1))
             else putStrLn("")
     in

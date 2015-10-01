@@ -770,7 +770,7 @@
 		    (list "getindex (" (value->ML v) ", " index ")"))
 	 (V:Vec   (lst) 
 		    (let ((n (length lst)))
-		      (list "(Vector.fromList [" (intersperse (map (lambda (v) (value->ML v)) lst) ", ") "])")))
+		      (list "(Array.fromList [" (intersperse (map (lambda (v) (value->ML v)) lst) ", ") "])")))
 	 (V:Fn      (args body) 
 		    (list "(fn (" (intersperse (map name/ML args) ",") ") => "
 			  (stmt->ML body #f) ")"))
@@ -836,7 +836,7 @@ in
 (if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
 end
 
-val getindex = Unsafe.Vector.sub
+val getindex = Unsafe.Array.sub
 
 EOF
 
@@ -860,22 +860,22 @@ EOF
        ("fun integral (f,h) = f" ,nl))
 
      `(("val summer = fn (a,b) => (vmap2 (fn (x,y) => x+y) (a,b))" ,nl)
-       ("val scaler = fn(a,lst) => (Vector.map (fn (x) => a*x) lst)" ,nl)
+       ("val scaler = fn(a,lst) => (vmap (fn (x) => a*x) lst)" ,nl)
        . ,(case solver  
             ;; adaptive solvers
             ((rkoz rkdp)
              (let ((cesolver (sprintf "ce~A" solver)))
              `(
-               ("val " ,solver ": (real vector) stepper2 = make_" ,solver "()" ,nl)
+               ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nl)
                ("fun make_stepper (deriv) = " ,solver " (scaler,summer,deriv)" ,nl)
-               ("val " ,cesolver ": (real vector) stepper3 = make_" ,cesolver "()" ,nl)
+               ("val " ,cesolver ": (real array) stepper3 = make_" ,cesolver "()" ,nl)
                ("fun make_event_stepper (deriv) = " ,cesolver " (scaler,summer,deriv)" ,nl)
                (,nl)
                )
              ))
             (else
              `(
-               ("val " ,solver ": (real vector) stepper1 = make_" ,solver "()" ,nl)
+               ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nl)
                ("fun make_stepper (deriv) = " ,solver " (scaler,summer,deriv)" ,nl)
                ("fun make_event_stepper (deriv) = " ,solver " (scaler,summer,deriv)" ,nl)
                (,nl)

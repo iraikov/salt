@@ -53,15 +53,15 @@ fun showReal n =
 	(if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
     end
 
-fun showRealVector v = 
-    ("<" ^ (String.concatWith ", " (Vector.foldr (fn (x, ax) => (showReal x)::ax) [] v)) ^ ">")
+fun showRealArray v = 
+    ("<" ^ (String.concatWith ", " (Array.foldr (fn (x, ax) => (showReal x)::ax) [] v)) ^ ">")
 
-type regime_state  = bool vector
-type dsc_state     = real vector
-type event_state   = real vector
-type cont_state    = real vector
-type error_state   = real vector
-type external_state = real vector
+type regime_state  = bool array
+type dsc_state     = real array
+type event_state   = real array
+type cont_state    = real array
+type error_state   = real array
+type external_state = real array
 
 datatype model_state = 
          RegimeState of real * cont_state * event_state * dsc_state * regime_state * external_state * bool
@@ -83,18 +83,28 @@ datatype model_response =
          RegimeResponse of (real * cont_state * event_state * dsc_state * external_state) -> cont_state
          | SResponse of (real * cont_state * event_state * external_state) -> cont_state
 
-val getindex = Unsafe.Vector.sub
+val getindex = Unsafe.Array.sub
+val update = Unsafe.Array.update
+
+fun vmap f v = 
+    let
+        val n = Array.length v
+        val a = Array.array (n, 0.0)
+    in
+        (Array.appi (fn (i,x) => update (a, i, f (x))) v; a)
+    end
 
 fun vmap2 f (v1,v2) = 
     let 
-        val n = Vector.length v1
+        val n = Array.length v1
+        val a = Array.array (n, 0.0)
     in
-        Vector.tabulate (n, fn (i) => f (getindex (v1,i), getindex (v2,i)))
+        (Array.appi (fn (i,x) => update (a, i, f (x, getindex (v2,i)))) v1; a)
     end
 
 fun vfind2 f (v1,v2) = 
     let 
-        val n = Vector.length v1
+        val n = Array.length v1
         fun recur i = 
             (if Int.<(i, n)
              then (if f (getindex (v1,i), getindex (v2,i)) then SOME(i) else recur (Int.+(i,1)))
@@ -105,7 +115,7 @@ fun vfind2 f (v1,v2) =
 
 fun vfoldpi2 f (v1,v2) = 
     let 
-        val n = Vector.length v1
+        val n = Array.length v1
         fun recur (i, ax) = 
             if Int.<(i, n)
             then recur (Int.+(i,1), f (i, getindex (v1,i), getindex (v2,i), ax))
@@ -131,7 +141,7 @@ fun thr (v1,v2) =
     end
 
 fun fixthr (v) =
-    Vector.map (fn(x) => if Real.>(Real.abs(x), 1e~6) then x else 0.0) v
+    (Array.modify (fn(x) => if Real.>(Real.abs(x), 1e~6) then x else 0.0) v; v)
 
 fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),                          
               SOME (RegimeResponse fpos),fneg,
@@ -194,7 +204,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
   | _ => (putStrLn "FunctionalHybridDynamics1: invalid EventState"; 
           raise Domain))
 
-| integral (ContStepper stepper,NONE,NONE,_,NONE,NONE,h) =
+| integral (ContStepper stepper,NONE,fpos,fneg,NONE,NONE,h) =
   (fn(ContState(x,y,ext)) => 
       let val x'  = x + h
           val y'  = stepper ext h (x,y)
@@ -235,12 +245,12 @@ fun showReal n =
 	(if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
     end
 
-type regime_state  = bool vector
-type dsc_state     = real vector
-type event_state   = real vector
-type cont_state    = real vector
-type error_state   = real vector
-type external_state = real vector
+type regime_state  = bool array
+type dsc_state     = real array
+type event_state   = real array
+type cont_state    = real array
+type error_state   = real array
+type external_state = real array
 
 datatype model_state = 
          RegimeState  of real * cont_state * event_state * dsc_state * regime_state * external_state * real * bool
@@ -264,18 +274,28 @@ datatype model_response =
          | SResponse of (real * cont_state * event_state * external_state) -> cont_state
 
 
-val getindex = Unsafe.Vector.sub
+val getindex = Unsafe.Array.sub
+val update = Unsafe.Array.update
+
+fun vmap f v = 
+    let
+        val n = Array.length v
+        val a = Array.array (n, 0.0)
+    in
+        (Array.appi (fn (i,x) => update (a, i, f (x))) v; a)
+    end
 
 fun vmap2 f (v1,v2) = 
     let 
-        val n = Vector.length v1
+        val n = Array.length v1
+        val a = Array.array (n, 0.0)
     in
-        Vector.tabulate (n, fn (i) => f (getindex (v1,i), getindex (v2,i)))
+        Array.appi (fn (i,x) => update (a, i, f (x, getindex (v2,i)))) v1; a
     end
 
 fun vfind2 f (v1,v2) = 
     let 
-        val n = Vector.length v1
+        val n = Array.length v1
         fun recur i = 
             if Int.<(i, n)
             then (if f (getindex (v1,i), getindex (v2,i)) then SOME(i) else recur (Int.+(i,1)))
@@ -286,7 +306,7 @@ fun vfind2 f (v1,v2) =
 
 fun vfoldpi2 f (v1,v2) = 
     let 
-        val n = Vector.length v1
+        val n = Array.length v1
         fun recur (i, ax) = 
             if Int.<(i, n)
             then recur (Int.+(i,1), f (i, getindex (v1,i), getindex (v2,i), ax))
@@ -310,7 +330,7 @@ exception ConvergenceError
 
 fun predictor tol (h,ys) =
   let open Real
-      val e = Vector.foldl (fn (y,ax) => Real.+ ((abs y),ax)) 0.0 ys
+      val e = Array.foldl (fn (y,ax) => Real.+ ((abs y),ax)) 0.0 ys
   in 
       if e < lb 
       then Right (1.414*h)	(* step too small, accept but grow *)
@@ -369,8 +389,8 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime)  =
                     (case vfoldpi2 adthreshold (ev, ev') of
                          SOME (evdir,evind,evdiff) => 
                          (let
-                             fun fy (theta) = Vector.sub(fcond d (x+theta*h, finterp theta, ev, ext), evind)
-                             val y0    = Vector.sub(fcond d (x,ys,ev,ext), evind)
+                             fun fy (theta) = Array.sub(fcond d (x+theta*h, finterp theta, ev, ext), evind)
+                             val y0    = Array.sub(fcond d (x,ys,ev,ext), evind)
                              val theta = secant tol fy y0 1.0 0.0
                              val x'    = x+(theta+tol)*h
                              val ys''  = finterp (theta+tol)
@@ -404,8 +424,8 @@ fun adaptive_event_solver (stepper,fcond)  =
                     (case vfoldpi2 adthreshold (ev, ev') of
                          SOME (evdir,evind,evdiff) => 
                          (let
-                             fun fy (theta) = Vector.sub(fcond (x+theta*h, finterp theta, ev, ext), evind)
-                             val y0    = Vector.sub(fcond (x,ys,ev,ext), evind)
+                             fun fy (theta) = Array.sub(fcond (x+theta*h, finterp theta, ev, ext), evind)
+                             val y0    = Array.sub(fcond (x,ys,ev,ext), evind)
                              val theta = secant tol fy y0 1.0 0.0
                              val x'    = x+(theta+tol)*h
                              val ys''  = finterp (theta+tol)
@@ -501,7 +521,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
       | _ => (putStrLn "FunctionalHybridDynamics2: invalid EventState"; raise Domain)
     end
 
-  | integral (ContStepper fstepper,NONE,NONE,NONE,NONE,NONE) =
+  | integral (ContStepper fstepper,NONE,fpos,fneg,NONE,NONE) =
     let
        (*fun fstepper (d,r) = make_stepper (f(d,r))*)
        val fsolver = adaptive_solver fstepper
