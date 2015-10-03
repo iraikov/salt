@@ -34,11 +34,11 @@
 
   (define sim (simcreate elab))
   (pp sim)
-  (pp (codegen-ODE sim))
+  (pp (codegen-ODE sim solver))
   (let* ((sml-path (make-pathname dir (string-append (->string name) ".sml")))
          (mlb-path (make-pathname dir (string-append (->string name) "_run.mlb")))
          (port (open-output-file sml-path)))
-    (codegen-ODE/ML sim out: port solver: solver)
+    (codegen-ODE/ML sim out: port solver: solver libs: '(interp))
     (close-output-port port)
     (if compile
         (run (mlton -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
@@ -276,7 +276,7 @@
 
 (test-model 'izhfs izhfs solver: 'rkdp compile: #t)
 
-(test-model 'iafrefr iafrefr solver: 'rk4b compile: #t)
+;(test-model 'iafrefr iafrefr solver: 'rk4b compile: #t)
 
 (test-model 'iafrefr iafrefr solver: 'rkoz compile: #t)
 

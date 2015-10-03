@@ -652,6 +652,26 @@
                    (parse-expression env (parse-sym-infix-expr expr))
                    Unity
                    ))
+                 (('= 'external-event ('dim u) . expr)
+                  (let ((dim-assoc (assv u (model-quantities))))
+                    (if (not dim-assoc)
+                        (salt:error 'parse-definition "unknown dimension in external event definition"
+                                    pattern u))
+                    (externalev
+                     (gensym 'ext)
+                     (free-variable-name 
+                      (parse-variable env pattern))
+                     (parse-expression env (parse-sym-infix-expr expr))
+                     (cdr dim-assoc))
+                     ))
+                 (('= 'external-event . expr)
+                  (externalev
+                   (gensym 'ext)
+                   (free-variable-name 
+                    (parse-variable env pattern))
+                   (parse-expression env (parse-sym-infix-expr expr))
+                   Unity
+                   ))
                  (('= 'constant ('unit u) . expr)
                   (let ((unit-assoc (assv u (model-units)))
                         (cvalue (parse-expression env (parse-sym-infix-expr expr))))

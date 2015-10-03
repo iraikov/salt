@@ -92,7 +92,7 @@
       
 
 
-(define (codegen-expr ode-inds ode-order invcindexmap)
+(define (codegen-expr ode-inds ode-order invcindexmap solver)
   (lambda (expr)
     (let recur ((expr expr))
       (match expr
@@ -110,6 +110,10 @@
                        (V:Sub (recur vect) (cdr ode-index-assoc)))
                      (V:Var (cdr (assv index invcindexmap)))))
                 (else (V:Sub (recur vect) index))))
+             (('ext index t)
+              (recur `(getindex ext ,index)))
+             (('extev index t)
+              (recur `(signal.primop signal.sub ,t (getindex extev ,index))))
              (($ constant 'number val unit)
               (V:C val))
              (('signal.if test ift iff)
@@ -151,7 +155,7 @@
       ))
 
 
-(define (codegen-ODE sim)
+(define (codegen-ODE sim solver)
 
   (define (update-bucket k v alst)
     (let recur ((alst alst)
@@ -246,15 +250,16 @@
 
 
   (let* (
-        (cindexmap (simruntime-cindexmap sim))
-        (invcindexmap (map (lambda (x) (cons (cdr x) (car x))) (env->list cindexmap)))
-        (dindexmap (simruntime-dindexmap sim))
-        (rindexmap (simruntime-rindexmap sim))
-        (defs      (simruntime-definitions sim))
+        (cindexmap      (simruntime-cindexmap sim))
+        (invcindexmap   (map (lambda (x) (cons (cdr x) (car x))) (env->list cindexmap)))
+        (dindexmap      (simruntime-dindexmap sim))
+        (rindexmap      (simruntime-rindexmap sim))
+        (defs           (simruntime-definitions sim))
         (discrete-defs  (simruntime-discrete-definitions sim))
-        (params    (simruntime-parameters sim))
-        (externals (simruntime-external-definitions sim))
-        (eqblock   (simruntime-eqblock sim))
+        (params         (simruntime-parameters sim))
+        (externals      (simruntime-external-definitions sim))
+        (externalevs    (simruntime-externalev-definitions sim))
+        (eqblock        (simruntime-eqblock sim))
 
         (ode-inds 
          (sort
@@ -338,7 +343,7 @@
         )
     (let* (
 
-           (codegen-expr1 (codegen-expr ode-inds ode-order invcindexmap))
+           (codegen-expr1 (codegen-expr ode-inds ode-order invcindexmap solver))
 
            (ode-defs (filter-map (lambda (index) 
                                    (and (member index ode-inds)
@@ -449,6 +454,9 @@
            (initextfun  
             (V:Fn '(p) (E:Ret (V:Vec (map codegen-expr1 externals)))))
 
+           (initextevfun  
+            (V:Fn '(p) (E:Ret (V:Vec (map codegen-expr1 externalevs)))))
+
            (odefun    
             (let ((fnval
                    (V:Fn '(t y) 
@@ -461,11 +469,11 @@
                    ))
             (V:Fn '(p) 
                   (E:Ret (cond ((pair? regblocks) 
-                                (V:Op 'RegimeStepper (list (V:Fn '(d r) (E:Ret (V:Fn '(ext) (E:Ret (V:Op 'make_event_stepper (list fnval)))))))))
+                                (V:Op 'RegimeStepper (list (V:Fn '(d r) (E:Ret (V:Fn '(ext extev) (E:Ret (V:Op 'make_event_stepper (list fnval)))))))))
                                ((pair? condblock)
-                                (V:Op 'EventStepper (list (V:Fn '(ext) (E:Ret (V:Op 'make_event_stepper (list fnval)))))))
+                                (V:Op 'EventStepper (list (V:Fn '(ext extev) (E:Ret (V:Op 'make_event_stepper (list fnval)))))))
                                (else
-                                (V:Op 'ContStepper (list  (V:Fn '(ext) (E:Ret (V:Op 'make_stepper (list fnval)))))))
+                                (V:Op 'ContStepper (list  (V:Fn '(ext extev) (E:Ret (V:Op 'make_stepper (list fnval)))))))
                                ))
                   ))
             )
@@ -487,7 +495,7 @@
                            '() condblock)))))
               (if (null? condblock)
                   (V:C 'NONE)
-                  (let ((fnval (V:Fn '(t y c ext) 
+                  (let ((fnval (V:Fn '(t y c ext extev) 
                                      (if (null? used-asgns)
                                          (E:Ret (V:Vec (map codegen-expr1 condblock)))
                                          (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
@@ -515,7 +523,7 @@
                                     (delete-duplicates
                                      (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
                                            '() blocks))))
-                              (fnval (V:Fn (if (null? regblocks) '(t y c ext) '(t y c d ext))
+                              (fnval (V:Fn (if (null? regblocks) '(t y c ext extev) '(t y c d ext extev))
                                            (if (null? used-asgns)
                                                (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
                                                (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
@@ -539,7 +547,7 @@
                                     (delete-duplicates
                                      (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
                                            '() blocks))))
-                              (fnval (V:Fn (if (null? regblocks) '(t y c ext) '(t y c d ext))
+                              (fnval (V:Fn (if (null? regblocks) '(t y c ext extev) '(t y c d ext extev))
                                                  (if (null? used-asgns)
                                                      (E:Ret (V:Vec (map (compose codegen-expr1 cdr) blocks)))
                                                      (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
@@ -609,6 +617,7 @@
         (odefun   . ,odefun)
         (initcondfun . ,initcondfun)
         (initextfun  . ,initextfun)
+        (initextevfun  . ,initextevfun)
         (condfun . ,condfun)
         (posfun  . ,posfun)
         (negfun  . ,negfun)
@@ -794,23 +803,23 @@
 
 (define (codegen-ODE/ML sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
 
-  (let ((fundefs (codegen-ODE sim)))
-
     (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkoz rkdp))))
         (error 'codegen-ODE/ML "unknown solver" solver))
-    
-    (if mod (print-fragments (prelude/ML solver: solver libs: libs) out))
-    
-    (print-fragments
-     (map (match-lambda
-           ((name . def)  
-            (list (binding->ML (B:Val name def)) nl)))
-          fundefs)
-     out)
-    
-    (if mod (print-fragments (list nl "end" nl) out))
 
-    ))
+    (let ((fundefs (codegen-ODE sim solver)))
+      
+      (if mod (print-fragments (prelude/ML solver: solver libs: libs) out))
+      
+      (print-fragments
+       (map (match-lambda
+             ((name . def)  
+              (list (binding->ML (B:Val name def)) nl)))
+            fundefs)
+       out)
+      
+      (if mod (print-fragments (list nl "end" nl) out))
+      
+      ))
 
 
 (define (prelude/ML  #!key (solver 'rk4b) (libs '()))
