@@ -1286,7 +1286,7 @@
                      (($ externalev name label initial-value dim)
                       (d 'elaborate "externalevs: label = ~A initial-value = ~A~%" label initial-value)
                       (let* ((resolved-initial (resolve initial-value env-stack))
-                             (en1 (external name label resolved-initial dim)))
+                             (en1 (externalev name label resolved-initial dim)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
                                parameters fields externals (cons (cons name resolved-initial) externalevs)
@@ -1764,10 +1764,10 @@
 
          (($ externalev name label initial dim)
           (let ((yindex (env-lookup name extevindexmap)))
-            (d 'reduce-expr "extevindexmap = ~A~%" extevindexmap)
+            (d 'reduce-expr "extevindexmap = ~A~%" (env->list extevindexmap))
             (if (not yindex)
-                (error 'reduce-expr "external not in index" name)
-                `(extev ,(cdr yindex) ,(variable-name model-time)))
+                (error 'reduce-expr "external event not in index" name)
+                `(extev ,(cdr yindex) ,(variable-label model-time)))
             ))
 
          (('signal.let lbnds body)
@@ -2118,7 +2118,9 @@
                       (extindexmap . ,extindexmap)
                       (extevindexmap . ,extevindexmap)
                       ))
-                      
+         
+         (dd (d 'reduce-expr "extindexmap = ~A~%" (env->list extindexmap)))
+         (dd (d 'reduce-expr "extevindexmap = ~A~%" (env->list extevindexmap)))
 
          (param-block 
           (map (lambda (x) (reduce-constant-expr (cdr x) indexmaps))
