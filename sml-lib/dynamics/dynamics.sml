@@ -54,7 +54,7 @@ fun showReal n =
     end
 
 fun showRealArray v = 
-    ("<" ^ (String.concatWith ", " (Array.foldr (fn (x, ax) => (showReal x)::ax) [] v)) ^ ">")
+    (String.concatWith ", " (Array.foldr (fn (x, ax) => (showReal x)::ax) [] v))
 
 type regime_state  = bool array
 type dsc_state     = real array
@@ -246,6 +246,9 @@ fun showReal n =
 	(if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
     end
 
+fun showRealArray v = 
+    (String.concatWith ", " (Array.foldr (fn (x, ax) => (showReal x)::ax) [] v))
+
 type regime_state  = bool array
 type dsc_state     = real array
 type event_state   = real array
@@ -330,6 +333,9 @@ datatype ('a, 'b) either = Left of 'a | Right of 'b
 exception ConvergenceError
 
 
+fun fixthr (v) =
+    (Array.modify (fn(x) => if Real.>(Real.abs(x), tol) then x else 0.0) v; v)
+
 fun predictor tol (h,ys) =
   let open Real
       val e = Array.foldl (fn (y,ax) => Real.+ ((abs y),ax)) 0.0 ys
@@ -362,10 +368,11 @@ datatype 'a result = Next of 'a | Root of 'a
 fun adthreshold (i,v1,v2,ax) = 
     let
         fun ethr0 (i, v1, v2) =
-            (case (Real.sign(v1),Real.sign(v2)) of
-                 (~1, 1) => SOME (1, i, v1-v2)
-               | (~1, 0) => SOME (1, i, v1-v2)
-               | _ => NONE)
+            case (Real.sign(v1),Real.sign(v2)) of
+                (~1, 1) => SOME (1, i, v1-v2)
+              | (~1, 0) => SOME (1, i, v1-v2)
+              | (1, 0)  => SOME (1, i, v1-v2)
+              | _ => NONE
     in
         case ax of 
             NONE => ethr0 (i,v1,v2)
@@ -384,19 +391,24 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime)  =
         fun f (x,ys,ev,d,r,ext,extev,h) =
             (let
                 val (ys',e,finterp) = (stepper (d,r)) (ext,extev) h (x,ys)
-                val ev' = fcond d (x+h,ys',ev,ext,extev)
+                val ev' = fixthr (fcond d (x+h,ys',ev,ext,extev))
             in
                 case predictor tol (h,e) of
                     Right h' => 
                     (case vfoldpi2 adthreshold (ev, ev') of
                          SOME (evdir,evind,evdiff) => 
                          (let
-                             fun fy (theta) = Array.sub(fcond d (x+theta*h, finterp theta, ev, ext, extev), evind)
-                             val y0    = Array.sub(fcond d (x,ys,ev,ext,extev), evind)
+                             fun fy (theta) = 
+                                 let
+                                     val ysc = if theta > 0.0 then finterp theta else ys'
+                                 in
+                                     Array.sub(fcond d (x+theta*h, ysc, ev, ext, extev), evind)
+                                 end
+                             val y0    = Array.sub(fixthr (fcond d (x,ys,ev,ext,extev)), evind)
                              val theta = secant tol fy y0 1.0 0.0
-                             val x'    = x+(theta+tol)*h
-                             val ys''  = finterp (theta+tol)
-                             val ev''  = fcond d (x',ys'',ev,ext,extev)
+                             val x'    = x+(theta)*h
+                             val ys''  = if theta > 0.0 then finterp (theta) else ys'
+                             val ev''  = fixthr (fcond d (x',ys'',ev,ext,extev))
                              val d'    = (case fdiscrete of 
                                               SOME f => f (x',ys'',ev'',d)
                                             | NONE => d)
@@ -419,19 +431,24 @@ fun adaptive_event_solver (stepper,fcond)  =
         fun f (x,ys,ev,ext,extev,h) =
             (let
                 val (ys',e,finterp) = stepper (ext,extev) h (x,ys)
-                val ev' = fcond (x+h,ys',ev,ext,extev)
+                val ev' = fixthr (fcond (x+h,ys',ev,ext,extev))
             in
                 case predictor tol (h,e) of
                     Right h' => 
                     (case vfoldpi2 adthreshold (ev, ev') of
                          SOME (evdir,evind,evdiff) => 
                          (let
-                             fun fy (theta) = Array.sub(fcond (x+theta*h, finterp theta, ev, ext, extev), evind)
-                             val y0    = Array.sub(fcond (x,ys,ev,ext,extev), evind)
+                             fun fy (theta) = 
+                                 let
+                                     val ysc = if theta > 0.0 then finterp theta else ys'
+                                 in
+                                     Array.sub(fcond (x+theta*h, ysc, ev, ext, extev), evind)
+                                 end
+                             val y0    = Array.sub(fixthr(fcond (x,ys,ev,ext,extev)), evind)
                              val theta = secant tol fy y0 1.0 0.0
                              val x'    = x+(theta+tol)*h
-                             val ys''  = finterp (theta+tol)
-                             val ev''  = fcond (x',ys'',ev,ext,extev)
+                             val ys''  = if theta > 0.0 then finterp (theta) else ys'
+                             val ev''  = fixthr (fcond (x',ys'',ev,ext,extev))
                          in
                              Root (x',ys'',evdir,ev'',ext,extev,h')
                          end)
@@ -480,8 +497,9 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                                  fpos(x,y,e,ext,extev,d)
                                | SOME _ => (putStrLn "FunctionalHybridDynamics2: RegimeState integral response"; 
                                             raise Domain)
+                    val  e' = fcond d (x,y',e,ext,extev)
                 in
-                    RegimeState (x,y',e,d,r,ext,extev,h,false) 
+                    RegimeState (x,y',e',d,r,ext,extev,h,false) 
                 end)
              | false =>  
                 case fsolver (x,y,e,d,r,ext,extev,h) of

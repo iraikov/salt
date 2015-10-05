@@ -483,7 +483,7 @@
                 (V:C 'NONE)
                 (V:Op 'SOME
                       (list 
-                       (V:Fn '() (E:Ret (V:Vec (map (lambda (x) (V:C 'posInf)) condblock))))))
+                       (V:Fn '() (E:Ret (V:Vec (map (lambda (x) (V:C 'negInf)) condblock))))))
                 ))
 
            (condfun     
@@ -845,7 +845,7 @@ in
 (if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
 end
 
-val getindex = Unsafe.Array.sub
+val getindex = Array.sub
 
 EOF
 
