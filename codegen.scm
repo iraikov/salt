@@ -845,7 +845,7 @@ in
 (if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
 end
 
-val getindex = Array.sub
+val getindex = Unsafe.Array.sub
 
 EOF
 
