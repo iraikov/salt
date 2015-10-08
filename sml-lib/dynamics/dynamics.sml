@@ -349,15 +349,27 @@ fun predictor tol (h,ys) =
 
 
 
-fun secant tol f fg0 guess1 guess0 = 
+fun secant tol f fg0 guess1 guess0 iter = 
     let open Real
+        infix ==
         val fg1 = f guess1
         val newGuess = guess1 - fg1 * (guess1 - guess0) / (fg1 - fg0)
         val err =  abs (newGuess - guess1)
     in 
-        if (err < tol)
-        then newGuess
-        else secant tol f fg1 newGuess guess1 
+        if fg1 == fg0
+        then guess1
+        else 
+            (if Int.<(iter, 10)
+             then 
+                 (if (err < tol)
+                  then newGuess
+                  else secant tol f fg1 newGuess guess1 (Int.+(iter,1)))
+             else (putStrLn "FunctionalHybridDynamics2: secant convergence error";
+                   putStrLn ("err = " ^ (showReal err) ^ " guess1 = " ^ (showReal guess1) ^
+                             " guess0 = " ^ (showReal guess0) ^ " guess1 = " ^ (showReal guess1) ^ 
+                             " fg0 = " ^ (showReal fg0) ^ " fg1 = " ^ (showReal fg1));
+                   raise ConvergenceError))
+                         
     end
 
 
@@ -388,77 +400,83 @@ fun adthreshold (i,v1,v2,ax) =
 
 fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime)  =
     let open Real
-        fun f (x,ys,ev,d,r,ext,extev,h) =
-            (let
-                val (ys',e,finterp) = (stepper (d,r)) (ext,extev) h (x,ys)
-                val ev' = fixthr (fcond d (x+h,ys',ev,ext,extev))
-            in
-                case predictor tol (h,e) of
-                    Right h' => 
-                    (case vfoldpi2 adthreshold (ev, ev') of
-                         SOME (evdir,evind,evdiff) => 
-                         (let
-                             fun fy (theta) = 
-                                 let
-                                     val ysc = if theta > 0.0 then finterp theta else ys'
-                                 in
-                                     Array.sub(fcond d (x+theta*h, ysc, ev, ext, extev), evind)
-                                 end
-                             val y0    = Array.sub(fixthr (fcond d (x,ys,ev,ext,extev)), evind)
-                             val theta = secant tol fy y0 1.0 0.0
-                             val x'    = x+(theta)*h
-                             val ys''  = if theta > 0.0 then finterp (theta) else ys'
-                             val ev''  = fixthr (fcond d (x',ys'',ev,ext,extev))
-                             val d'    = (case fdiscrete of 
-                                              SOME f => f (x',ys'',ev'',d)
-                                            | NONE => d)
-                             val r'    = fregime (ev'',r)
-                         in
-                             Root (x',ys'',evdir,ev'',d',r',ext,extev,h')
-                         end)
-                       | NONE => 
-                         Next (x+h,ys',0,ev',d,r,ext,extev,h'))
-                  | Left h'  => 
-                    f (x,ys,ev,d,r,ext,extev,h')
-            end)
+        fun f iter (x,ys,ev,d,r,ext,extev,h) =
+            if Int.<(iter,10)
+            then 
+                (let
+                    val (ys',e,finterp) = (stepper (d,r)) (ext,extev) h (x,ys)
+                    val ev' = fixthr (fcond d (x+h,ys',ev,ext,extev))
+                in
+                    case predictor tol (h,e) of
+                        Right h' => 
+                        (case vfoldpi2 adthreshold (ev, ev') of
+                             SOME (evdir,evind,evdiff) => 
+                             (let
+                                 fun fy (theta) = 
+                                     let
+                                         val ysc = if theta > 0.0 then finterp theta else ys'
+                                     in
+                                         Array.sub(fixthr(fcond d (x+theta*h, ysc, ev, ext, extev)), evind)
+                                     end
+                                 val y0    = Array.sub(fixthr (fcond d (x,ys,ev,ext,extev)), evind)
+                                 val theta = secant tol fy y0 1.0 0.0 0
+                                 val x'    = x+(theta)*h
+                                 val ys''  = if theta > 0.0 then finterp (theta) else ys'
+                                 val ev''  = fixthr (fcond d (x',ys'',ev,ext,extev))
+                                 val d'    = (case fdiscrete of 
+                                                  SOME f => f (x',ys'',ev'',d)
+                                                | NONE => d)
+                                 val r'    = fregime (ev'',r)
+                             in
+                                 Root (x',ys'',evdir,ev'',d',r',ext,extev,h')
+                             end)
+                           | NONE => 
+                             Next (x+h,ys',0,ev',d,r,ext,extev,h'))
+                      | Left h'  => 
+                        f (Int.+(iter,1)) (x,ys,ev,d,r,ext,extev,h')
+                end)
+            else raise ConvergenceError
     in
-        f
+        f 0
     end
 
 
 fun adaptive_event_solver (stepper,fcond)  =
     let open Real
-        fun f (x,ys,ev,ext,extev,h) =
-            (let
-                val (ys',e,finterp) = stepper (ext,extev) h (x,ys)
-                val ev' = fixthr (fcond (x+h,ys',ev,ext,extev))
-            in
-                case predictor tol (h,e) of
-                    Right h' => 
-                    (case vfoldpi2 adthreshold (ev, ev') of
-                         SOME (evdir,evind,evdiff) => 
-                         (let
-                             fun fy (theta) = 
-                                 let
-                                     val ysc = if theta > 0.0 then finterp theta else ys'
-                                 in
-                                     Array.sub(fcond (x+theta*h, ysc, ev, ext, extev), evind)
-                                 end
-                             val y0    = Array.sub(fixthr(fcond (x,ys,ev,ext,extev)), evind)
-                             val theta = secant tol fy y0 1.0 0.0
-                             val x'    = x+(theta+tol)*h
-                             val ys''  = if theta > 0.0 then finterp (theta) else ys'
-                             val ev''  = fixthr (fcond (x',ys'',ev,ext,extev))
-                         in
-                             Root (x',ys'',evdir,ev'',ext,extev,h')
-                         end)
-                       | NONE => 
-                         Next (x+h,ys',0,ev',ext,extev,h'))
-                  | Left h'  => 
-                    f (x,ys,ev,ext,extev,h')
-            end)
+        fun f iter (x,ys,ev,ext,extev,h) =
+            if (Int.<(iter,10))
+            then 
+                (let
+                    val (ys',e,finterp) = stepper (ext,extev) h (x,ys)
+                    val ev' = fixthr (fcond (x+h,ys',ev,ext,extev))
+                in
+                    case predictor tol (h,e) of
+                        Right h' => 
+                        (case vfoldpi2 adthreshold (ev, ev') of
+                             SOME (evdir,evind,evdiff) => 
+                             (let
+                                 fun fy (theta) = 
+                                     let
+                                         val ysc = if theta > 0.0 then finterp theta else ys'
+                                     in
+                                         Array.sub(fcond (x+theta*h, ysc, ev, ext, extev), evind)
+                                     end
+                                 val y0    = Array.sub(fixthr(fcond (x,ys,ev,ext,extev)), evind)
+                                 val theta = secant tol fy y0 1.0 0.0 0
+                                 val x'    = x+(theta*h)
+                                 val ys''  = if theta > 0.0 then finterp (theta) else ys'
+                                 val ev''  = fixthr (fcond (x',ys'',ev,ext,extev))
+                             in
+                                 Root (x',ys'',evdir,ev'',ext,extev,h')
+                             end)
+                           | NONE => 
+                             Next (x+h,ys',0,ev',ext,extev,h'))
+                      | Left h'  => 
+                        f (Int.+(iter,1)) (x,ys,ev,ext,extev,h')
+                end)
+            else raise ConvergenceError
     in
-        f
+        f 0
     end
 
 
