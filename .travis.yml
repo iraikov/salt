@@ -7,7 +7,7 @@ env:
 before_install:
     - apt-cache show libblas-dev
     - sudo apt-get update -qq -y
-    - sudo apt-get install  chicken-bin 
+    - sudo apt-get install chicken-bin 
     - git config --global user.name "Travis User"
     - git config --global user.email "travis@example.net"
     - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
