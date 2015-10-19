@@ -868,7 +868,7 @@ EOF
      `(("(* dummy solver; returns only the computed derivatives *)")
        ("fun integral (f,h) = f" ,nl))
 
-     `(("val summer = fn (a,b) => (vmap2 (fn (x,y) => x+y) (a,b))" ,nl)
+     `(("val summer = fn (a,b) => (vmodifyr2 (fn (x,y) => x+y) (a,b))" ,nl)
        ("val scaler = fn(a,lst) => (vmap (fn (x) => a*x) lst)" ,nl)
        . ,(case solver  
             ;; adaptive solvers

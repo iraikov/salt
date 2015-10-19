@@ -50,7 +50,6 @@
 structure RungeKutta =
 struct
 
-
 exception InsufficientArguments
 exception KsInvalidCoefficients
 exception BkInvalidCoefficients
@@ -191,10 +190,22 @@ fun k_sum (sc_fn: real * 'a -> 'a,
 	   sum_fn: 'a * 'a -> 'a, 
 	   h: real) 
 	  ((d,ns), ks) =
-    let 
-	val ns_ks = ListPair.zip (ns,ks)
+    let
+        fun recur f g (n::ns, k::ks, ax) =
+            (case f (n,k) of
+                 NONE => recur f g (ns, ks, ax)
+               | SOME v => 
+                 let val ax' = case ax of NONE => SOME v
+                                        | SOME v' => SOME (g (v, v'))
+                 in
+                     recur f g (ns, ks, ax')
+                 end)
+          | recur f g (_, _, SOME ax) = ax
+          | recur f g (_, _, NONE) = raise InsufficientArguments
+
+
     in
-	sc_fn (Real./ (h,d), foldl1 sum_fn (List.mapPartial (m_scale sc_fn) ns_ks  ))
+        sc_fn (Real./ (h,d), recur (m_scale sc_fn) sum_fn (ns, ks, NONE))
     end
 
 
