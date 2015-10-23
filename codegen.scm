@@ -23,7 +23,7 @@
   (V:C       (v (lambda (x) (or (symbol? x) (number? x) (boolean? x) ))))
   (V:Var     (name symbol?))
   (V:Sub     (v value?) (index (lambda (x) (and (integer? x) (or (zero? x) (positive? x))))) )
-  (V:Vec     (vals (lambda (x) (every value? x))))
+  (V:Set     (v value?)  (i integer?) (x value?))
   (V:Fn      (args list?) (body stmt?))
   (V:Op      (name symbol?)  (args (lambda (x) (every value? x))))
   (V:Ifv     (test value?)  (ift value?) (iff value?))
@@ -36,7 +36,7 @@
 		  (V:C  (v)      (sprintf "(V:C ~A)" v))
 		  (V:Var (n)     (sprintf "(V:Var ~A)" n))
 		  (V:Sub (v i)   (sprintf "(V:Sub ~A ~A)" v i))
-                  (V:Vec  (lst)  (sprintf "(V:Vec ~A)" lst))
+                  (V:Set  (v i x)  (sprintf "(V:Set ~A ~A ~A)" v i x))
 		  (V:Ifv (test tv fv) (sprintf  "(V:Ifv ~A ~A ~A)" test tv fv))
 		  (V:Fn  (args body) (sprintf "(V:Fn ~A = ~A)" args body))
 		  (V:Op (name args) (sprintf "(V:Op ~A ~A)" name args))
@@ -199,8 +199,8 @@
         (let ((reinits 
                (filter-map 
                 (match-lambda
-                 [('setindex 'y index val) (and (member index ode-inds) val)]
-                 [('setindex 'd index val) val]
+                 [('setindex 'y_out index val) (and (member index ode-inds) val)]
+                 [('setindex 'd_out index val) val]
                  [else #f])
                 (cdr x))))
           (and (pair? reinits) (cons (car x) (fold-reinits reinits)))))
@@ -216,7 +216,7 @@
         (let ((reinits 
                (filter-map 
                 (match-lambda
-                 [('setindex 'r index val) val]
+                 [('setindex 'r_out index val) val]
                  [else #f])
                 (cdr x))))
           (and (pair? reinits) (cons (car x) (fold-reinits reinits)))))
@@ -264,9 +264,9 @@
         (ode-inds 
          (sort
           (filter-map 
-           (match-lambda [('setindex 'dy index val) index] 
-                         [('setindex 'y index val)  #f] 
-                         [('reduceindex 'y index val)  #f] 
+           (match-lambda [('setindex 'dy_out index val) index] 
+                         [('setindex 'y_out index val)  #f] 
+                         [('reduceindex 'y_out index val)  #f] 
                          [eq (error 'codegen "unknown equation type" eq)])
            eqblock) <))
 
@@ -290,7 +290,7 @@
         (dposblocks (let ((bucket-eqs 
                            (bucket 
                             (match-lambda*
-                             [((and eq ('setindex 'd index ('signal.reinit ev y rhs))))
+                             [((and eq ('setindex 'd_out index ('signal.reinit ev y rhs))))
                               index]
                              [else #f])
                             (simruntime-posresp sim))))
@@ -300,7 +300,7 @@
         (posblocks (let ((bucket-eqs 
                           (bucket 
                            (match-lambda*
-                            [((and eq ('setindex 'y index ('signal.reinit ev y rhs))))
+                            [((and eq ('setindex 'y_out index ('signal.reinit ev y rhs))))
                              index]
                             [else #f])
                            (simruntime-posresp sim))))
@@ -311,13 +311,13 @@
                     (lambda (i)
                       (let ((posblock-assoc (assoc i posblocks)))
                         (if (not posblock-assoc)
-                            (list i `(setindex y ,i (getindex y ,i)))
+                            (list i `(setindex y_out ,i (getindex y ,i)))
                             posblock-assoc)))))
 
         (negblocks (let ((bucket-eqs 
                           (bucket 
                            (match-lambda*
-                            [((and eq ('setindex 'y index ('signal.reinit ev y rhs))))
+                            [((and eq ('setindex 'y_out index ('signal.reinit ev y rhs))))
                              index]
                             [else #f])
                            (simruntime-negresp sim))))
@@ -328,13 +328,13 @@
                     (lambda (i)
                       (let ((negblock-assoc (assoc i negblocks)))
                         (if (not negblock-assoc)
-                            (list i `(setindex y ,i (getindex y ,i)))
+                            (list i `(setindex y_out ,i (getindex y ,i)))
                             negblock-assoc)))))
 
         (regblocks (let ((bucket-eqs 
                           (bucket 
                            (match-lambda*
-                            [((and eq ('setindex 'r index ('signal.reinit ev y rhs))))
+                            [((and eq ('setindex 'r_out index ('signal.reinit ev y rhs))))
                              index]
                             [_ #f])
                            (simruntime-posresp sim))))
@@ -364,15 +364,15 @@
                         
            (asgn-idxs (delete-duplicates
                        (filter-map
-                        (match-lambda [('setindex 'dy index val) #f]
-                                      [(or ('setindex 'y index val)
-                                           ('reduceindex 'y index val)) index]
+                        (match-lambda [('setindex 'dy_out index val) #f]
+                                      [(or ('setindex 'y_out index val)
+                                           ('reduceindex 'y_out index val)) index]
                                       [eq (error 'codegen "unknown equation type" eq)])
                         eqblock)))
 
            (asgn-dag (fold (match-lambda* 
-                            [(('setindex 'dy index val) dag) dag]
-                            [(('setindex 'y index val) dag)
+                            [(('setindex 'dy_out index val) dag) dag]
+                            [(('setindex 'y_out index val) dag)
                              (let ((edges (map (lambda (src) (cons src index)) 
                                                (fold-asgns asgn-idxs val))))
                                (if (null? edges) (cons `(,index) dag)
@@ -393,9 +393,9 @@
             (append 
              (delete-duplicates
               (filter-map
-               (match-lambda [('setindex 'dy index val) #f] 
-                             [('setindex 'y index val) #f] 
-                             [('reduceindex 'y index val)
+               (match-lambda [('setindex 'dy_out index val) #f] 
+                             [('setindex 'y_out index val) #f] 
+                             [('reduceindex 'y_out index val)
                               (let ((asgn-def (assv index asgn-defs)))
                                 (match asgn-def
                                        ((_ name rhs) asgn-def)
@@ -407,9 +407,9 @@
               (lambda (ordindex ax)
                 (append 
                  (filter-map
-                  (match-lambda [('setindex 'dy index val) #f] 
-                                [(or ('setindex 'y index val)  
-                                     ('reduceindex 'y index val))
+                  (match-lambda [('setindex 'dy_out index val) #f] 
+                                [(or ('setindex 'y_out index val)  
+                                     ('reduceindex 'y_out index val))
                                  (and (= index ordindex) 
                                       (list index (cdr (assv index invcindexmap)) val))]
                                 [eq (error 'codegen "unknown equation type" eq)])
@@ -419,9 +419,9 @@
            (odeblock 
             (sort 
              (filter-map
-              (match-lambda [(and ode ('setindex 'dy index val)) ode] 
-                            [('setindex 'y index val)  #f]
-                            [('reduceindex 'y index val)  #f]
+              (match-lambda [(and ode ('setindex 'dy_out index val)) ode] 
+                            [('setindex 'y_out index val)  #f]
+                            [('reduceindex 'y_out index val)  #f]
                             [eq (error 'codegen "unknown equation type" eq)])
               eqblock)
              (match-lambda*
@@ -430,7 +430,7 @@
                (< index1 index2)])))
 
            (paramfun 
-            (V:Fn '() (E:Ret (V:Vec (map codegen-expr1 params)))))
+            (V:Fn '(p_out) (E:Seq (map (lambda (ex) codegen-expr1 params)))))
 
            (initfun  
             (V:Fn '(p) (if (null? asgn-defs)
@@ -460,7 +460,7 @@
            (odefun    
             (let ((fnval
                    (V:Fn '(t y) 
-                         (let ((resval (V:Vec (map (match-lambda [('setindex 'dy index val) (codegen-expr1 val)]) odeblock))))
+                         (let ((resval (V:Vec (map (match-lambda [('setindex 'dy_out index val) (codegen-expr1 val)]) odeblock))))
                            (if (null? asgns)
                                (E:Ret resval)
                                (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) asgns)

@@ -1881,7 +1881,7 @@
                     (let ((rhs-units (expr-units rhs unit-env)))
                       (d 'reduce-eq "ddim = ~A dims(rhs-units) = ~A ~%" ddim (unit-dims rhs-units))
                       (if (equal? ddim (quantity-int (unit-dims rhs-units)))
-                          `(setindex dy ,(cdr yindex) ,expr)
+                          `(setindex dy_out ,(cdr yindex) ,expr)
                           (error 'reduce-eq "dimension mismatch in rhs" 
                                  (variable-name y) (variable-label y)
                                  dim (unit-dims rhs-units)))
@@ -1897,7 +1897,7 @@
                     (let ((rhs-units (expr-units rhs unit-env)))
                       (d 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
                       (if (equal? dim (unit-dims rhs-units))
-                          `(setindex y ,(cdr yindex) ,expr)
+                          `(setindex y_out ,(cdr yindex) ,expr)
                           (error 'reduce-eq "dimension mismatch in rhs" 
                                  name label
                                  dim (unit-dims rhs-units)))
@@ -1931,7 +1931,7 @@
               (d 'reduce-eq "evcondition name = ~A~%" name)
               (d 'reduce-eq "expr = ~A~%" expr)
               (if (expr-units rhs unit-env)
-                  `(setindex c ,(cdr evindex) ,expr)
+                  `(setindex c_out ,(cdr evindex) ,expr)
                   (error 'reduce-eq "dimension mismatch in condition" expr))
               ))
            
@@ -1950,7 +1950,7 @@
                       (error 'reduce-eq "variable not in index" y)
                       (let ((expr (reduce-expr rhs indexmaps)))
                         (if (equal? dim (unit-dims (expr-units rhs unit-env)))
-                            `(setindex y ,(cdr yindex) ,expr)
+                            `(setindex y_out ,(cdr yindex) ,expr)
                             (error 'reduce-eq "variable dimension mismatch in event response" 
                                    y dim (unit-dims (expr-units rhs unit-env))))
                         ))
@@ -1964,7 +1964,7 @@
                       (error 'reduce-eq "variable not in index" y)
                       (let ((expr (reduce-expr rhs indexmaps)))
                         (if (equal? dim (unit-dims (expr-units rhs unit-env)))
-                            `(setindex d ,(cdr yindex) ,expr)
+                            `(setindex d_out ,(cdr yindex) ,expr)
                             (error 'reduce-eq "variable dimension mismatch in event response" y))
                         ))
                   ))
@@ -1975,7 +1975,7 @@
                   (if (not rindex)
                       (error 'reduce-eq "regime variable not in index" y)
                       (let ((expr (reduce-expr rhs indexmaps)))
-                        `(setindex r ,(cdr rindex) ,expr)
+                        `(setindex r_out ,(cdr rindex) ,expr)
                         ))
                   ))
                (else (error 'reduce-eq "unknown variable type in reinit equation" eq))
