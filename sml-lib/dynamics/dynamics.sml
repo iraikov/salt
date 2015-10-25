@@ -151,6 +151,7 @@ fun thr (v1,v2) =
 fun fixthr (v) =
     (Array.modify (fn(x) => if Real.>(Real.abs(x), 1e~6) then x else 0.0) v; v)
 
+
 fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),                          
               SOME (RegimeResponse fpos),fneg,
               fdiscrete,SOME fregime,h) =

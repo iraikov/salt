@@ -80,7 +80,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 
 
 val h           = 0.01
-val tstop       = 150.0
+val tstop       = 1500.0
 val p           = Model.paramfun()
 val initial     = Model.initfun(p)
 val evinitial   = optApply Model.initcondfun ()
@@ -90,5 +90,5 @@ val extinitial  = Model.initextfun ()
 val extevinitial  = Model.initextevfun ()
 val f = D.integral(Model.odefun(p),optApply Model.condfun p,optApply Model.posfun p,optApply Model.negfun p,
                    optApply Model.dposfun p,Model.regfun,h)
-val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial,extevinitial,tstop)
+val _ = start (f,initial(),evinitial,dinitial,rinitial,extinitial(),extevinitial(),tstop)
 

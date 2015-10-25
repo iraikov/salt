@@ -90,5 +90,5 @@ val extinitial  = Model.initextfun ()
 val extevinitial  = Model.initextevfun ()
 val f = D.integral(Model.odefun(p),optApply Model.condfun p,optApply Model.posfun p,optApply Model.negfun p,
                    optApply Model.dposfun p,Model.regfun)
-val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial,extevinitial,tstop,h0)
+val _ = start (f,initial(),evinitial,dinitial,rinitial,extinitial(),extevinitial(),tstop,h0)
 
