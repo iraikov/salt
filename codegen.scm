@@ -244,7 +244,7 @@
   (define (codegen-set-stmts codegen-expr exprs out)
     (let recur ((i 0) (exprs exprs) (stmts '()))
       (if (null? exprs)
-          stmts
+          (append stmts (list (E:Ret (V:Var out))))
           (recur (+ i 1) (cdr exprs)
                  (cons (E:Set (V:Var out) i (codegen-expr (car exprs))) stmts))
           ))
@@ -439,25 +439,24 @@
                 ('setindex vect2 index2 val2)) 
                (< index1 index2)])))
 
-           (paramfun (V:Op 'make_initial
+           (paramfun (V:Op 'make_real_initial
                            (list (V:C (length params))
                                  (V:Fn '(p_out) (E:Begin (codegen-set-stmts codegen-expr1 params 'p_out))))))
 
            (initfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 ode-defs 'y_out)))
               (V:Fn '(p) 
-                    (E:Ret (V:Op 'make_initial
-                                 (list  (V:C ode-n)
-                                        (V:Fn '(y_out) 
-                                              (if (null? asgn-defs)
-                                                  (E:Begin stmts)
-                                                  (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
-                                                              asgn-defs)
-                                                         (E:Begin stmts)))
-                                              ))
+                    (E:Ret (V:Op 'make_real_initial
+                           (list (V:C ode-n)
+                                 (V:Fn '(y_out) 
+                                       (if (null? asgn-defs)
+                                           (E:Begin stmts)
+                                           (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                       asgn-defs)
+                                                  (E:Begin stmts))))
                                  ))
-                    ))
-            )
+                           ))
+              ))
 
            (dinitfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 discrete-defs 'd_out)))
@@ -466,27 +465,26 @@
                   (V:Op 'SOME
                         (list 
                          (V:Fn '(p) 
-                               (V:Op 'make_initial
-                                     (list (V:C (length discrete-defs))
-                                           (V:Fn '(d_out)
-                                                 (if (null? asgn-defs)
-                                                     (E:Begin stmts)
-                                                     (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                                 asgn-defs)
-                                                            (E:Begin stmts))))))
-                               ))
-                        ))
-              ))
+                               (E:Ret (V:Op 'make_real_initial
+                                            (list (V:C (length discrete-defs))
+                                                  (V:Fn '(d_out)
+                                                        (if (null? asgn-defs)
+                                                            (E:Begin stmts)
+                                                            (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                                        asgn-defs)
+                                                                   (E:Begin stmts))))))
+                                      ))
+                         ))
+                  ))
+            )
 
            (initextfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 externals 'ext_out)))
-              (V:Fn '(p) (E:Ret (V:Op 'make_initial (list (V:C (length externals))
-                                                          (V:Fn '(ext_out) (E:Begin stmts))))))))
+              (V:Fn '(p) (E:Ret (V:Op 'make_ext (list (V:C (length externals)) (V:Fn '(ext_out) (E:Begin stmts))))))))
 
            (initextevfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 externalevs 'extev_out)))
-              (V:Fn '(p) (E:Ret (V:Op 'make_initial (list (V:C (length externalevs))
-                                                          (V:Fn '(extev_out) (E:Begin stmts))))))))
+              (V:Fn '(p) (E:Ret (V:Op 'make_ext (list (V:C (length externalevs)) (V:Fn '(extev_out) (E:Begin stmts))))))))
 
            (odefun    
             (let ((fnval
@@ -517,15 +515,18 @@
                 (V:C 'NONE)
                 (V:Op 'SOME
                       (list
-                       (V:Op 'make_initial
-                             (list
-                              (V:C (length condblock))
-                              (V:Fn '(c_out) 
-                                    (E:Begin 
-                                     (list-tabulate
-                                      (length condblock)
-                                      (lambda (i) (E:Set (V:Var 'c_out) i (V:C 'negInf)))))
-                                    )))
+                       (V:Op 'make_real_initial
+                             (list (V:C (length condblock))
+                                   (V:Fn '(c_out) 
+                                         (E:Begin 
+                                          (append 
+                                           (list-tabulate
+                                            (length condblock)
+                                            (lambda (i) (E:Set (V:Var 'c_out) i (V:C 'negInf))))
+                                           (list (E:Ret (V:Var 'c_out)))
+                                           )
+                                          ))
+                                   ))
                        ))
                 ))
 
@@ -549,8 +550,11 @@
                           (list 
                            (V:Fn '(p) 
                                  (E:Ret (if (null? regblocks)
-                                            (V:Op 'SCondition (list (V:Op 'make_condition (list (V:C (length condblock)) fnval))))
-                                            (V:Op 'RegimeCondition (list (V:Fn '(d) (E:Ret (V:Op 'make_condition (list (V:C (length condblock)) fnval))))))))
+                                            (V:Op 'SCondition (list (V:Op 'make_condition
+                                                                          (list (V:C (length condblock)) fnval))))
+                                            (V:Op 'RegimeCondition (list (V:Op 'make_regime_condition 
+                                                                               (list (V:C (length condblock)) 
+                                                                                     (V:Fn '(d) (E:Ret fnval))))))))
                                  ))
                           ))
                   ))
@@ -578,10 +582,10 @@
                               )
                          (V:Fn '(p) (E:Ret (if (null? regblocks)
                                                (V:Op 'SResponse (list (V:Op 'make_response (list (V:C ode-n) fnval))))
-                                               (V:Op 'RegimeResponse (list (V:Op 'make_regime_response (list (V:C ode-n) fnval))))))
-                               ))
-                       ))
-                ))
+                                               (V:Op 'RegimeResponse (list (V:Op 'make_regime_response (list (V:C ode-n) fnval)))))))
+                         ))
+                      ))
+            )
 
            (negfun      
             (if (null? negblocks)
@@ -605,10 +609,11 @@
                               )
                          (V:Fn '(p) (E:Ret (if (null? regblocks)
                                                (V:Op 'SResponse (list (V:Op 'make_response (list (V:C ode-n) fnval))))
-                                               (V:Op 'RegimeResponse (list (V:Op 'make_regime_response (list (V:C ode-n) fnval))))))
-                               ))
-                       ))
-                ))
+                                               (V:Op 'RegimeResponse (list (V:Op 'make_regime_response (list (V:C ode-n) fnval)))))))
+
+                         ))
+                      ))
+            )
 
            (dposfun      
             (if (null? dposblocks)
@@ -630,7 +635,7 @@
                                                              used-asgns)
                                                         (E:Begin stmts))))))
                               )
-                         (V:Fn '(p) (E:Ret fnval))
+                         (V:Fn '(p) (E:Ret (V:Op 'make_dresponse (list (V:C (length dposblocks)) fnval))))
                          ))
                       ))
             )
@@ -640,13 +645,20 @@
                 (V:C 'NONE)
                 (V:Op 'SOME
                       (list 
-                       (V:Fn '(r_out) 
-                             (E:Begin (cons (E:Set (V:Var 'r_out) 0 (V:C #t))
-                                            (list-tabulate (length (cdr regblocks))
-                                                           (lambda (i) (E:Set (V:Var 'r_out) (+ 1 i) (V:C #f))))
-                                            ))))
-                      ))
-            )
+                       (V:Op 'make_bool_initial
+                             (list (V:C (length regblocks))
+                                   (V:Fn '(r_out) 
+                                         (E:Begin (append 
+                                                   (cons 
+                                                    (E:Set (V:Var 'r_out) 0 (V:C #t))
+                                                    (list-tabulate (length (cdr regblocks))
+                                                                   (lambda (i) (E:Set (V:Var 'r_out) (+ 1 i) (V:C #f))))
+                                                    )
+                                                   (list (E:Ret (V:Var 'r_out))))
+                                                  ))
+                                   ))
+                       ))
+                ))
 
            (regfun      
             (if (null? regblocks)
@@ -659,13 +671,16 @@
                                     (delete-duplicates
                                      (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
                                           '() blocks)))))
-                         (V:Fn '(c r r_out) 
-                               (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'r_out)))
-                                 (if (null? used-asgns)
-                                     (E:Begin stmts)
-                                     (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
-                                                 used-asgns)
-                                            (E:Begin stmts)))))
+                         (V:Op 'make_transition
+                               (list (V:C (length blocks))
+                                     (V:Fn '(c r r_out) 
+                                           (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'r_out)))
+                                             (if (null? used-asgns)
+                                                 (E:Begin stmts)
+                                                 (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                             used-asgns)
+                                                        (E:Begin stmts)))))
+                                     ))
                          ))
                       ))
             )
@@ -934,32 +949,22 @@ EOF
      `(("(* dummy solver; returns only the computed derivatives *)")
        ("fun integral (f,h) = f" ,nl))
 
-     `(("val summer = fn (a,b) => (vmodifyr2 (fn (x,y) => x+y) (a,b))" ,nl)
+     `(
+       ("fun alloc n = (fn () => Array.array (n, 0.0))" ,nl)
+       ("fun bool_alloc n = (fn () => Array.array (n, false))" ,nl)
+       ("val summer = fn (a,b) => (vmodifyr2 (fn (x,y) => x+y) (a,b))" ,nl)
        ("val scaler = fn(a,lst) => (vmap (fn (x) => a*x) lst)" ,nl)
-       ("fun make_initial (n, f) = " ,nl
-        "let" ,nl
-        " val out = Array.array (n, 0.0)" ,nl
-        "in" ,nl
-        " fn () => (f (out); out)" ,nl
-        "end" ,nl)
-       ("fun make_condition (n, cond) = " ,nl
-        "let" ,nl
-        " val c_out = Array.array (n, 0.0)" ,nl
-        "in" ,nl 
-        " fn (x,y,c,ext,extev) => (cond (x,y,c,ext,extev,c_out); c_out)" ,nl
-        "end" ,nl)
-       ("fun make_response (n, response) = " ,nl
-        "let" ,nl
-        " val y_out = Array.array (n, 0.0)" ,nl
-        "in" ,nl
-        " fn (x,y,e,ext,extev) => (response (x,y,e,ext,extev,y_out); y_out)" ,nl
-        "end" ,nl)
-       ("fun make_regime_response (n, response) = " ,nl
-        "let" ,nl
-        " val y_out = Array.array (n, 0.0)" ,nl
-        "in" ,nl
-        " fn (x,y,e,d,ext,extev) => (response (x,y,e,d,ext,extev,y_out); y_out)" ,nl
-        "end" ,nl)
+       ("fun make_bool_initial (n, f) = let val a = bool_alloc n () in fn () => f(a) end" ,nl)
+       ("fun make_real_initial (n, f) = let val a = alloc n () in fn () => f(a) end" ,nl)
+       ("fun make_ext (n, f) = let val a = alloc n () in fn () => f(a) end" ,nl)
+       ("fun make_condition (n, f) = let val a = LastNBuffer.fromList (List.tabulate (12, fn (i) => alloc n ())) in " 
+        " fn (x,y,e,ext,extev) => (LastNBuffer.rotate_left a; f(x,y,e,ext,extev,LastNBuffer.sub (a, 0))) end" ,nl)
+       ("fun make_regime_condition (n, f) = let val a = LastNBuffer.fromList (List.tabulate (12, fn (i) => alloc n ())) in " 
+        " fn (d) => fn (x,y,e,ext,extev) => (LastNBuffer.rotate_left a; f d (x,y,e,ext,extev,LastNBuffer.sub (a, 0))) end" ,nl)
+       ("fun make_response (n, f) = let val a = alloc n () in fn (x,y,e,ext,extev) => f(x,y,e,ext,extev,a) end" ,nl)
+       ("fun make_regime_response (n, f) = let val a = alloc n () in fn (x,y,e,d,ext,extev) => f(x,y,e,d,ext,extev,a) end" ,nl)
+       ("fun make_dresponse (n, f) = let val a = alloc n () in fn (x,y,e,d) => f(x,y,e,d,a) end" ,nl)
+       ("fun make_transition (n, f) = let val a = bool_alloc n () in fn (e,r) => f(e,r,a) end" ,nl)
 
        . ,(case solver  
             ;; adaptive solvers
@@ -968,46 +973,23 @@ EOF
              `(
                ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nl)
                ("val " ,cesolver ": (real array) stepper3 = make_" ,cesolver "()" ,nl)
-               ("fun make_stepper (n, deriv) = " ,nl
-                "let" ,nl
-                " val dy_out = Array.array (n, 0.0)" ,nl
-                " fun deriv' (t,y) = (deriv (t,y,dy_out); dy_out)" ,nl
-                "in" ,nl
-                ,solver " (scaler,summer,deriv')" ,nl
-                "end" ,nl)
-               ("fun make_event_stepper (n, deriv) = " ,nl
-                "let" ,nl
-                " val dy_out = Array.array (n, 0.0)" ,nl
-                " fun deriv' (t,y) = (deriv (t,y,dy_out); dy_out)" ,nl
-                "in" ,nl
-                ,cesolver " (scaler,summer,deriv')" ,nl
-                "end" ,nl)
+               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler,summer,deriv)" ,nl)
+               ("fun make_event_stepper (n, deriv) = " ,cesolver " (alloc n,scaler,summer,deriv)" ,nl)
                (,nl)
                )
              ))
             (else
              `(
                ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nl)
-               ("fun make_stepper (n, deriv) = " ,nl
-                "let" ,nl
-                " val dy_out = Array.array (n, 0.0)" ,nl
-                " fun deriv' (t,y) = (deriv (t,y,dy_out); dy_out)" ,nl
-                "in" ,nl
-                ,solver " (scaler,summer,deriv')" ,nl
-                "end" ,nl)
-               ("fun make_event_stepper (n, deriv) = " ,nl
-                "let" ,nl
-                " val dy_out = Array.array (n, 0.0)" ,nl
-                " fun deriv' (t,y) = (deriv (t,y,dy_out); dy_out)" ,nl
-                "in" ,nl
-                ,solver " (scaler,summer,deriv')" ,nl
-                "end" ,nl)
+               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler,summer,deriv)" ,nl)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler,summer,deriv)" ,nl)
                (,nl)
                ))
             ))
      ))
-
 )
+
+
 
 
 

@@ -420,7 +420,8 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime)  =
             then 
                 (let
                     val (ys',e,finterp) = (stepper (d,r)) (ext,extev) h (x,ys)
-                    val ev' = fixthr (fcond d (x+h,ys',ev,ext,extev))
+                    val ev' = fcond d (x+h,ys',ev,ext,extev)
+                    val ev' = fixthr ev'
                 in
                     case predictor tol (h,e) of
                         Right h' => 

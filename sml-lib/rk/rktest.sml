@@ -9,6 +9,7 @@ open RungeKutta
 
 val summer = Real.+
 val scaler = Real.*
+fun alloc () = 0.0
 
 infix 7 */
 infix 6 +/
@@ -23,7 +24,7 @@ infix //
 *)
 
 val con = ~0.4
-fun deriv (t,y) = con*y
+fun deriv (t,y,_) = con*y
 val t0 = 0.0
 val y0 = 1.75
 fun exact t = y0*Real.Math.exp(con*(t - t0))
@@ -72,7 +73,7 @@ fun do_case1 integrator n =
 fun solver1 (integrator,stats) =
   (putStrLn stats;
    putStrLn "# step yf err";
-   List.app (do_case1 (integrator (scaler,summer,deriv)))
+   List.app (do_case1 (integrator (alloc,scaler,summer,deriv)))
 	    (List.tabulate (15, fn x => x - 2));
    putStrLn "# All done!\n")
 
@@ -89,7 +90,7 @@ fun do_case2 integrator n =
 fun solver2 (integrator,stats) =
   (putStrLn stats;
    putStrLn "# step yf err";
-   List.app (do_case2 (integrator (scaler,summer,deriv)))
+   List.app (do_case2 (integrator (alloc,scaler,summer,deriv)))
 	    (List.tabulate (15, fn x => x - 2));
    putStrLn "# All done!\n")
 
@@ -117,7 +118,7 @@ fun do_case3 integrator n =
 fun solver3 (integrator,stats) =
   (putStrLn stats;
    putStrLn "# step yf err uf";
-   List.app (do_case3 (integrator (scaler,summer,deriv)))
+   List.app (do_case3 (integrator (alloc,scaler,summer,deriv)))
 	    (List.tabulate (15, fn x => x - 2));
    putStrLn "# All done!\n")
 

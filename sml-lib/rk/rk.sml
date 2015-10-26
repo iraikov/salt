@@ -211,17 +211,20 @@ fun k_sum (sc_fn: real * 'a -> 'a,
 
 (* Helper function to generate a list of K_i *)
 
-fun gen_ks (ksum_fn,sum_fn: 'a * 'a -> 'a,der_fn: real * 'a -> 'a,
-	    h,(tn,yn),ks,[],[]) = ks
+fun gen_ks (ksum_fn,
+            sum_fn: 'a * 'a -> 'a,
+            der_fn: real * 'a * 'a -> 'a,
+	    h,(tn,yn),ks,[],[],[]) = ks
 
-  | gen_ks (ksum_fn,sum_fn,der_fn,h,old as (tn,yn),ks,(c::cs),(a::ar)) =
+  | gen_ks (ksum_fn,sum_fn,der_fn,h,old as (tn,yn),ks,(c::cs),(a::ar),(s::ss)) =
     let
 	val yn1 = if (List.null ks) then yn else sum_fn (yn, ksum_fn (a,ks))
+        val s1   = der_fn (tn + c*h, yn1, s)
     in
-	gen_ks (ksum_fn, sum_fn, der_fn, h, old, (ks @ [der_fn (tn + c*h, yn1)]), cs, ar)
+	gen_ks (ksum_fn, sum_fn, der_fn, h, old, (ks @ [s1]), cs, ar, ss)
     end
 
-  | gen_ks (ksum_fn,sum_fn,der_fn,h,(tn,yn),ks,_,_) =
+  | gen_ks (ksum_fn,sum_fn,der_fn,h,(tn,yn),ks,_,_,_) =
     raise KsInvalidCoefficients
     
 
@@ -256,21 +259,24 @@ fun gen_ks (ksum_fn,sum_fn: 'a * 'a -> 'a,der_fn: real * 'a -> 'a,
      and the return value is the new state Y_new
 *)
 
-type 'a stepper1 =  ((real * 'a -> 'a) * 
+type 'a stepper1 =  ((unit -> 'a) *
+                     (real * 'a -> 'a) * 
 		     ('a * 'a -> 'a)   *
-		     (real * 'a -> 'a)) ->
+		     (real * 'a * 'a -> 'a)) ->
 		     (real -> (real * 'a) -> 'a)
 
 fun core1
 	(cl: real list, al: RCL list, bl: RCL)
-	(sc_fn:  real * 'a -> 'a, 
+	(sl_fn: unit -> 'a,
+         sc_fn:  real * 'a -> 'a, 
 	 sum_fn: 'a * 'a -> 'a,
-	 der_fn: real * 'a -> 'a)
+	 der_fn: real * 'a * 'a -> 'a)
 	(h: real) 
 	(old as (tn,yn: 'a)) =
     (let
-	 val ksum = k_sum (sc_fn,sum_fn,h)
-	 val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, [], cl, al)
+        val sl = List.tabulate (List.length cl, fn (i) => sl_fn())
+	val ksum = k_sum (sc_fn,sum_fn,h)
+	val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, [], cl, al, sl)
      in
 	 sum_fn (yn, ksum (bl, ks))
      end)
@@ -284,20 +290,23 @@ fun core1
    e_{n+1} = h sum_{i=1}^s (b_i - b'_i) k_i
 *)
 
-type 'a stepper2 =  ((real * 'a -> 'a) * 
+type 'a stepper2 =  ((unit -> 'a) *
+                     (real * 'a -> 'a) * 
 		     ('a * 'a -> 'a)   *
-		     (real * 'a -> 'a)) ->
+		     (real * 'a * 'a -> 'a)) ->
 		    (real -> (real * 'a) -> ('a * 'a))
 
 fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) 
-	  (sc_fn: real * 'a -> 'a, 
+	  (sl_fn: unit -> 'a,
+           sc_fn: real * 'a -> 'a, 
 	   sum_fn: 'a * 'a -> 'a,
-	   der_fn: real * 'a -> 'a)
+	   der_fn: real * 'a * 'a -> 'a)
 	   (h: real)
 	   (old as (tn,yn: 'a)) =
   let
+      val sl = List.tabulate (List.length cl, fn (i) => sl_fn())
       val ksum = k_sum (sc_fn,sum_fn,h)
-      val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, [], cl, al)
+      val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, [], cl, al, sl)
   in
       (sum_fn (yn, ksum (bl, ks)), ksum (dl, ks))
   end
@@ -307,7 +316,8 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL)
 (* Helper function to sum a list of b_i (theta) K_i *)
 
 fun bk_sum (bs: RCL list)
-           (sc_fn: real * 'a -> 'a, sum_fn: 'a * 'a -> 'a) 
+           (sc_fn: real * 'a -> 'a, 
+            sum_fn: 'a * 'a -> 'a)
            (ks: 'a list, h: real)
            (theta: real) = 
     let 
@@ -346,21 +356,24 @@ fun interp (ws: RCL list)
    function for this timestep.
 *)
 
-type 'a stepper3 =  ((real * 'a -> 'a) * 
+type 'a stepper3 =  ((unit -> 'a) *
+                     (real * 'a -> 'a) * 
 		     ('a * 'a -> 'a)   *
-		     (real * 'a -> 'a)) ->
+		     (real * 'a * 'a -> 'a)) ->
 		    (real -> (real * 'a) -> ('a * 'a * (real -> 'a)))
 
 fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) 
-	  (sc_fn: real * 'a -> 'a, 
+	  (sl_fn: unit -> 'a,
+           sc_fn: real * 'a -> 'a, 
 	   sum_fn: 'a * 'a -> 'a,
-	   der_fn: real * 'a -> 'a)
+	   der_fn: real * 'a * 'a -> 'a)
 	   (h: real)
 	   (old as (tn,yn: 'a)) =
   let
+      val sl        = List.tabulate (List.length cl, fn (i) => sl_fn())
       val interp'   = interp wl (sc_fn,sum_fn)
       val ksum      = k_sum (sc_fn,sum_fn,h)
-      val ks        = gen_ks (ksum, sum_fn, der_fn, h, old, [], cl, al)
+      val ks        = gen_ks (ksum, sum_fn, der_fn, h, old, [], cl, al, sl)
   in
       (sum_fn (yn, ksum (bl, ks)),
        ksum (dl, ks),

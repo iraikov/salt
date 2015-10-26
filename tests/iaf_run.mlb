@@ -4,6 +4,7 @@ $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/unsafe.mlb
 $(RK_LIB)/rk.mlb
 $(DYNAMICS_LIB)/dynamics.mlb
+$(LASTN_LIB)/lastn-buffer.mlb
 
 structure Dynamics = FunctionalHybridDynamics1
 
