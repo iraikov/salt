@@ -388,7 +388,7 @@
                                (if (null? edges) (cons `(,index) dag)
                                    (fold (lambda (e dag) (update-edge e dag))  
                                          dag edges)))]
-                            [(('reduceindex 'y index val) dag)
+                            [(('reduceindex 'y_out index val) dag)
                              (let ((edges (filter-map (lambda (src) (and (not (= src index)) (cons src index))) 
                                                       (fold-asgns asgn-idxs val))))
                                (if (null? edges) (cons `(,index) dag)

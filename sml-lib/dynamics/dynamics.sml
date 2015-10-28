@@ -339,9 +339,9 @@ val equal = fn (x,y) => (x = y)
 
 (* Adaptive time step integrator *)
 
-val tol = Real.Math.pow (10.0, ~7.0)
-val lb = 0.5 * tol
-val ub = 0.9 * tol
+val tol = ref (Real.Math.pow (10.0, ~3.0))
+val lb = 0.5 * (!tol)
+val ub = 0.9 * (!tol)
 
 datatype ('a, 'b) either = Left of 'a | Right of 'b
 
@@ -349,7 +349,7 @@ exception ConvergenceError
 
 
 fun fixthr (v) =
-    (Array.modify (fn(x) => if Real.>(Real.abs(x), tol) then x else 0.0) v; v)
+    (Array.modify (fn(x) => if Real.>(Real.abs(x), (!tol)) then x else 0.0) v; v)
 
 fun predictor tol (h,ys) =
   let open Real
@@ -376,7 +376,7 @@ fun secant tol f fg0 guess1 guess0 iter =
         else 
             (if Int.<(iter, 10)
              then 
-                 (if (err < tol)
+                 (if (err < (!tol))
                   then newGuess
                   else secant tol f fg1 newGuess guess1 (Int.+(iter,1)))
              else (putStrLn "FunctionalHybridDynamics2: secant convergence error";
@@ -420,8 +420,7 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime)  =
             then 
                 (let
                     val (ys',e,finterp) = (stepper (d,r)) (ext,extev) h (x,ys)
-                    val ev' = fcond d (x+h,ys',ev,ext,extev)
-                    val ev' = fixthr ev'
+                    val ev' = fixthr(fcond d (x+h,ys',ev,ext,extev))
                 in
                     case predictor tol (h,e) of
                         Right h' => 

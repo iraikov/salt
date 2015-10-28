@@ -1914,7 +1914,7 @@
                     (let ((rhs-units (expr-units rhs unit-env)))
                       (d 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
                       (if (equal? dim (unit-dims rhs-units))
-                          `(reduceindex y ,(cdr yindex) ,expr)
+                          `(reduceindex y_out ,(cdr yindex) ,expr)
                           (error 'reduce-eq "dimension mismatch in rhs" 
                                  (variable-name y)
                                  (variable-label y)
