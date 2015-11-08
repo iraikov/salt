@@ -852,10 +852,19 @@
 (define (value->ML v)
   (cases value v
 	 (V:C       (v) (cond ((number? v) 
-                               (let ((str (number->string v)))
-                                 (string-map (lambda (c) (case c ((#\-) #\~) (else c))) str))) 
+                               (cond ((= v +inf.0) "posInf")
+                                     ((= v -inf.0) "negInf")
+                                     (else
+                                      (let ((str (number->string v)))
+                                        (string-map (lambda (c) (case c ((#\-) #\~) (else c))) str)))
+                                     ))
                               ((boolean? v)
                                (if v "true" "false"))
+                              ((symbol? v)
+                               (case v 
+                                 ((+inf) "posInf")
+                                 ((-inf) "negInf")
+                                 (else v)))
 			      (else v)))
 	 (V:Var     (name) (name/ML name))
 	 (V:Sub     (v index) 
