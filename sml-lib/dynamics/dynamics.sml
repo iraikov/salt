@@ -87,12 +87,11 @@ datatype model_response =
 val getindex = Unsafe.Array.sub
 val update = Unsafe.Array.update
 
-fun vmap f v = 
+fun vmap f v u = 
     let
         val n = Array.length v
-        val a = Array.array (n, 0.0)
     in
-        (Array.appi (fn (i,x) => update (a, i, f (x))) v; a)
+        (Array.appi (fn (i,x) => update (u, i, f (x))) v; u)
     end
 
 fun vmap2 f (v1,v2) = 
@@ -287,15 +286,14 @@ datatype model_response =
          | SResponse of (real * cont_state * event_state * external_state * externalev_state) -> cont_state
 
 
-val getindex = Unsafe.Array.sub
-val update = Unsafe.Array.update
+val getindex = Array.sub
+val update = Array.update
 
-fun vmap f v = 
+fun vmap f v u = 
     let
         val n = Array.length v
-        val a = Array.array (n, 0.0)
     in
-        (Array.appi (fn (i,x) => update (a, i, f (x))) v; a)
+        (Array.appi (fn (i,x) => update (u, i, f (x))) v; u)
     end
 
 fun vmap2 f (v1,v2) = 

@@ -953,7 +953,8 @@ EOF
        ("fun alloc n = (fn () => Array.array (n, 0.0))" ,nl)
        ("fun bool_alloc n = (fn () => Array.array (n, false))" ,nl)
        ("val summer = fn (a,b) => (vmodifyr2 (fn (x,y) => x+y) (a,b))" ,nl)
-       ("val scaler = fn(a,lst) => (vmap (fn (x) => a*x) lst)" ,nl)
+       ("fun scaler n = let val b = LastNBuffer.fromList (List.tabulate (24, fn (i) => alloc n ())) in "
+        "  fn(a,lst) => (LastNBuffer.rotate_left b; vmap (fn (x) => a*x) lst (LastNBuffer.sub (b, 0))) end" ,nl)
        ("fun make_bool_initial (n, f) = let val a = bool_alloc n () in fn () => f(a) end" ,nl)
        ("fun make_real_initial (n, f) = let val a = alloc n () in fn () => f(a) end" ,nl)
        ("fun make_ext (n, f) = let val a = alloc n () in fn () => f(a) end" ,nl)
@@ -973,16 +974,16 @@ EOF
              `(
                ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nl)
                ("val " ,cesolver ": (real array) stepper3 = make_" ,cesolver "()" ,nl)
-               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler,summer,deriv)" ,nl)
-               ("fun make_event_stepper (n, deriv) = " ,cesolver " (alloc n,scaler,summer,deriv)" ,nl)
+               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
+               ("fun make_event_stepper (n, deriv) = " ,cesolver " (alloc n,scaler n,summer,deriv)" ,nl)
                (,nl)
                )
              ))
             (else
              `(
                ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nl)
-               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler,summer,deriv)" ,nl)
-               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler,summer,deriv)" ,nl)
+               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
                (,nl)
                ))
             ))
