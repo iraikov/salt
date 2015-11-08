@@ -275,6 +275,329 @@ datatype model_state =
 
 datatype model_stepper = 
          RegimeStepper of dsc_state * regime_state -> (external_state * externalev_state) -> real -> real * cont_state -> 
+                          (cont_state * error_state)
+         | EventStepper of (external_state * externalev_state) -> real -> (real * cont_state) -> 
+                           (cont_state * error_state)
+         | ContStepper of (external_state * externalev_state) -> real -> (real * cont_state) -> 
+                          (cont_state * error_state)
+
+datatype model_condition = 
+         RegimeCondition of dsc_state -> (real * cont_state * event_state * external_state * externalev_state) -> event_state
+         | SCondition of (real * cont_state * event_state * external_state * externalev_state) -> event_state
+
+datatype model_response = 
+         RegimeResponse of (real * cont_state * event_state * dsc_state * external_state * externalev_state) -> cont_state
+         | SResponse of (real * cont_state * event_state * external_state * externalev_state) -> cont_state
+
+
+val getindex = Unsafe.Array.sub
+val update = Unsafe.Array.update
+
+fun vmap f v u = 
+    let
+        val n = Array.length v
+        fun recur i = 
+            (if Int.<(i, n)
+             then (update (u, i, f (getindex (v, i))); recur (Int.+(i,1)))
+             else ())
+    in
+        (recur 0; u)
+    end
+
+fun vmap2 f (v1,v2) = 
+    let 
+        val n = Array.length v1
+        val a = Array.array (n, 0.0)
+    in
+        Array.appi (fn (i,x) => update (a, i, f (x, getindex (v2,i)))) v1; a
+    end
+
+fun vmodifyr2 f (v1,v2) = 
+    let 
+        val n = Array.length v1
+    in
+        (Array.appi (fn (i,x) => update (v2, i, f (x, getindex (v2,i)))) v1; v2)
+    end
+
+fun vfind2 f (v1,v2) = 
+    let 
+        val n = Array.length v1
+        fun recur i = 
+            if Int.<(i, n)
+            then (if f (getindex (v1,i), getindex (v2,i)) then SOME(i) else recur (Int.+(i,1)))
+            else NONE
+    in
+      recur 0
+    end 
+
+fun vfoldpi2 f (v1,v2) = 
+    let 
+        val n = Array.length v1
+        fun recur (i, ax) = 
+            if Int.<(i, n)
+            then recur (Int.+(i,1), f (i, getindex (v1,i), getindex (v2,i), ax))
+            else ax
+    in
+      recur (0, NONE)
+    end 
+
+val equal = fn (x,y) => (x = y) 
+
+(* Adaptive time step integrator *)
+
+val tol = ref (Real.Math.pow (10.0, ~6.0))
+val lb = 0.5 * (!tol)
+val ub = 0.9 * (!tol)
+
+datatype ('a, 'b) either = Left of 'a | Right of 'b
+
+exception ConvergenceError
+
+
+fun thr (v1,v2) = 
+    let
+        val s1 = Real.sign v1
+        val s2 = Real.sign v2
+    in
+        case (s1,s2) of
+            (~1,1) => true
+          | (~1,0) => true
+          | (1,1)  => true
+          | (_,_)  => false
+    end
+
+fun fixthr (v) =
+    (Array.modify (fn(x) => if Real.>(Real.abs(x), (!tol)) then x else 0.0) v; v)
+
+fun predictor tol (h,ys) =
+  let open Real
+      val e = Array.foldl (fn (y,ax) => Real.+ ((abs y),ax)) 0.0 ys
+  in 
+      if e < lb 
+      then Right (1.414*h)	(* step too small, accept but grow *)
+      else (if e < ub 
+            then Right h	(* step just right *)
+            else Left (0.5*h))	(* step too large, reject and shrink *)
+  end
+
+
+
+datatype 'a result = Next of 'a | Root of 'a
+
+fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime)  =
+    let open Real
+        fun f iter (x,ys,ev,d,r,ext,extev,h) =
+            if Int.<(iter,10)
+            then 
+                (let
+                    val (ys',e) = (stepper (d,r)) (ext,extev) h (x,ys)
+                    val ev' = fixthr(fcond d (x+h,ys',ev,ext,extev))
+                in
+                    case predictor tol (h,e) of
+                        Right h' => 
+                        (let
+                            val root = (case (vfind2 thr (ev, ev'), vfind2 thr (ev', ev)) of
+                                            (SOME _, SOME _) => true
+                                          | (SOME _, NONE) => true
+                                          | (NONE, SOME _) => true
+                                          | (NONE, NONE) => false)
+                        in
+                            if root 
+                            then 
+                                (let
+                                    val d'    = (case fdiscrete of 
+                                                  SOME f => f (x+h,ys',ev',d)
+                                                | NONE => d)
+                                    val r' = fregime (ev',r)
+                                in
+                                    Root (x+h,ys',ev',d',r',ext,extev,h)
+                                end)
+                            else 
+                                Next (x+h,ys',ev',d,r,ext,extev,h')
+                        end)
+                      | Left h'  => 
+                        f (Int.+(iter,1)) (x,ys,ev,d,r,ext,extev,h')
+                end)
+            else raise ConvergenceError
+    in
+        f 0
+    end
+
+
+fun adaptive_event_solver (stepper,fcond)  =
+    let open Real
+        fun f iter (x,ys,ev,ext,extev,h) =
+            if (Int.<(iter,10))
+            then 
+                (let
+                    val (ys',e) = stepper (ext,extev) h (x,ys)
+                    val ev' = fixthr (fcond (x+h,ys',ev,ext,extev))
+                in
+                    case predictor tol (h,e) of
+                        Right h' => 
+                        (let
+                            val root = (case (vfind2 thr (ev, ev'), vfind2 thr (ev', ev)) of
+                                            (SOME _, SOME _) => true
+                                          | (SOME _, NONE) => true
+                                          | (NONE, SOME _) => true
+                                          | (NONE, NONE) => false)
+                        in
+                            if root 
+                            then Root (x+h,ys',ev',ext,extev,h)
+                            else Next (x+h,ys',ev',ext,extev,h')
+                        end)
+                      | Left h'  => 
+                        f (Int.+(iter,1)) (x,ys,ev,ext,extev,h')
+                end)
+            else raise ConvergenceError
+    in
+        f 0
+    end
+
+
+fun adaptive_solver stepper  =
+    let open Real
+        fun f (x,ys,ext,extev,h) =
+            (let
+                val (ys',e) = stepper (ext,extev) h (x,ys)
+            in
+                case predictor tol (h,e) of
+                    Right h' => 
+                    Next (x+h,ys',ext,extev,h')
+                  | Left h'  => 
+                    f (x,ys,ext,extev,h')
+            end)
+    in
+        f
+    end
+
+
+fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
+               SOME (RegimeResponse fpos),fneg,
+               fdiscrete,SOME fregime) =
+    let
+       (*fun fstepper (d,r) = make_stepper (f(d,r))*)
+       val fsolver = adaptive_regime_solver (fstepper,fcond,fdiscrete,fregime)
+    in
+        fn(RegimeState (x,y,e,d,r,ext,extev,h,root)) => 
+           (case root of
+                true =>
+                (let
+                    val y' = case fneg of 
+                                 SOME (RegimeResponse f) => 
+                                 f(x,fpos(x,y,e,d,ext,extev),e,d,ext,extev)
+                               | NONE => 
+                                 fpos(x,y,e,ext,extev,d)
+                               | SOME _ => (putStrLn "FunctionalHybridDynamics2: RegimeState integral response"; 
+                                            raise Domain)
+                    val  e' = fcond d (x,y',e,ext,extev)
+                in
+                    RegimeState (x,y',e',d,r,ext,extev,h,false) 
+                end)
+             | false =>  
+                case fsolver (x,y,e,d,r,ext,extev,h) of
+                    Next (xn,ysn,evn,dn,rn,_,_,hn) => 
+                    RegimeState (xn,ysn,evn,dn,rn,ext,extev,hn,false)
+                  | Root (xn,ysn,evn,dn,rn,ext,extev,hn) => 
+                    RegimeState (xn,ysn,evn,dn,rn,ext,extev,hn,true))                          
+      | _ => (putStrLn "FunctionalHybridDynamics2: invalid RegimeState"; raise Domain)
+    end
+
+  | integral (EventStepper fstepper,SOME (SCondition fcond),
+               SOME (SResponse fpos),fneg,
+               NONE,NONE) =
+    let
+       (*fun fstepper (d,r) = make_stepper (f(d,r))*)
+       val fsolver = adaptive_event_solver (fstepper,fcond)
+    in
+        fn(EventState (x,y,e,ext,extev,h,root)) => 
+           (case root of
+                true => (let
+                            val y' = case fneg of 
+                                         SOME (SResponse f) => 
+                                         f(x,fpos(x,y,e,ext,extev),e,ext,extev)
+                                       | NONE => 
+                                         fpos(x,y,e,ext,extev)
+                                       | SOME _ => 
+                                         (putStrLn "FunctionalHybridDynamics2: EventState integral response"; 
+                                          raise Domain)
+                            val  e' = fcond(x,y',e,ext,extev)
+                        in
+                            EventState (x,y',e',ext,extev,h,false)
+                        end)
+               | false => 
+                 (case fsolver (x,y,e,ext,extev,h) of
+                      Next (xn,ysn,evn,ext,extev,hn) => 
+                      EventState (xn,ysn,evn,ext,extev,hn,false)
+                    | Root (xn,ysn,evn,ext,extev,hn) => 
+                      EventState (xn,ysn,evn,ext,extev,hn,true)))
+      | _ => (putStrLn "FunctionalHybridDynamics2: invalid EventState"; raise Domain)
+    end
+
+  | integral (ContStepper fstepper,NONE,fpos,fneg,NONE,NONE) =
+    let
+       (*fun fstepper (d,r) = make_stepper (f(d,r))*)
+       val fsolver = adaptive_solver fstepper
+    in
+        fn(ContState (x,y,ext,extev,h)) => 
+           (case fsolver (x,y,ext,extev,h) of
+                Next (xn,ysn,_,_,hn) => 
+                ContState (xn,ysn,ext,extev,hn)
+              | Root (xn,ysn,_,_,hn) => 
+                ContState (xn,ysn,ext,extev,hn))
+      | _ => (putStrLn "FunctionalHybridDynamics2: ContState integral response"; 
+              raise Domain)
+    end
+
+| integral _ =
+  (putStrLn "FunctionalHybridDynamics2: unsupported stepper configuration"; 
+   raise Domain)
+
+end
+
+(*
+ * Adaptive step simulations with interpolated threshold detection of functional hybrid dynamical systems.
+ *)
+
+structure FunctionalHybridDynamics3 =
+struct
+
+open Real
+open Math
+open SignalMath
+
+fun putStrLn str = 
+    (TextIO.output (TextIO.stdOut, str);
+     TextIO.output (TextIO.stdOut, "\n"))
+    
+fun putStr str = 
+    (TextIO.output (TextIO.stdOut, str))
+    
+fun showReal n = 
+    let open StringCvt
+	open Real
+    in
+	(if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
+    end
+
+fun showRealArray v = 
+    (String.concatWith ", " (Array.foldr (fn (x, ax) => (showReal x)::ax) [] v))
+
+type regime_state  = bool array
+type dsc_state     = real array
+type event_state   = real array
+type cont_state    = real array
+type error_state   = real array
+type external_state = real array
+type externalev_state = real array
+
+datatype model_state = 
+         RegimeState  of real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * real * bool
+         | EventState of real * cont_state * event_state * external_state * externalev_state * real * bool
+         | ContState  of real * cont_state * external_state * externalev_state * real
+
+datatype model_stepper = 
+         RegimeStepper of dsc_state * regime_state -> (external_state * externalev_state) -> real -> real * cont_state -> 
                           (cont_state * error_state * (real -> cont_state))
          | EventStepper of (external_state * externalev_state) -> real -> (real * cont_state) -> 
                            (cont_state * error_state * (real -> cont_state))
@@ -385,7 +708,7 @@ fun secant tol f fg0 guess1 guess0 iter =
                  (if (err < (!tol))
                   then newGuess
                   else secant tol f fg1 newGuess guess1 (Int.+(iter,1)))
-             else (putStrLn "FunctionalHybridDynamics2: secant convergence error";
+             else (putStrLn "FunctionalHybridDynamics3: secant convergence error";
                    putStrLn ("err = " ^ (showReal err) ^ " guess1 = " ^ (showReal guess1) ^
                              " guess0 = " ^ (showReal guess0) ^ " guess1 = " ^ (showReal guess1) ^ 
                              " fg0 = " ^ (showReal fg0) ^ " fg1 = " ^ (showReal fg1));
@@ -534,7 +857,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                                  f(x,fpos(x,y,e,d,ext,extev),e,d,ext,extev)
                                | NONE => 
                                  fpos(x,y,e,ext,extev,d)
-                               | SOME _ => (putStrLn "FunctionalHybridDynamics2: RegimeState integral response"; 
+                               | SOME _ => (putStrLn "FunctionalHybridDynamics3: RegimeState integral response"; 
                                             raise Domain)
                     val  e' = fcond d (x,y',e,ext,extev)
                 in
@@ -546,7 +869,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                     RegimeState (xn,ysn,evn,dn,rn,ext,extev,hn,false)
                   | Root (xn,ysn,_,evn,dn,rn,ext,extev,hn) => 
                     RegimeState (xn,ysn,evn,dn,rn,ext,extev,hn,true))                          
-      | _ => (putStrLn "FunctionalHybridDynamics2: invalid RegimeState"; raise Domain)
+      | _ => (putStrLn "FunctionalHybridDynamics3: invalid RegimeState"; raise Domain)
     end
 
   | integral (EventStepper fstepper,SOME (SCondition fcond),
@@ -565,7 +888,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                                        | NONE => 
                                          fpos(x,y,e,ext,extev)
                                        | SOME _ => 
-                                         (putStrLn "FunctionalHybridDynamics2: EventState integral response"; 
+                                         (putStrLn "FunctionalHybridDynamics3: EventState integral response"; 
                                           raise Domain)
                             val  e' = fcond(x,y',e,ext,extev)
                         in
@@ -577,7 +900,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                       EventState (xn,ysn,evn,ext,extev,hn,false)
                     | Root (xn,ysn,_,evn,ext,extev,hn) => 
                       EventState (xn,ysn,evn,ext,extev,hn,true)))
-      | _ => (putStrLn "FunctionalHybridDynamics2: invalid EventState"; raise Domain)
+      | _ => (putStrLn "FunctionalHybridDynamics3: invalid EventState"; raise Domain)
     end
 
   | integral (ContStepper fstepper,NONE,fpos,fneg,NONE,NONE) =
@@ -591,12 +914,12 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                 ContState (xn,ysn,ext,extev,hn)
               | Root (xn,ysn,_,_,hn) => 
                 ContState (xn,ysn,ext,extev,hn))
-      | _ => (putStrLn "FunctionalHybridDynamics2: ContState integral response"; 
+      | _ => (putStrLn "FunctionalHybridDynamics3: ContState integral response"; 
               raise Domain)
     end
 
 | integral _ =
-  (putStrLn "FunctionalHybridDynamics2: unsupported stepper configuration"; 
+  (putStrLn "FunctionalHybridDynamics3: unsupported stepper configuration"; 
    raise Domain)
 
 end

@@ -883,7 +883,7 @@
 
 (define (codegen-ODE/ML sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
 
-    (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkoz rkdp))))
+    (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 cerkoz cerkdp))))
         (error 'codegen-ODE/ML "unknown solver" solver))
 
     (let ((fundefs (codegen-ODE sim solver)))
@@ -968,17 +968,24 @@ EOF
        ("fun make_transition (n, f) = let val a = bool_alloc n () in fn (e,r) => f(e,r,a) end" ,nl)
 
        . ,(case solver  
-            ;; adaptive solvers
-            ((rkoz rkdp)
-             (let ((cesolver (sprintf "ce~A" solver)))
+            ;; adaptive solvers with interpolation
+            ((cerkoz cerkdp)
              `(
-               ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nl)
-               ("val " ,cesolver ": (real array) stepper3 = make_" ,cesolver "()" ,nl)
+               ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nl)
                ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
-               ("fun make_event_stepper (n, deriv) = " ,cesolver " (alloc n,scaler n,summer,deriv)" ,nl)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
                (,nl)
                )
-             ))
+             )
+            ;; adaptive solvers with threshold detection on grid points
+            ((rkhe rkbs rkf45 rkck rkoz rkdp rkf45 rkf78 rkv65)
+             `(
+               ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nl)
+               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
+               (,nl)
+               )
+             )
             (else
              `(
                ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nl)
