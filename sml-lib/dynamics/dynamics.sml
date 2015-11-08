@@ -286,8 +286,8 @@ datatype model_response =
          | SResponse of (real * cont_state * event_state * external_state * externalev_state) -> cont_state
 
 
-val getindex = Array.sub
-val update = Array.update
+val getindex = Unsafe.Array.sub
+val update = Unsafe.Array.update
 
 fun vmap f v u = 
     let
