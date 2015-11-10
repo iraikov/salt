@@ -1,6 +1,7 @@
 (* import libraries *)
 
 $(SML_LIB)/basis/basis.mlb
+$(SALT_LIB)/queue/fun-queue.mlb
 
 local
 	rk.sml

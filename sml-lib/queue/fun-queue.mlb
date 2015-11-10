@@ -1,0 +1,11 @@
+(* import libraries *)
+
+$(SML_LIB)/basis/basis.mlb
+$(SML_LIB)/basis/unsafe.mlb
+
+local
+	fun-queue.sig
+	fun-queue.sml
+in
+	structure FunQueue
+end

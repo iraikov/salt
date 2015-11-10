@@ -191,17 +191,21 @@ fun k_sum (sc_fn: real * 'a -> 'a,
 	   h: real) 
 	  ((d,ns), ks) =
     let
-        fun recur f g (n::ns, k::ks, ax) =
-            (case f (n,k) of
-                 NONE => recur f g (ns, ks, ax)
-               | SOME v => 
-                 let val ax' = case ax of NONE => SOME v
-                                        | SOME v' => SOME (g (v, v'))
-                 in
-                     recur f g (ns, ks, ax')
-                 end)
-          | recur f g (_, _, SOME ax) = ax
-          | recur f g (_, _, NONE) = raise InsufficientArguments
+        fun recur f g (n::ns, ks, ax) =
+            let
+                val (k, ks) = valOf (FunQueue.deque ks)
+            in
+                case f (n,k) of
+                    NONE => recur f g (ns, ks, ax)
+                  | SOME v => 
+                    let val ax' = case ax of NONE => SOME v
+                                           | SOME v' => SOME (g (v, v'))
+                    in
+                        recur f g (ns, ks, ax')
+                    end
+            end
+          | recur f g ([], _, SOME ax) = ax
+          | recur f g ([], _, NONE) = raise InsufficientArguments
 
 
     in
@@ -218,10 +222,10 @@ fun gen_ks (ksum_fn,
 
   | gen_ks (ksum_fn,sum_fn,der_fn,h,old as (tn,yn),ks,(c::cs),(a::ar),(s::ss)) =
     let
-	val yn1 = if (List.null ks) then yn else sum_fn (yn, ksum_fn (a,ks))
+	val yn1 = if (FunQueue.empty ks) then yn else sum_fn (yn, ksum_fn (a,ks))
         val s1   = der_fn (tn + c*h, yn1, s)
     in
-	gen_ks (ksum_fn, sum_fn, der_fn, h, old, (ks @ [s1]), cs, ar, ss)
+	gen_ks (ksum_fn, sum_fn, der_fn, h, old, FunQueue.enque(ks,s1), cs, ar, ss)
     end
 
   | gen_ks (ksum_fn,sum_fn,der_fn,h,(tn,yn),ks,_,_,_) =
@@ -276,7 +280,7 @@ fun core1
     (let
         val sl = List.tabulate (List.length cl, fn (i) => sl_fn())
 	val ksum = k_sum (sc_fn,sum_fn,h)
-	val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, [], cl, al, sl)
+	val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, FunQueue.new(), cl, al, sl)
      in
 	 sum_fn (yn, ksum (bl, ks))
      end)
@@ -306,7 +310,7 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL)
   let
       val sl = List.tabulate (List.length cl, fn (i) => sl_fn())
       val ksum = k_sum (sc_fn,sum_fn,h)
-      val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, [], cl, al, sl)
+      val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, FunQueue.new(), cl, al, sl)
   in
       (sum_fn (yn, ksum (bl, ks)), ksum (dl, ks))
   end
@@ -318,25 +322,27 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL)
 fun bk_sum (bs: RCL list)
            (sc_fn: real * 'a -> 'a, 
             sum_fn: 'a * 'a -> 'a)
-           (ks: 'a list, h: real)
+           (ks, h: real)
            (theta: real) = 
     let 
 
-        fun recur ((d,ns)::bs, k::ks, fs) =
+        fun recur ((d,ns)::bs, ks, fs) =
             let
                 val (bsum,_) = foldl (fn (n,(sum,theta)) => 
                                          ((n*theta)+sum,theta*theta)) (0.0,theta) ns
+                val (k, ks) = valOf (FunQueue.deque ks)
             in
                 case m_scale sc_fn (bsum, k) of 
                     SOME bk => recur (bs, ks, (sc_fn (h/d, bk))::fs)
                   | NONE => recur (bs, ks, fs)
             end
-          | recur ([], [], fs) = foldl1 sum_fn fs
-          | recur (bs, ks, fs) = 
-            (putStrLn ("BkInvalidCoefficients: length bs = " ^ (Int.toString (length bs)));
-             putStrLn ("BkInvalidCoefficients: length ks = " ^ (Int.toString (length ks)));
-             putStrLn ("BkInvalidCoefficients: length fs = " ^ (Int.toString (length fs)));
-             raise BkInvalidCoefficients)
+          | recur ([], ks, fs) = 
+            if FunQueue.empty ks 
+            then foldl1 sum_fn fs
+            else 
+                (putStrLn ("BkInvalidCoefficients: length bs = " ^ (Int.toString (length bs)));
+                 putStrLn ("BkInvalidCoefficients: length fs = " ^ (Int.toString (length fs)));
+                 raise BkInvalidCoefficients)
     in
         recur (bs, ks, [])
     end
@@ -346,7 +352,7 @@ fun bk_sum (bs: RCL list)
 fun interp (ws: RCL list)
            (sc_fn: real * 'a -> 'a, 
 	    sum_fn: 'a * 'a -> 'a)
-           (ks: 'a list, h: real)
+           (ks, h: real)
 	   (tn,yn: 'a) (theta: real) = 
     sum_fn (yn, bk_sum ws (sc_fn,sum_fn) (ks,h) theta)
 
@@ -373,7 +379,7 @@ fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list)
       val sl        = List.tabulate (List.length cl, fn (i) => sl_fn())
       val interp'   = interp wl (sc_fn,sum_fn)
       val ksum      = k_sum (sc_fn,sum_fn,h)
-      val ks        = gen_ks (ksum, sum_fn, der_fn, h, old, [], cl, al, sl)
+      val ks        = gen_ks (ksum, sum_fn, der_fn, h, old, FunQueue.new(), cl, al, sl)
   in
       (sum_fn (yn, ksum (bl, ks)),
        ksum (dl, ks),
