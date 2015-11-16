@@ -219,13 +219,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
         (case root of 
              true => 
              (let
-                 val _ = putStrLn ("event root: x = " ^ (showReal x))
-                 val _ = putStrLn (" e = " ^ (showRealArray e))
-                 val _ = putStrLn (" y = " ^ (showRealArray y))
-                 val _ = putStrLn (" ext = " ^ (showRealArray ext))
-                 val _ = putStrLn (" extev = " ^ (showRealArray extev))
                  val (y',e',d',r') = evresponse_regime (fcond,fpos,fneg,fdiscrete,fregime) (x,y,e,d,r,ext,extev)
-                 val _ = putStrLn (" y' = " ^ (showRealArray y'))
              in
                  RegimeState(x,y',e',d',r',ext,extev,false)
              end)
