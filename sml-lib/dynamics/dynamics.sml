@@ -231,12 +231,11 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
              end)
            | false =>
              (let 
-                 val x'  = x + h
-                 val e'  = fixthr (fcond d (x',y,e,ext,extev))
-                 val hasevent = posdetect (x', e, e')
+                 val e'  = fixthr (fcond d (x,y,e,ext,extev))
+                 val hasevent = posdetect (x, e, e')
              in
                  if hasevent 
-                 then RegimeState(x',y,e',d,r,ext,extev,true)
+                 then RegimeState(x,y,e',d,r,ext,extev,true)
                  else (let
                           val x'  = x + h
                           val y'  = stepper (d,r) (ext,extev) h (x,y)
@@ -263,12 +262,11 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
            end)
            | false =>
              (let 
-                 val x'  = x + h
-                 val e'  = fixthr (fcond (x',y,e,ext,extev))
-                 val hasevent = posdetect (x', e, e')
+                 val e'  = fixthr (fcond (x,y,e,ext,extev))
+                 val hasevent = posdetect (x, e, e')
              in
                  if hasevent
-                 then EventState(x',y,e',ext,extev,true)
+                 then EventState(x,y,e',ext,extev,true)
                  else 
                      (let 
                          val x'  = x + h
@@ -610,12 +608,11 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                 end)
              | false =>  
                let
-                   val x' = x + h
-                   val e' = fixthr(fcond d (x',y,e,ext,extev))
-                   val hasevent = posdetect (x', e, e')
+                   val e' = fixthr(fcond d (x,y,e,ext,extev))
+                   val hasevent = posdetect (x, e, e')
                in
                    if hasevent
-                   then RegimeState (x',y,e',d,r,ext,extev,h,true)
+                   then RegimeState (x,y,e',d,r,ext,extev,h,true)
                    else (case fsolver (x,y,e,d,r,ext,extev,h) of
                              Next (xn,ysn,evn,dn,rn,_,_,hn) => 
                              RegimeState (xn,ysn,evn,dn,rn,ext,extev,hn,false)
@@ -640,12 +637,11 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                         end)
                | false => 
                  let
-                     val x' = x + h
-                     val e' = fixthr(fcond (x',y,e,ext,extev))
-                     val hasevent = posdetect (x', e, e')
+                     val e' = fixthr(fcond (x,y,e,ext,extev))
+                     val hasevent = posdetect (x, e, e')
                  in
                      if hasevent
-                     then EventState (x',y,e',ext,extev,h,true)
+                     then EventState (x,y,e',ext,extev,h,true)
                      else (case fsolver (x,y,e,ext,extev,h) of
                                Next (xn,ysn,evn,ext,extev,hn) => 
                                EventState (xn,ysn,evn,ext,extev,hn,false)
