@@ -271,9 +271,9 @@
 
 
 
-(test-model 'vdp vdp solver: rk4b compile: #t)
+(test-model 'vdp vdp solver: 'rk4b compile: #t)
 
-(test-model 'iaf iaf solver: rk4b compile: #t)
+(test-model 'iaf iaf solver: 'rk4b compile: #t)
 
 (test-model 'izhfs izhfs solver: 'rkdp compile: #t)
 
