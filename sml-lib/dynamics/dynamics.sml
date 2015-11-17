@@ -448,8 +448,6 @@ fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
                                 SOME f => f (x,y',e,d)
                               | NONE => d)
                 val r'  = fregime (e,r)
-                val _    = Array.modify (fn i => posInf) extev
-
             in
                 (y',d',r')
             end)
