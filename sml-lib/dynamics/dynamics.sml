@@ -777,7 +777,7 @@ val equal = fn (x,y) => (x = y)
 
 (* Adaptive time step integrator *)
 
-val tol = ref (Real.Math.pow (10.0, ~6.0))
+val tol = ref (Real.Math.pow (10.0, ~4.0))
 val lb = 0.5 * (!tol)
 val ub = 0.9 * (!tol)
 
