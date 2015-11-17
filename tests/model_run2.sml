@@ -80,7 +80,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 
 
 val h0          = 0.01
-val tstop       = 1500.0
+val tstop       = 150.0
 val p           = Model.paramfun()
 val initial     = Model.initfun(p)
 val evinitial   = optApply Model.initcondfun ()

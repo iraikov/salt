@@ -45,6 +45,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
     in
 	printstate (0.0, initial);
 	run (D.RegimeState (0.0, initial, evinitial, dinitial, rinitial, extinitial, extevinitial, false))
+
     end
 |  start (f,initial,SOME evinitial,NONE,NONE,extinitial,extevinitial,tmax) =
     let
@@ -80,9 +81,9 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 
 
 val h           = 0.01
-val tstop       = 1500.0
-val p           = Model.paramfun()
-val initial     = Model.initfun(p)
+val tstop       = 150.0
+val p           = Model.paramfun ()
+val initial     = Model.initfun (p)
 val evinitial   = optApply Model.initcondfun ()
 val dinitial    = optApply Model.dinitfun (p)
 val rinitial    = optApply Model.initregfun ()
