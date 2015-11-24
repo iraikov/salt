@@ -1,0 +1,15 @@
+(* import libraries *)
+
+$(SML_LIB)/basis/basis.mlb
+$(SML_LIB)/basis/mlton.mlb
+$(SML_LIB)/basis/unsafe.mlb
+
+local
+	crk.sml
+	crktest.sml
+in
+	structure CRungeKutta
+	structure CRungeKuttaTest
+end
+
+
