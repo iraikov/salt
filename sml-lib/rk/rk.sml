@@ -278,8 +278,8 @@ fun core1
 	(h: real) 
 	(old as (tn,yn: 'a)) =
     (let
-        val sl = List.tabulate (List.length cl, fn (i) => sl_fn())
 	val ksum = k_sum (sc_fn,sum_fn,h)
+        val sl = List.tabulate (List.length cl, fn (i) => sl_fn())
 	val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, FunQueue.new(), cl, al, sl)
      in
 	 sum_fn (yn, ksum (bl, ks))

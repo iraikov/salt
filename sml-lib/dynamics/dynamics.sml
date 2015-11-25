@@ -106,13 +106,6 @@ fun vmap2 f (v1,v2) =
         (Array.appi (fn (i,x) => update (a, i, f (x, getindex (v2,i)))) v1; a)
     end
 
-fun vmodifyr2 f (v1,v2) = 
-    let 
-        val n = Array.length v1
-    in
-        (Array.appi (fn (i,x) => update (v2, i, f (x, getindex (v2,i)))) v1; v2)
-    end
-
 fun vfind2 f (v1,v2) = 
     let 
         val n = Array.length v1
@@ -370,13 +363,6 @@ fun vmap2 f (v1,v2) =
         val a = Array.array (n, 0.0)
     in
         Array.appi (fn (i,x) => update (a, i, f (x, getindex (v2,i)))) v1; a
-    end
-
-fun vmodifyr2 f (v1,v2) = 
-    let 
-        val n = Array.length v1
-    in
-        (Array.appi (fn (i,x) => update (v2, i, f (x, getindex (v2,i)))) v1; v2)
     end
 
 fun vfind2 f (v1,v2) = 
@@ -742,13 +728,6 @@ fun vmap2 f (v1,v2) =
         val a = Array.array (n, 0.0)
     in
         Array.appi (fn (i,x) => update (a, i, f (x, getindex (v2,i)))) v1; a
-    end
-
-fun vmodifyr2 f (v1,v2) = 
-    let 
-        val n = Array.length v1
-    in
-        (Array.appi (fn (i,x) => update (v2, i, f (x, getindex (v2,i)))) v1; v2)
     end
 
 fun vfind2 f (v1,v2) = 

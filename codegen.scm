@@ -961,7 +961,7 @@ EOF
      `(
        ("fun alloc n = (fn () => Array.array (n, 0.0))" ,nl)
        ("fun bool_alloc n = (fn () => Array.array (n, false))" ,nl)
-       ("val summer = fn (a,b) => (vmodifyr2 (fn (x,y) => x+y) (a,b))" ,nl)
+       ("val summer = fn (a,b) => (vmap2 (fn (x,y) => x+y) (a,b))" ,nl)
        ("fun scaler n = let val b = LastNBuffer.fromList (List.tabulate (24, fn (i) => alloc n ())) in "
         "  fn(a,lst) => (LastNBuffer.rotate_left b; vmap (fn (x) => a*x) lst (LastNBuffer.sub (b, 0))) end" ,nl)
        ("fun make_bool_initial (n, f) = let val a = bool_alloc n () in fn () => f(a) end" ,nl)
