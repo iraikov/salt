@@ -1,5 +1,5 @@
 
-(define nl "\n")
+(define nll "\n")
 
 ;; based on SRV:send-reply by Oleg Kiselyov
 (define (print-fragments b out)
@@ -92,7 +92,7 @@
       
 
 
-(define (codegen-expr ode-inds ode-order invcindexmap solver)
+(define (codegen-expr ode-inds ode-order invcindexmap)
   (lambda (expr)
     (let recur ((expr expr))
       (match expr
@@ -155,7 +155,7 @@
       ))
 
 
-(define (codegen-ODE sim solver)
+(define (codegen-ODE sim)
 
   (define (update-bucket k v alst)
     (let recur ((alst alst)
@@ -245,6 +245,15 @@
     (let recur ((i 0) (exprs exprs) (stmts '()))
       (if (null? exprs)
           (append stmts (list (E:Ret (V:Var out))))
+          (recur (+ i 1) (cdr exprs)
+                 (cons (E:Set (V:Var out) i (codegen-expr (car exprs))) stmts))
+          ))
+    )
+
+  (define (codegen-set-stmts* codegen-expr exprs out)
+    (let recur ((i 0) (exprs exprs) (stmts '()))
+      (if (null? exprs)
+          stmts
           (recur (+ i 1) (cdr exprs)
                  (cons (E:Set (V:Var out) i (codegen-expr (car exprs))) stmts))
           ))
@@ -353,7 +362,7 @@
         )
     (let* (
 
-           (codegen-expr1 (codegen-expr ode-inds ode-order invcindexmap solver))
+           (codegen-expr1 (codegen-expr ode-inds ode-order invcindexmap))
 
            (ode-defs (filter-map (lambda (index) 
                                    (and (member index ode-inds)
@@ -486,8 +495,23 @@
             (let ((stmts (codegen-set-stmts codegen-expr1 externalevs 'extev_out)))
               (V:Fn '(p) (E:Ret (V:Op 'make_ext (list (V:C (length externalevs)) (V:Fn '(extev_out) (E:Begin stmts))))))))
 
+
+           (rhsfun 
+            (V:Fn (if (pair? regblocks) 
+                      '((double . t) ((%pointer double) . p) ((%pointer double) . d) ((%pointer int) . r) 
+                        ((%pointer double) . y) ((%pointer double) . dy_out))
+                      '((double . t) ((%pointer double) . p) ((%pointer double) . y) ((%pointer double) . dy_out)))
+                  (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
+                         (stmts (codegen-set-stmts* codegen-expr1 odes 'dy_out)))
+                    (if (null? asgns)
+                        (E:Begin stmts)
+                        (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) asgns)
+                               (E:Begin stmts)))
+                    ))
+            )
+            
            (odefun    
-            (let ((fnval
+            (let ((rhsfun 
                    (V:Fn '(t y dy_out)
                          (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
                                 (stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
@@ -495,20 +519,21 @@
                                (E:Begin stmts)
                                (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) asgns)
                                       (E:Begin stmts)))
-                           ))
-                   ))
-            (V:Fn '(p) 
-                  (E:Ret
-                   (cond
-                    ((pair? regblocks) 
-                     (V:Op 'RegimeStepper (list (V:Fn '(d r) (E:Ret (V:Fn '(ext extev) (E:Ret (V:Op 'make_event_stepper (list (V:C ode-n) fnval)))))))))
-                    ((pair? condblock)
-                     (V:Op 'EventStepper (list (V:Fn '(ext extev) (E:Ret (V:Op 'make_event_stepper (list (V:C ode-n) fnval)))))))
-                    (else
-                     (V:Op 'ContStepper (list  (V:Fn '(ext extev) (E:Ret (V:Op 'make_stepper (list (V:C ode-n) fnval)))))))
+                           ))))
+              (V:Fn '(p) 
+                    (E:Ret
+                     (cond
+                      ((pair? regblocks) 
+                       (V:Op 'RegimeStepper (list (V:Fn '(d r) (E:Ret (V:Fn '(ext extev) 
+                                                                            (E:Ret (V:Op 'make_event_stepper (list (V:C ode-n) rhsfun)))))))))
+                      ((pair? condblock)
+                       (V:Op 'EventStepper (list (V:Fn '(ext extev) (E:Ret (V:Op 'make_event_stepper (list (V:C ode-n) rhsfun)))))))
+                      (else
+                       (V:Op 'ContStepper (list  (V:Fn '(ext extev) (E:Ret (V:Op 'make_stepper (list (V:C ode-n) rhsfun)))))))
+                      ))
                     ))
-                  ))
             )
+            
 
            (initcondfun 
             (if (null? condblock)
@@ -581,11 +606,11 @@
                                                         (E:Begin stmts))))))
                               )
                          (V:Fn '(p) (E:Ret (if (null? regblocks)
-                                               (V:Op 'SResponse (list (V:Op 'make_response (list (V:C ode-n) fnval))))
-                                               (V:Op 'RegimeResponse (list (V:Op 'make_regime_response (list (V:C ode-n) fnval)))))))
+                                               (V:Op 'SResponse (list fnval))
+                                               (V:Op 'RegimeResponse (list fnval))))
                          ))
                       ))
-            )
+            ))
 
            (negfun      
             (if (null? negblocks)
@@ -608,8 +633,8 @@
                                                         (E:Begin stmts))))))
                               )
                          (V:Fn '(p) (E:Ret (if (null? regblocks)
-                                               (V:Op 'SResponse (list (V:Op 'make_response (list (V:C ode-n) fnval))))
-                                               (V:Op 'RegimeResponse (list (V:Op 'make_regime_response (list (V:C ode-n) fnval)))))))
+                                               (V:Op 'SResponse (list fnval))
+                                               (V:Op 'RegimeResponse (list fnval)))))
 
                          ))
                       ))
@@ -690,6 +715,7 @@
         (paramfun . ,paramfun)
         (initfun  . ,initfun)
         (dinitfun . ,dinitfun)
+        (rhsfun   . ,rhsfun)
         (odefun   . ,odefun)
         (initcondfun . ,initcondfun)
         (initextfun  . ,initextfun)
@@ -720,7 +746,7 @@
 (define (binding->scheme x)
   (cases binding x
 	 (B:Val (name v)
-                (list "(" (name/scheme name) " " (value->scheme v) ")" nl))))
+                (list "(" (name/scheme name) " " (value->scheme v) ")" nll))))
 
 
 (define (stmt->scheme x . rest)
@@ -728,26 +754,26 @@
     (cases stmt x
 
 	 (E:Ife     (test ift iff)
-		    (list "(cond (" (value->scheme test) " " nl
-			  " " (stmt->scheme ift ) ")" nl
-			  "(else " (stmt->scheme iff) "))" nl))
+		    (list "(cond (" (value->scheme test) " " 
+			  " " (stmt->scheme ift ) ")" 
+			  "(else " (stmt->scheme iff) "))" ))
 
 	 (E:Let     (bnds body)
-		    (list "(let* (" nl
-			  (map (lambda (x) (binding->scheme x)) bnds) nl
-			  ") " nl
-			  (stmt->scheme body #f) nl
-			  ")" nl))
+		    (list "(let* (" 
+			  (map (lambda (x) (binding->scheme x)) bnds) 
+			  ") " 
+			  (stmt->scheme body #f) 
+			  ")" nll))
 			  
 	 (E:Begin   (stmts)  
                     (list "(begin " 
-                          (map (lambda (x) (stmt->scheme x)) stmts) nl
+                          (map (lambda (x) (stmt->scheme x)) stmts) nll
                           ")"))
 
 	 (E:Set   (v i x)  
                     (list "(vector-set! " 
                           (value->scheme v) (number->string i) (value->scheme x) 
-                          nl
+                          nll
                           ")"))
 
 	 (E:Ret     (v)  (value->scheme v))
@@ -794,6 +820,76 @@
 	 )))
     result))
 
+(define (args->sexpr xs)
+  (map (lambda (x) 
+         (if (symbol? x) (name/scheme x)
+             (list (car x) (name/scheme (cdr x)))
+             ))
+       xs))
+
+(define (binding->sexpr x)
+  (cases binding x
+	 (B:Val (name v)
+                (cases value v
+                       (V:Fn (args body)
+                             `(%fun void ,name ,(args->sexpr args) ,(stmt->sexpr body)))
+                       (else `(%var double ,name ,(value->sexpr v)))))
+         ))
+
+
+(define (stmt->sexpr x)
+    (cases stmt x
+
+	 (E:Ife     (test ift iff)
+		    `(if ,(value->sexpr test) ,(stmt->sexpr ift) ,(stmt->sexpr iff)))
+
+	 (E:Let     (bnds body)
+                    `(%begin . ,(append (map binding->sexpr bnds) (list (stmt->sexpr body)))))
+			  
+	 (E:Begin   (stmts)  
+                    `(%begin . ,(map (lambda (x) (stmt->sexpr x)) stmts)))
+
+	 (E:Set   (v i x)  
+                    `(vector-set! ,(value->sexpr v) ,i ,(value->sexpr x) ))
+
+	 (E:Ret     (v)  (value->sexpr v))
+		    
+	 (E:Noop    () `(%begin))
+	 ))
+
+
+(define (value->sexpr v)
+  (let ((result
+         (cases value v
+                (V:C       (v) v)
+                (V:Var     (name) (name/scheme name))
+                (V:Sub     (v index) 
+                           `(vector-ref ,(value->sexpr v) ,index))
+                (V:Fn      (args body) 
+                           `(%fun #f ,(gensym 'f) ,(args->sexpr args) ,(stmt->sexpr body)))
+                (V:Op     (name args)
+                          (let* ((op (case name
+                                       ((signal.add) '+) ((signal.sub) '-) ((signal.mul) '*) ((signal.div) '/) 
+                                       ((signal.pow) '^) 
+                                       ((signal.gte) '>=) ((signal.gt) '<=) ((signal.lt) '<) ((signal.lte) '<=)
+                                       ((signal.neg) '-)
+                                       (else name))))
+                            (cond ((null? args) 
+                                   (case name 
+                                     ((NONE)  `false)
+                                     (else    '())))
+                                  
+                                  (else
+                                   `(,op . ,(map value->sexpr args))))
+                            ))
+                (V:Ifv     (test ift iff)
+                           `(if ,(value->sexpr test)
+                                ,(value->sexpr ift)
+                                ,(value->sexpr iff)))
+                
+                )))
+    result))
+
   
 (define (name/ML s)
   (let ((cs (string->list (->string s))))
@@ -817,7 +913,7 @@
   (let-optionals rest ((bnd? #t))
     (cases binding x
 	 (B:Val     (name v)
-                    (list "val " (name/ML name) " = " (value->ML v) nl))
+                    (list "val " (name/ML name) " = " (value->ML v) nll))
          )))
 
 
@@ -826,16 +922,16 @@
     (cases stmt x
 
 	 (E:Ife     (test ift iff)
-		    (list "if (" (value->ML test) ") " nl
-			  "then " (stmt->ML ift ) nl
-			  "else " (stmt->ML iff) nl))
+		    (list "if (" (value->ML test) ") " nll
+			  "then " (stmt->ML ift ) nll
+			  "else " (stmt->ML iff) nll))
 
 	 (E:Let     (bnds body)
-		    (list "let " nl
-			  (map (lambda (x) (binding->ML x #t)) bnds) nl
-			  "in " nl
-			  (stmt->ML body #f) nl
-			  "end" nl))
+		    (list "let " nll
+			  (map (lambda (x) (binding->ML x #t)) bnds) nll
+			  "in " nll
+			  (stmt->ML body #f) nll
+			  "end" nll))
 			  
 	 (E:Begin     (stmts)  
                       (list "(" (intersperse (map (lambda (stmt) (list (stmt->ML stmt) )) stmts) "; ")  ")"))
@@ -895,18 +991,18 @@
     (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 cerkoz cerkdp))))
         (error 'codegen-ODE/ML "unknown solver" solver))
 
-    (let ((fundefs (codegen-ODE sim solver)))
+    (let ((fundefs (codegen-ODE sim)))
       
       (if mod (print-fragments (prelude/ML solver: solver libs: libs) out))
       
       (print-fragments
        (map (match-lambda
-             ((name . def)  
-              (list (binding->ML (B:Val name def)) nl)))
+             (('rhsfun . def) (list))
+             ((name . def) (list (binding->ML (B:Val name def)) nll)))
             fundefs)
        out)
       
-      (if mod (print-fragments (list nl "end" nl) out))
+      (if mod (print-fragments (list nll "end" nll) out))
       
       ))
 
@@ -956,55 +1052,71 @@ EOF
 
 ,(if (not solver)
      `(("(* dummy solver; returns only the computed derivatives *)")
-       ("fun integral (f,h) = f" ,nl))
+       ("fun integral (f,h) = f" ,nll))
 
      `(
-       ("fun alloc n = (fn () => Array.array (n, 0.0))" ,nl)
-       ("fun bool_alloc n = (fn () => Array.array (n, false))" ,nl)
-       ("val summer = fn (a,b) => (vmap2 (fn (x,y) => x+y) (a,b))" ,nl)
-       ("fun scaler n = let val b = LastNBuffer.fromList (List.tabulate (24, fn (i) => alloc n ())) in "
-        "  fn(a,lst) => (LastNBuffer.rotate_left b; vmap (fn (x) => a*x) lst (LastNBuffer.sub (b, 0))) end" ,nl)
-       ("fun make_bool_initial (n, f) = let val a = bool_alloc n () in fn () => f(a) end" ,nl)
-       ("fun make_real_initial (n, f) = let val a = alloc n () in fn () => f(a) end" ,nl)
-       ("fun make_ext (n, f) = let val a = alloc n () in fn () => f(a) end" ,nl)
+       ("fun statelen a = Array.length (a)" ,nll)
+       ("fun alloc n = (fn () => Array.array (n, 0.0))" ,nll)
+       ("fun bool_alloc n = (fn () => Array.array (n, false))" ,nll)
+       ("fun summer n = fn (a,b,y) => (vmap2 (fn (x,y) => x+y) (a,b,y))" ,nll)
+       ("fun scaler n = fn (a,lst) => vmap (fn (x) => a*x) lst (alloc n ())")
+       ("fun make_bool_initial (n, f) = let val a = bool_alloc n () in fn () => f(a) end" ,nll)
+       ("fun make_real_initial (n, f) = let val a = alloc n () in fn () => f(a) end" ,nll)
+       ("fun make_ext (n, f) = let val a = alloc n () in fn () => f(a) end" ,nll)
        ("fun make_condition (n, f) = let val a = LastNBuffer.fromList (List.tabulate (12, fn (i) => alloc n ())) in " 
-        " fn (x,y,e,ext,extev) => (LastNBuffer.rotate_left a; f(x,y,e,ext,extev,LastNBuffer.sub (a, 0))) end" ,nl)
+        " fn (x,y,e,ext,extev) => (LastNBuffer.rotate_left a; f(x,y,e,ext,extev,LastNBuffer.sub (a, 0))) end" ,nll)
        ("fun make_regime_condition (n, f) = let val a = LastNBuffer.fromList (List.tabulate (12, fn (i) => alloc n ())) in " 
-        " fn (d) => fn (x,y,e,ext,extev) => (LastNBuffer.rotate_left a; f d (x,y,e,ext,extev,LastNBuffer.sub (a, 0))) end" ,nl)
-       ("fun make_response (n, f) = let val a = alloc n () in fn (x,y,e,ext,extev) => f(x,y,e,ext,extev,a) end" ,nl)
-       ("fun make_regime_response (n, f) = let val a = alloc n () in fn (x,y,e,d,ext,extev) => f(x,y,e,d,ext,extev,a) end" ,nl)
-       ("fun make_dresponse (n, f) = let val a = alloc n () in fn (x,y,e,d) => f(x,y,e,d,a) end" ,nl)
-       ("fun make_transition (n, f) = let val a = bool_alloc n () in fn (e,r) => f(e,r,a) end" ,nl)
+        " fn (d) => fn (x,y,e,ext,extev) => (LastNBuffer.rotate_left a; f d (x,y,e,ext,extev,LastNBuffer.sub (a, 0))) end" ,nll)
+       ("fun make_dresponse (n, f) = let val a = alloc n () in fn (x,y,e,d) => f(x,y,e,d,a) end" ,nll)
+       ("fun make_transition (n, f) = let val a = bool_alloc n () in fn (e,r) => f(e,r,a) end" ,nll)
 
        . ,(case solver  
             ;; adaptive solvers with interpolation
             ((cerkoz cerkdp)
              `(
-               ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nl)
-               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
-               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
-               (,nl)
+               ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
+               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
+               (,nll)
                )
              )
             ;; adaptive solvers with threshold detection on grid points
             ((rkhe rkbs rkf45 rkck rkoz rkdp rkf45 rkf78 rkv65)
              `(
-               ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nl)
-               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
-               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
-               (,nl)
+               ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nll)
+               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
+               (,nll)
                )
              )
             (else
              `(
-               ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nl)
-               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
-               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer,deriv)" ,nl)
-               (,nl)
+               ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nll)
+               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
+               (,nll)
                ))
             ))
      ))
 )
+
+
+(define (codegen-ODE/C sim #!key (out (current-output-port)) (cname #f) (libs '()))
+
+    (let ((fundefs (codegen-ODE sim)))
+      
+      ;;(if mod (print-fragments (prelude/C solver: solver libs: libs) out))
+      
+      (for-each
+       (match-lambda
+        (((and 'rhsfun name) . def)
+         (let ((sexpr (binding->sexpr (B:Val (or cname name) def))))
+           (fmt out (c-expr sexpr))))
+        (else (begin)))
+       fundefs)
+      
+      ))
+
 
 
 

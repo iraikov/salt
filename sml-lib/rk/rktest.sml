@@ -7,8 +7,8 @@ struct
 
 open RungeKutta
 
-val summer = Real.+
-val scaler = Real.*
+fun summer(a,b,y) = Real.+(a,b)
+fun scaler(a,b) = Real.* (a,b)
 fun alloc () = 0.0
 
 infix 7 */
@@ -42,7 +42,7 @@ fun showst (t, y) = String.concat [(showReal y), "\t", (showReal (y - (exact t))
 
 fun gen_soln1 (integrator,h,t,st) =
   let 
-      val stn = integrator (t,st)
+      val stn = integrator (t,st,st)
       val tn  = Real.+(t,h)
   in 
       if t >= 5.0
@@ -52,7 +52,7 @@ fun gen_soln1 (integrator,h,t,st) =
 
 fun gen_soln2 (integrator,h,t,st) =
   let 
-      val (stn,en) = integrator (t,st)
+      val (stn,en) = integrator (t,st,st)
       val tn       = Real.+(t,h)
   in 
       if t >= 5.0
@@ -96,7 +96,7 @@ fun solver2 (integrator,stats) =
 
 fun gen_soln3 (integrator,h,t,st) =
   let 
-      val (stn,en,inp) = integrator (t,st)
+      val (stn,en,inp) = integrator (t,st,st)
       val tn       = Real.+(t,h)
   in 
       if t >= 5.0

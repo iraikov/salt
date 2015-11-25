@@ -187,9 +187,9 @@ fun m_scale sc_fn (s,v) =
    un-necessary multiplications and additions *)
 
 fun k_sum (sc_fn: real * 'a -> 'a, 
-	   sum_fn: 'a * 'a -> 'a, 
+	   sum_fn: 'a * 'a * 'a -> 'a, 
 	   h: real) 
-	  ((d,ns), ks) =
+	  ((d,ns), ks, s) =
     let
         fun recur f g (n::ns, ks, ax) =
             let
@@ -199,7 +199,7 @@ fun k_sum (sc_fn: real * 'a -> 'a,
                     NONE => recur f g (ns, ks, ax)
                   | SOME v => 
                     let val ax' = case ax of NONE => SOME v
-                                           | SOME v' => SOME (g (v, v'))
+                                           | SOME v' => SOME (g (v, v', s))
                     in
                         recur f g (ns, ks, ax')
                     end
@@ -216,19 +216,19 @@ fun k_sum (sc_fn: real * 'a -> 'a,
 (* Helper function to generate a list of K_i *)
 
 fun gen_ks (ksum_fn,
-            sum_fn: 'a * 'a -> 'a,
+            sum_fn: 'a * 'a * 'a -> 'a,
             der_fn: real * 'a * 'a -> 'a,
-	    h,(tn,yn),ks,[],[],[]) = ks
+	    h,(tn,yn),ks,[],[],[],[]) = ks
 
-  | gen_ks (ksum_fn,sum_fn,der_fn,h,old as (tn,yn),ks,(c::cs),(a::ar),(s::ss)) =
+  | gen_ks (ksum_fn,sum_fn,der_fn,h,old as (tn,yn),ks,(c::cs),(a::ar),(s::ss),(t::ts)) =
     let
-	val yn1 = if (FunQueue.empty ks) then yn else sum_fn (yn, ksum_fn (a,ks))
+	val yn1 = if (FunQueue.empty ks) then yn else sum_fn (yn, ksum_fn (a,ks,t), t)
         val s1   = der_fn (tn + c*h, yn1, s)
     in
-	gen_ks (ksum_fn, sum_fn, der_fn, h, old, FunQueue.enque(ks,s1), cs, ar, ss)
+	gen_ks (ksum_fn, sum_fn, der_fn, h, old, FunQueue.enque(ks,s1), cs, ar, ss, ts)
     end
 
-  | gen_ks (ksum_fn,sum_fn,der_fn,h,(tn,yn),ks,_,_,_) =
+  | gen_ks (ksum_fn,sum_fn,der_fn,h,(tn,yn),ks,_,_,_,_) =
     raise KsInvalidCoefficients
     
 
@@ -265,24 +265,26 @@ fun gen_ks (ksum_fn,
 
 type 'a stepper1 =  ((unit -> 'a) *
                      (real * 'a -> 'a) * 
-		     ('a * 'a -> 'a)   *
+		     ('a * 'a * 'a -> 'a)   *
 		     (real * 'a * 'a -> 'a)) ->
-		     (real -> (real * 'a) -> 'a)
+		     (real -> (real * 'a * 'a) -> 'a)
 
 fun core1
 	(cl: real list, al: RCL list, bl: RCL)
-	(sl_fn: unit -> 'a,
+	(alloc_fn: unit -> 'a,
          sc_fn:  real * 'a -> 'a, 
-	 sum_fn: 'a * 'a -> 'a,
+	 sum_fn: 'a * 'a * 'a -> 'a,
 	 der_fn: real * 'a * 'a -> 'a)
 	(h: real) 
-	(old as (tn,yn: 'a)) =
+	(old as (tn,yn: 'a,yout: 'a)) =
     (let
 	val ksum = k_sum (sc_fn,sum_fn,h)
-        val sl = List.tabulate (List.length cl, fn (i) => sl_fn())
-	val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, FunQueue.new(), cl, al, sl)
+        val sl = List.tabulate (List.length cl, fn (i) => alloc_fn())
+        val tl = List.tabulate (List.length cl, fn (i) => alloc_fn())
+        val s  = alloc_fn()
+	val ks = gen_ks (ksum, sum_fn, der_fn, h, (tn,yn), FunQueue.new(), cl, al, sl, tl)
      in
-	 sum_fn (yn, ksum (bl, ks))
+	 sum_fn (yn, ksum (bl, ks, s), yout)
      end)
 
 
@@ -296,23 +298,26 @@ fun core1
 
 type 'a stepper2 =  ((unit -> 'a) *
                      (real * 'a -> 'a) * 
-		     ('a * 'a -> 'a)   *
+		     ('a * 'a * 'a -> 'a)   *
 		     (real * 'a * 'a -> 'a)) ->
-		    (real -> (real * 'a) -> ('a * 'a))
+		    (real -> (real * 'a * 'a) -> ('a * 'a))
 
 fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) 
-	  (sl_fn: unit -> 'a,
+	  (alloc_fn: unit -> 'a,
            sc_fn: real * 'a -> 'a, 
-	   sum_fn: 'a * 'a -> 'a,
+	   sum_fn: 'a * 'a * 'a -> 'a,
 	   der_fn: real * 'a * 'a -> 'a)
 	   (h: real)
-	   (old as (tn,yn: 'a)) =
+	   (old as (tn,yn: 'a,yout: 'a)) =
   let
-      val sl = List.tabulate (List.length cl, fn (i) => sl_fn())
+      val sl = List.tabulate (List.length cl, fn (i) => alloc_fn())
+      val tl = List.tabulate (List.length cl, fn (i) => alloc_fn())
+      val sy  = alloc_fn()
+      val se  = alloc_fn()
       val ksum = k_sum (sc_fn,sum_fn,h)
-      val ks   = gen_ks (ksum, sum_fn, der_fn, h, old, FunQueue.new(), cl, al, sl)
+      val ks   = gen_ks (ksum, sum_fn, der_fn, h, (tn,yn), FunQueue.new(), cl, al, sl, tl)
   in
-      (sum_fn (yn, ksum (bl, ks)), ksum (dl, ks))
+      (sum_fn (yn, ksum (bl, ks, sy), yout), ksum (dl, ks, se))
   end
 
 
@@ -321,9 +326,9 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL)
 
 fun bk_sum (bs: RCL list)
            (sc_fn: real * 'a -> 'a, 
-            sum_fn: 'a * 'a -> 'a)
+            sum_fn: 'a * 'a * 'a -> 'a)
            (ks, h: real)
-           (theta: real) = 
+           (theta: real, yout: 'a) = 
     let 
 
         fun recur ((d,ns)::bs, ks, fs) =
@@ -338,7 +343,7 @@ fun bk_sum (bs: RCL list)
             end
           | recur ([], ks, fs) = 
             if FunQueue.empty ks 
-            then foldl1 sum_fn fs
+            then foldl1 (fn(x,y) => sum_fn (x,y,yout)) fs
             else 
                 (putStrLn ("BkInvalidCoefficients: length bs = " ^ (Int.toString (length bs)));
                  putStrLn ("BkInvalidCoefficients: length fs = " ^ (Int.toString (length fs)));
@@ -351,10 +356,11 @@ fun bk_sum (bs: RCL list)
 (* Interpolation routine for continuous explicit RK (CERK) methods *)
 fun interp (ws: RCL list)
            (sc_fn: real * 'a -> 'a, 
-	    sum_fn: 'a * 'a -> 'a)
+	    sum_fn: 'a * 'a * 'a -> 'a)
            (ks, h: real)
-	   (tn,yn: 'a) (theta: real) = 
-    sum_fn (yn, bk_sum ws (sc_fn,sum_fn) (ks,h) theta)
+	   (tn,yn: 'a,yout: 'a) 
+           (theta: real) = 
+    sum_fn (yn, bk_sum ws (sc_fn,sum_fn) (ks,h) (theta, yout), yout)
 
 
 (* Core routine for constructing continuous methods.  It returns a
@@ -364,26 +370,30 @@ fun interp (ws: RCL list)
 
 type 'a stepper3 =  ((unit -> 'a) *
                      (real * 'a -> 'a) * 
-		     ('a * 'a -> 'a)   *
+		     ('a * 'a * 'a -> 'a)   *
 		     (real * 'a * 'a -> 'a)) ->
-		    (real -> (real * 'a) -> ('a * 'a * (real -> 'a)))
+		    (real -> (real * 'a * 'a) -> ('a * 'a * (real -> 'a)))
 
 fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) 
-	  (sl_fn: unit -> 'a,
+	  (alloc_fn: unit -> 'a,
            sc_fn: real * 'a -> 'a, 
-	   sum_fn: 'a * 'a -> 'a,
+	   sum_fn: 'a * 'a * 'a -> 'a,
 	   der_fn: real * 'a * 'a -> 'a)
 	   (h: real)
-	   (old as (tn,yn: 'a)) =
+	   (old as (tn,yn: 'a,yout: 'a)) =
   let
-      val sl        = List.tabulate (List.length cl, fn (i) => sl_fn())
+      val sl        = List.tabulate (List.length cl, fn (i) => alloc_fn())
+      val tl        = List.tabulate (List.length cl, fn (i) => alloc_fn())
+      val sy        = alloc_fn()
+      val se        = alloc_fn()
+      val si        = alloc_fn()
       val interp'   = interp wl (sc_fn,sum_fn)
       val ksum      = k_sum (sc_fn,sum_fn,h)
-      val ks        = gen_ks (ksum, sum_fn, der_fn, h, old, FunQueue.new(), cl, al, sl)
+      val ks        = gen_ks (ksum, sum_fn, der_fn, h, (tn,yn), FunQueue.new(), cl, al, sl, tl)
   in
-      (sum_fn (yn, ksum (bl, ks)),
-       ksum (dl, ks),
-       interp' (ks, h) (tn,yn))
+      (sum_fn (yn, ksum (bl, ks, sy), yout),
+       ksum (dl, ks, se),
+       interp' (ks, h) (tn,yn,si))
   end
 
 (* Helper routines to show the internal tables *)
