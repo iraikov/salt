@@ -9,15 +9,15 @@ fun putStrLn str =
     (TextIO.output (TextIO.stdOut, str);
      TextIO.output (TextIO.stdOut, "\n"))
 
-val c_rkdp = _import "Dormand_Prince_5_4" public: int * MLton.Pointer.t * real array * real array * real * real * real array *
-                                                  real array * real array * real array * real array * real array * real array *
-                                                  real array * real array * real array * real array * real array * real array *
-                                                  real array * real array * real array * real array * real array * real array 
-                                                  -> int;
+val c_rkdp = _import "Dormand_Prince_5_4" public reentrant: 
+             int * MLton.Pointer.t * real array * real * real * real array * real array * 
+             real array * real array * real array * real array * real array * real array *
+             real array * real array * real array * real array * real array * real array *
+             real array * real array * real array * real array * real array * real array 
+             -> int;
 
 fun make_c_rkdp (n, f) =
-    let val err = Array.array (n, 0.0)
-        val yout = Array.array (n, 0.0)
+    let
         val t1 = Array.array (n, 0.0) 
         val t2 = Array.array (n, 0.0) 
         val t3 = Array.array (n, 0.0) 
@@ -37,9 +37,11 @@ fun make_c_rkdp (n, f) =
         val k11 = Array.array (n, 0.0) 
         val k12 = Array.array (n, 0.0) 
     in
-        fn (h) => (fn (tn,yn) => (c_rkdp (n, f, yn, yout, tn, h, err, t1, t2, t3, t4, t5, t6,
-                                          k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12); 
-                                  (yout, err)))
+        fn (h) => (fn (tn,yn,yout,err) => 
+                      (putStrLn ("c_rkdp: y[0] = " ^ (Real.toString (Array.sub (yn,0))));
+                       c_rkdp (n, f, yn, tn, h, yout, err, t1, t2, t3, t4, t5, t6,
+                               k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12)
+                  ))
     end
 
 end

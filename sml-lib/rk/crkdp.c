@@ -33,9 +33,9 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include "export.h"
 
 #define max(x,y) ( (x) < (y) ? (y) : (x) )
 #define min(x,y) ( (x) < (y) ? (x) : (y) )
@@ -62,7 +62,7 @@ void vector_scale (int n, double k, double *x, double *result)
     }
 }
 
-int Dormand_Prince_5_4(int, int (*f)(double,double*,double*), double *y, double *yout, double x, double h, double *err,
+int Dormand_Prince_5_4(int, int (*f)(double,double*,double*), double *y, double x, double h, double *yout, double *err,
                        double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, 
                        double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, double *t10, double *t11, double *t12);
 
@@ -93,12 +93,10 @@ int Dormand_Prince_5_4(int, int (*f)(double,double*,double*), double *y, double 
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-int Dormand_Prince_5_4(int n, int (*f)(double,double *,double *), double *y, double *yout, double x0, double h, double *err,
+int Dormand_Prince_5_4(int n, int (*f)(double,double *,double *), double *y, double x0, double h, double *yout, double *err,
                        double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, 
                        double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, double *t10, double *t11, double *t12)
 {
-
-  int status;
 
   static const double two_thirds = 2.0 / 3.0;
   static const double one_seventwoninths = 1.0 / 729.0;
@@ -107,9 +105,10 @@ int Dormand_Prince_5_4(int n, int (*f)(double,double *,double *), double *y, dou
   static const double one_fiveninefourzero = 1.0 / 5940.0;
   
   double h5 = 0.2 * h;
+
+  printf("c: y = %p yout = %p err = %p\n", y, yout, err);
   
   printf("c: y[0] = %g\n", y[0]);
-
   assert ((*f)(x0, y, k1) == 0);
   printf("c: k1[0] = %g\n", k1[0]);
   
@@ -117,7 +116,10 @@ int Dormand_Prince_5_4(int n, int (*f)(double,double *,double *), double *y, dou
   printf("c: t1[0] = %g\n", t1[0]);
   vector_sum(n, y, t1, t2);
   printf("c: t2[0] = %g\n", t2[0]);
+  printf("c: k2 = %p\n", k2);
+  printf("c: k2[0] = %g\n", k2[0]);
   assert ((*f)(x0+h5, t2, k2) == 0);
+  printf("c: k2 = %p\n", k2);
   printf("c: k2[0] = %g\n", k2[0]);
   
   vector_scale(n, 0.075, k1, t1); vector_scale(n, 0.225, k2, t2); 
@@ -126,13 +128,23 @@ int Dormand_Prince_5_4(int n, int (*f)(double,double *,double *), double *y, dou
   printf("c: k3[0] = %g\n", k3[0]);
 
   vector_scale(n, 0.3, k1, t1); vector_scale(n, -0.9, k2, t2); vector_scale(n, 1.2, k3, t3); 
+  printf("c: t1[0] = %g\n", t1[0]);
+  printf("c: t2[0] = %g\n", t2[0]);
+  printf("c: t3[0] = %g\n", t3[0]);
   vector_sum(n, t1, t2, t4); vector_sum(n, t3, t4, t5); vector_scale(n, h, t5, t6); vector_sum(n, y, t6, t7); 
+  printf("c: t4[0] = %g\n", t4[0]);
+  printf("c: t5[0] = %g\n", t5[0]);
+  printf("c: t6[0] = %g\n", t6[0]);
+  printf("c: t7[0] = %g\n", t7[0]);
   assert ((*f)(x0+0.6*h, t7, k4) == 0);
+  printf("c: k4 = %p\n", k4);
   printf("c: k4[0] = %g\n", k4[0]);
   
   vector_scale(n, 226.0, k1, t1); vector_scale(n, -675.0, k2, t2); vector_scale(n, 880.0, k3, t3); vector_scale(n, 55.0, k4, t4); 
   vector_sum(n, t1, t2, t5); vector_sum(n, t3, t4, t6); vector_sum(n, t5, t6, t7); vector_scale(n, one_seventwoninths * h, t7, t8);  
+  printf("c: t8[0] = %g\n", t8[0]);
   vector_sum(n, y, t8, t9); 
+  printf("c: t9[0] = %g\n", t9[0]);
   assert ((*f)(x0+two_thirds * h, t9, k5) == 0);
   printf("c: k5[0] = %g\n", k5[0]);
   
@@ -157,6 +169,8 @@ int Dormand_Prince_5_4(int n, int (*f)(double,double *,double *), double *y, dou
   vector_scale(n, 99.0, k6, t6); 
   vector_sum(n, t1, t3, t7); vector_sum(n, t4, t5, t8); vector_sum(n, t6, t7, t9); vector_sum(n, t8, t9, t10); 
   vector_scale(n, one_twofivetwozero, t10, err);  
+
+  printf("c: err[0] = %g\n", err[0]);
   
   return 0;
 }

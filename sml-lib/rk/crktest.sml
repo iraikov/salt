@@ -27,8 +27,12 @@ fun putStrLn str =
      TextIO.output (TextIO.stdOut, "\n"))
 
 val con = ~0.4
-fun deriv (t,y,yout) = (putStrLn ("deriv: t = " ^ (Real.toString t) ^ " y[0] = " ^ (Real.toString (Array.sub(y,0))));
-                        Array.update(yout,0,con*Array.sub(y,0)); 0)
+fun deriv (t,y,yout) = (
+                        Array.update(yout,0,con*Array.sub(y,0)); 
+                        putStrLn ("deriv: t = " ^ (Real.toString t) ^ 
+                                  " y[0] = " ^ (Real.toString (Array.sub(y,0))) ^
+                                  " yout[0] = " ^ (Real.toString (Array.sub(yout,0))));
+                        0)
 val t0 = 0.0
 val y0 = Array.array (1, 1.75)
 fun exact t = 1.75*Real.Math.exp(con*(t - t0))
@@ -40,8 +44,11 @@ fun showst (t, y) = String.concat [showReal (Array.sub(y,0)), "\t",
 
 fun gen_soln (integrator,h,t,st) =
   let 
-      val (stn,en) = integrator h (t,st)
-      val tn       = Real.+(t,h)
+      val _ = putStrLn ("gen_soln: t = " ^ (Real.toString t))
+      val stn = Array.array (1, 0.0)
+      val err = Array.array (1, 0.0)
+      val _   = integrator h (t,st,stn,err)
+      val tn  = Real.+(t,h)
   in 
       if t >= 5.0
       then putStrLn (showst (tn,stn))
@@ -58,7 +65,7 @@ fun do_case integrator n =
       gen_soln (integrator,h,t0,y0)
   end
 
-val e  = _export "deriv": (real * real array * real array -> int) -> unit;
+val e  = _export "deriv" public reentrant: (real * real array * real array -> int) -> unit;
 val cb = _address "deriv" public: MLton.Pointer.t;
 
 
@@ -66,7 +73,7 @@ fun run (integrator) =
   (putStrLn "# step yf err";
    e deriv;
    List.app (do_case integrator)
-	    (List.tabulate (15, fn x => x - 2));
+	    (List.tabulate (4, fn x => x - 2));
    putStrLn "# All done!\n")
 
 
