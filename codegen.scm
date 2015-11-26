@@ -1059,7 +1059,7 @@ EOF
        ("fun alloc n = (fn () => Array.array (n, 0.0))" ,nll)
        ("fun bool_alloc n = (fn () => Array.array (n, false))" ,nll)
        ("fun summer n = fn (a,b,y) => (vmap2 (fn (x,y) => x+y) (a,b,y))" ,nll)
-       ("fun scaler n = fn (a,lst) => vmap (fn (x) => a*x) lst (alloc n ())")
+       ("fun scaler n = fn (a,lst,y) => vmap (fn (x) => a*x) lst y" ,nll)
        ("fun make_bool_initial (n, f) = let val a = bool_alloc n () in fn () => f(a) end" ,nll)
        ("fun make_real_initial (n, f) = let val a = alloc n () in fn () => f(a) end" ,nll)
        ("fun make_ext (n, f) = let val a = alloc n () in fn () => f(a) end" ,nll)

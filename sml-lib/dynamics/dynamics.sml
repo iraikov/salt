@@ -90,12 +90,8 @@ val update = Unsafe.Array.update
 fun vmap f v u = 
     let
         val n = Array.length v
-        fun recur i = 
-            (if Int.<(i, n)
-             then (update (u, i, f (getindex (v, i))); recur (Int.+(i,1)))
-             else ())
     in
-        (recur 0; u)
+        (Array.appi (fn (i,x) => update (u, i, f x)) v; u)
     end
 
 fun vmap2 f (v1,v2,a) = 
@@ -348,12 +344,8 @@ val update = Unsafe.Array.update
 fun vmap f v u = 
     let
         val n = Array.length v
-        fun recur i = 
-            (if Int.<(i, n)
-             then (update (u, i, f (getindex (v, i))); recur (Int.+(i,1)))
-             else ())
     in
-        (recur 0; u)
+        (Array.appi (fn (i,x) => update (u, i, f x)) v; u)
     end
 
 fun vmap2 f (v1,v2,a) = 
@@ -715,12 +707,8 @@ val update = Unsafe.Array.update
 fun vmap f v u = 
     let
         val n = Array.length v
-        fun recur i = 
-            (if Int.<(i, n)
-             then (update (u, i, f (getindex (v, i))); recur (Int.+(i,1)))
-             else ())
     in
-        (recur 0; u)
+        (Array.appi (fn (i,x) => update (u, i, f x)) v; u)
     end
 
 fun vmap2 f (v1,v2,a) = 
