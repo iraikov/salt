@@ -1063,12 +1063,10 @@ EOF
        ("fun make_bool_initial (n, f) = let val a = bool_alloc n () in fn () => f(a) end" ,nll)
        ("fun make_real_initial (n, f) = let val a = alloc n () in fn () => f(a) end" ,nll)
        ("fun make_ext (n, f) = let val a = alloc n () in fn () => f(a) end" ,nll)
-       ("fun make_condition (n, f) = let val a = LastNBuffer.fromList (List.tabulate (12, fn (i) => alloc n ())) in " 
-        " fn (x,y,e,ext,extev) => (LastNBuffer.rotate_left a; f(x,y,e,ext,extev,LastNBuffer.sub (a, 0))) end" ,nll)
-       ("fun make_regime_condition (n, f) = let val a = LastNBuffer.fromList (List.tabulate (12, fn (i) => alloc n ())) in " 
-        " fn (d) => fn (x,y,e,ext,extev) => (LastNBuffer.rotate_left a; f d (x,y,e,ext,extev,LastNBuffer.sub (a, 0))) end" ,nll)
-       ("fun make_dresponse (n, f) = let val a = alloc n () in fn (x,y,e,d) => f(x,y,e,d,a) end" ,nll)
-       ("fun make_transition (n, f) = let val a = bool_alloc n () in fn (e,r) => f(e,r,a) end" ,nll)
+       ("fun make_condition (n, f) = fn (x,y,e,ext,extev) => f (x,y,e,ext,extev,alloc n ())" ,nll)
+       ("fun make_regime_condition (n, f) = (fn (d) => fn (x,y,e,ext,extev) => f d (x,y,e,ext,extev,alloc n ()))" ,nll)
+       ("fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,alloc n ())" ,nll)
+       ("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n ())" ,nll)
 
        . ,(case solver  
             ;; adaptive solvers with interpolation
