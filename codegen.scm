@@ -857,6 +857,38 @@
 	 (E:Noop    () `(%begin))
 	 ))
 
+(define (mathop->cfun op)
+  (case op
+    ((signal.add) '+) ((signal.sub) '-) ((signal.mul) '*) ((signal.div) '/) 
+    ((signal.pow) '^) 
+    ((signal.gte) '>=) ((signal.gt) '<=) ((signal.lt) '<) ((signal.lte) '<=)
+    ((signal.neg) '-)
+    ((signal.abs)    'fabs)
+    ((signal.atan)   'atan)
+    ((signal.asin)   'asin)
+    ((signal.acos)   'acos)
+    ((signal.sin)    'sin)
+    ((signal.cos)    'cos)
+    ((signal.exp)    'exp)
+    ((signal.ln)     'ln)
+    ((signal.sqrt)   'sqrt)
+    ((signal.tan)    'tan)
+    ((signal.cosh)   'cosh)
+    ((signal.sinh)   'sinh)
+    ((signal.tanh)   'tanh)
+    ((signal.hypot)  'hypot)
+    ((signal.gamma)  'gamma)
+    ((signal.lgamma) 'lgamma)
+    ((signal.log10)  'log10)
+    ((signal.log2)   'log2)
+    ((signal.log1p)  'log1p)
+    ((signal.ldexp)  'ldexp)
+    ((signal.cube)   'cube)
+    ((signal.round)   'round)
+    ((signal.ceiling) 'ceiling)
+    ((signal.floor)   'floor)
+    (else op)))
+
 
 (define (value->sexpr v)
   (let ((result
@@ -868,17 +900,11 @@
                 (V:Fn      (args body) 
                            `(%fun #f ,(gensym 'f) ,(args->sexpr args) ,(stmt->sexpr body)))
                 (V:Op     (name args)
-                          (let* ((op (case name
-                                       ((signal.add) '+) ((signal.sub) '-) ((signal.mul) '*) ((signal.div) '/) 
-                                       ((signal.pow) '^) 
-                                       ((signal.gte) '>=) ((signal.gt) '<=) ((signal.lt) '<) ((signal.lte) '<=)
-                                       ((signal.neg) '-)
-                                       (else name))))
+                          (let* ((op (mathop->cfun name)))
                             (cond ((null? args) 
                                    (case name 
                                      ((NONE)  `false)
                                      (else    '())))
-                                  
                                   (else
                                    `(,op . ,(map value->sexpr args))))
                             ))

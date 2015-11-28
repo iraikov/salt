@@ -1,11 +1,17 @@
 
 $(SML_LIB)/basis/basis.mlb
+$(SML_LIB)/smlnj-lib/Util/smlnj-lib.mlb
 $(SML_LIB)/basis/unsafe.mlb
 $(RK_LIB)/rk.mlb
 $(DYNAMICS_LIB)/dynamics.mlb
 
 structure Dynamics = FunctionalHybridDynamics1
 
+local
+        options.sml
+in
+	structure Options
+end
 local
 	ml.sml
 in
