@@ -61,9 +61,6 @@
 (copy-file-to-salt-dir "sml-lib/dynamics/dynamics.sml")
 (copy-file-to-salt-dir "sml-lib/dynamics/dynamics.mlb")
 
-(copy-file-to-salt-dir "sml-lib/lastn-buffer/lastn-buffer.sml")
-(copy-file-to-salt-dir "sml-lib/lastn-buffer/lastn-buffer.mlb")
-
 (copy-file-to-salt-dir "sml-lib/queue/fun-queue.sig")
 (copy-file-to-salt-dir "sml-lib/queue/fun-queue.sml")
 (copy-file-to-salt-dir "sml-lib/queue/fun-queue.mlb")

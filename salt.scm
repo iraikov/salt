@@ -37,7 +37,7 @@
 
 	(
 
-         parse elaborate simcreate codegen-ODE codegen-ODE/ML
+         parse elaborate simcreate codegen-ODE codegen-ODE/ML codegen-ODE/C 
          math-constant-env math-binop-env math-unop-env 
          model-quantities model-units
          verbose
@@ -73,7 +73,7 @@
 
 	(import scheme chicken)
         
-	(require-extension matchable datatype lalr-driver mathh unitconv with-units)
+	(require-extension matchable datatype lalr-driver mathh unitconv with-units fmt fmt-c)
 	(require-library data-structures extras srfi-1 srfi-4 srfi-13)
 	(import (only srfi-1 zip fold fold-right filter filter-map list-tabulate every delete-duplicates)
                 (only srfi-4 list->s32vector)
@@ -91,7 +91,6 @@
 (include "codegen.scm")
 
 
-(define nl "\n")
 (define (s+ . rst) (string-concatenate (map ->string rst)))
 
 (define (salt:warning x . rest)
