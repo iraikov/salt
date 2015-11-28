@@ -575,11 +575,8 @@
                           (list 
                            (V:Fn '(p) 
                                  (E:Ret (if (null? regblocks)
-                                            (V:Op 'SCondition (list (V:Op 'make_condition
-                                                                          (list (V:C (length condblock)) fnval))))
-                                            (V:Op 'RegimeCondition (list (V:Op 'make_regime_condition 
-                                                                               (list (V:C (length condblock)) 
-                                                                                     (V:Fn '(d) (E:Ret fnval))))))))
+                                            (V:Op 'SCondition (list fnval))
+                                            (V:Op 'RegimeCondition (list (V:Fn '(d) (E:Ret fnval))))))
                                  ))
                           ))
                   ))
@@ -1089,8 +1086,6 @@ EOF
        ("fun make_bool_initial (n, f) = let val a = bool_alloc n () in fn () => f(a) end" ,nll)
        ("fun make_real_initial (n, f) = let val a = alloc n () in fn () => f(a) end" ,nll)
        ("fun make_ext (n, f) = let val a = alloc n () in fn () => f(a) end" ,nll)
-       ("fun make_condition (n, f) = fn (x,y,e,ext,extev) => f (x,y,e,ext,extev,alloc n ())" ,nll)
-       ("fun make_regime_condition (n, f) = (fn (d) => fn (x,y,e,ext,extev) => f d (x,y,e,ext,extev,alloc n ()))" ,nll)
        ("fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,alloc n ())" ,nll)
        ("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n ())" ,nll)
 
