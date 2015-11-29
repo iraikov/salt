@@ -5,7 +5,7 @@ $(SML_LIB)/basis/unsafe.mlb
 $(RK_LIB)/rk.mlb
 $(DYNAMICS_LIB)/dynamics.mlb
 
-structure Dynamics = FunctionalHybridDynamics1
+structure Dynamics = FunctionalHybridDynamics2
 
 local
         options.sml
@@ -17,5 +17,5 @@ local
 in
 	structure Model
 end
-model_run1.sml
+model_run2.sml
 

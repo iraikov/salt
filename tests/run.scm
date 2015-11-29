@@ -34,7 +34,7 @@
 
   (define sim (simcreate elab))
   (pp sim)
-  (pp (codegen-ODE sim solver))
+  (pp (codegen-ODE sim))
   (let* ((sml-path (make-pathname dir (string-append (->string name) ".sml")))
          (mlb-path (make-pathname dir (string-append (->string name) "_run.mlb")))
          (port (open-output-file sml-path)))
@@ -275,13 +275,14 @@
 
 (test-model 'iaf iaf solver: 'rk4b compile: #t)
 
-(test-model 'izhfs izhfs solver: 'rkdp compile: #t)
+(test-model 'izhfs izhfs solver: 'rkoz compile: #t)
 
 ;(test-model 'iafrefr iafrefr solver: 'rk4b compile: #t)
 
-(test-model 'iafrefr iafrefr solver: 'rkoz compile: #t)
+(test-model 'iafrefr iafrefr solver: 'rkdp compile: #t)
 
-(test-model 'ml ml solver: 'rk3 compile: #t)
+;(test-model 'ml ml solver: 'rk3 compile: #t)
+(test-model 'ml ml solver: 'rkdp compile: #t)
 
 (test-model 'iafsyn iafsyn)
 

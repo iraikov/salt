@@ -1079,23 +1079,23 @@ EOF
 
      `(
        ("fun statelen a = Array.length (a)" ,nll)
-       ("fun alloc n = (fn () => Array.array (n, 0.0))" ,nll)
-       ("fun bool_alloc n = (fn () => Array.array (n, false))" ,nll)
-       ("fun summer n = fn (a,b,y) => (vmap2 (fn (x,y) => x+y) (a,b,y))" ,nll)
-       ("fun scaler n = fn (a,lst,y) => vmap (fn (x) => a*x) lst y" ,nll)
-       ("fun make_bool_initial (n, f) = let val a = bool_alloc n () in fn () => f(a) end" ,nll)
-       ("fun make_real_initial (n, f) = let val a = alloc n () in fn () => f(a) end" ,nll)
-       ("fun make_ext (n, f) = let val a = alloc n () in fn () => f(a) end" ,nll)
-       ("fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,alloc n ())" ,nll)
-       ("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n ())" ,nll)
+       ("fun alloc n = Array.array (n, 0.0)" ,nll)
+       ("fun bool_alloc n = Array.array (n, false)" ,nll)
+       ("fun summer (a,b,y) = (vmap2 (fn (x,y) => x+y) (a,b,y))" ,nll)
+       ("fun scaler (a,lst,y) = vmap (fn (x) => a*x) lst y" ,nll)
+       ("fun make_bool_initial (n, f) = let val a = bool_alloc n in fn () => f(a) end" ,nll)
+       ("fun make_real_initial (n, f) = let val a = alloc n in fn () => f(a) end" ,nll)
+       ("fun make_ext (n, f) = let val a = alloc n in fn () => f(a) end" ,nll)
+       ("fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,alloc n)" ,nll)
+       ("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n)" ,nll)
 
        . ,(case solver  
             ;; adaptive solvers with interpolation
             ((cerkoz cerkdp)
              `(
                ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
-               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
-               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
+               ("fun make_stepper (n, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
                (,nll)
                )
              )
@@ -1103,16 +1103,16 @@ EOF
             ((rkhe rkbs rkf45 rkck rkoz rkdp rkf45 rkf78 rkv65)
              `(
                ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nll)
-               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
-               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
+               ("fun make_stepper (n, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
                (,nll)
                )
              )
             (else
              `(
                ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nll)
-               ("fun make_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
-               ("fun make_event_stepper (n, deriv) = " ,solver " (alloc n,scaler n,summer n,deriv)" ,nll)
+               ("fun make_stepper (n, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
                (,nll)
                ))
             ))
