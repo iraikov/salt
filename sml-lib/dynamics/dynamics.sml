@@ -306,11 +306,11 @@ datatype model_state =
          | ContState  of real * cont_state * external_state * externalev_state * real
 
 datatype model_stepper = 
-         RegimeStepper of dsc_state * regime_state -> (external_state * externalev_state) -> real -> real * cont_state * cont_state -> 
+         RegimeStepper of dsc_state * regime_state -> (external_state * externalev_state) -> real -> real * cont_state * cont_state * error_state -> 
                           (cont_state * error_state)
-         | EventStepper of (external_state * externalev_state) -> real -> (real * cont_state * cont_state) -> 
+         | EventStepper of (external_state * externalev_state) -> real -> (real * cont_state * cont_state * error_state) -> 
                            (cont_state * error_state)
-         | ContStepper of (external_state * externalev_state) -> real -> (real * cont_state * cont_state) -> 
+         | ContStepper of (external_state * externalev_state) -> real -> (real * cont_state * cont_state * error_state) -> 
                           (cont_state * error_state)
 
 datatype model_condition = 
@@ -453,7 +453,8 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc)  =
             then 
                 (let
                     val yout = falloc()
-                    val (ys',e) = (stepper (d,r)) (ext,extev) h (x,ys,yout)
+                    val err = falloc()
+                    val (ys',e) = (stepper (d,r)) (ext,extev) h (x,ys,yout,err)
                 in
                     case predictor tol (h,e) of
                         Right h' => 
@@ -491,7 +492,8 @@ fun adaptive_event_solver (stepper,fcond,falloc)  =
             then 
                 (let
                     val yout = falloc()
-                    val (ys',e) = stepper (ext,extev) h (x,ys,yout)
+                    val err = falloc()
+                    val (ys',e) = stepper (ext,extev) h (x,ys,yout,err)
                 in
                     case predictor tol (h,e) of
                         Right h' => 
@@ -518,7 +520,8 @@ fun adaptive_solver (stepper,falloc)  =
         fun f (x,ys,ext,extev,h) =
             (let
                 val yout = falloc()
-                val (ys',e) = stepper (ext,extev) h (x,ys,yout)
+                val err = falloc()
+                val (ys',e) = stepper (ext,extev) h (x,ys,yout,err)
             in
                 case predictor tol (h,e) of
                     Right h' => 

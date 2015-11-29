@@ -298,7 +298,7 @@ type 'a stepper2 =  ((unit -> 'a) *
                      (real * 'a * 'a -> 'a) * 
 		     ('a * 'a * 'a -> 'a)   *
 		     (real * 'a * 'a -> 'a)) ->
-		    (real -> (real * 'a * 'a) -> ('a * 'a))
+		    (real -> (real * 'a * 'a * 'a) -> ('a * 'a))
 
 fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) 
 	  (alloc_fn: unit -> 'a,
@@ -306,13 +306,13 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL)
 	   sum_fn: 'a * 'a * 'a -> 'a,
 	   der_fn: real * 'a * 'a -> 'a)
 	   (h: real)
-	   (old as (tn,yn: 'a,yout: 'a)) =
+	   (old as (tn,yn: 'a,yout: 'a,err:'a)) =
   let
       val ts1 = List.tabulate (List.length cl, fn (i) => alloc_fn())
       val ts2 = List.tabulate (List.length cl, fn (i) => alloc_fn())
       val ts3  = (alloc_fn(),alloc_fn(),alloc_fn())
       val tys  = (alloc_fn(),alloc_fn(),alloc_fn())
-      val tes  = (alloc_fn(),alloc_fn(),alloc_fn())
+      val tes  = (err,alloc_fn(),alloc_fn())
       val ksum = k_sum (sc_fn,sum_fn,h)
       val ks   = gen_ks (ksum, sum_fn, der_fn, h, (tn,yn), FunQueue.new(), cl, al, ts1, ts2, ts3)
   in
@@ -377,7 +377,7 @@ type 'a stepper3 =  ((unit -> 'a) *
                      (real * 'a * 'a -> 'a) * 
 		     ('a * 'a * 'a -> 'a)   *
 		     (real * 'a * 'a -> 'a)) ->
-		    (real -> (real * 'a * 'a) -> ('a * 'a * (real -> 'a)))
+		    (real -> (real * 'a * 'a * 'a) -> ('a * 'a * (real -> 'a)))
 
 fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) 
 	  (alloc_fn: unit -> 'a,
@@ -385,13 +385,13 @@ fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list)
 	   sum_fn: 'a * 'a * 'a -> 'a,
 	   der_fn: real * 'a * 'a -> 'a)
 	   (h: real)
-	   (old as (tn,yn: 'a,yout: 'a)) =
+	   (old as (tn,yn: 'a,yout: 'a,err: 'a)) =
   let
       val ts1  = List.tabulate (List.length cl, fn (i) => alloc_fn())
       val ts2  = List.tabulate (List.length cl, fn (i) => alloc_fn())
       val ts3  = (alloc_fn(),alloc_fn(),alloc_fn())
       val tys  = (alloc_fn(),alloc_fn(),alloc_fn())
-      val tes  = (alloc_fn(),alloc_fn(),alloc_fn())
+      val tes  = (err,alloc_fn(),alloc_fn())
       val ti        = alloc_fn()
       val interp'   = interp wl (alloc_fn,sc_fn,sum_fn)
       val ksum      = k_sum (sc_fn,sum_fn,h)
