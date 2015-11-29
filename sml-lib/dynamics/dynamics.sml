@@ -144,6 +144,22 @@ fun fixthr (v) =
 fun posdetect (x, e, e') =
     case vfind2 thr (e, e') of (SOME _) => true | NONE => false
 
+fun condApply (SOME (RegimeCondition fcond)) =
+    (fn(RegimeState (x,y,e,d,r,ext,extev,root), eout) => 
+        let val e' = fixthr (fcond d (x,y,e,ext,extev,eout))
+        in
+            RegimeState (x,y,e',d,r,ext,extev,root)
+        end
+    | _ => raise Domain)
+  | condApply (SOME (SCondition fcond)) =
+    (fn(EventState(x,y,e,ext,extev,root), eout) =>     
+        let val e' = fixthr (fcond (x,y,e,ext,extev,eout))
+        in
+            EventState(x,y,e',ext,extev,root)
+        end
+    | _ => raise Domain)
+  | condApply (NONE) = raise Domain
+
 fun evresponse_regime (fcond,fpos,fneg,fdiscrete,fregime,falloc,n,nev) =
     case fpos of 
         SOME (RegimeResponse fpos) =>
@@ -386,6 +402,23 @@ fun fixthr (v) =
 
 fun posdetect (x, e, e') =
     case vfind2 thr (e, e') of (SOME _) => true | NONE => false
+
+
+fun condApply (SOME (RegimeCondition fcond)) =
+    (fn(RegimeState (x,y,e,d,r,ext,extev,h,root), eout) => 
+        let val e' = fixthr (fcond d (x,y,e,ext,extev,eout))
+        in
+            RegimeState (x,y,e',d,r,ext,extev,h,root)
+        end
+    | _ => raise Domain)
+  | condApply (SOME (SCondition fcond)) =
+    (fn(EventState(x,y,e,ext,extev,h,root), eout) =>     
+        let val e' = fixthr (fcond (x,y,e,ext,extev,eout))
+        in
+            EventState(x,y,e',ext,extev,h,root)
+        end
+    | _ => raise Domain)
+  | condApply (NONE) = raise Domain
     
 
 fun evresponse_regime (fcond,fpos,fneg,fdiscrete,fregime,falloc,n,nev) =
@@ -720,6 +753,22 @@ exception ConvergenceError
 
 fun fixthr (v) =
     (Array.modify (fn(x) => if Real.>(Real.abs(x), (!tol)) then x else 0.0) v; v)
+
+fun condApply (SOME (RegimeCondition fcond)) =
+    (fn(RegimeState (x,y,e,d,r,ext,extev,h,root), eout) => 
+        let val e' = fixthr (fcond d (x,y,e,ext,extev,eout))
+        in
+            RegimeState (x,y,e',d,r,ext,extev,h,root)
+        end
+    | _ => raise Domain)
+  | condApply (SOME (SCondition fcond)) =
+    (fn(EventState(x,y,e,ext,extev,h,root), eout) =>     
+        let val e' = fixthr (fcond (x,y,e,ext,extev,eout))
+        in
+            EventState(x,y,e',ext,extev,h,root)
+        end
+    | _ => raise Domain)
+  | condApply (NONE) = raise Domain
 
 fun predictor tol (h,ys) =
   let open Real
