@@ -105,8 +105,7 @@ val extevinitial  = Model.initextevfun (p)
 val f = D.integral(Model.odefun(p),optApply Model.condfun p,
                    optApply Model.posfun p,optApply Model.negfun p,
                    optApply Model.dposfun p,Model.regfun,Model.alloc,
-                   Model.statelen initial,
-                   case evinitial of SOME ev => SOME (Model.statelen ev) | _ => NONE)
+                   Model.n,case evinitial of SOME ev => SOME (Model.nev) | _ => NONE)
 
 val optStatus = ref NONE
 val (opts, _) = (Options.getopt optStatus) (CommandLine.arguments())

@@ -44,7 +44,6 @@
         (run (mlton -mlb-path-var ,(sprintf "'SALT_LIB ~A/sml-lib'" SALT-DIR)
                     -mlb-path-var ,(sprintf "'RK_LIB $(SALT_LIB)/rk'")
                     -mlb-path-var ,(sprintf "'DYNAMICS_LIB $(SALT_LIB)/dynamics'")
-                    -mlb-path-var ,(sprintf "'LASTN_LIB $(SALT_LIB)/lastn-buffer'")
                     ,mlb-path))))
 
 )
@@ -278,7 +277,6 @@
 (test-model 'izhfs izhfs solver: 'rkoz compile: #t)
 
 ;(test-model 'iafrefr iafrefr solver: 'rk4b compile: #t)
-
 (test-model 'iafrefr iafrefr solver: 'rkdp compile: #t)
 
 ;(test-model 'ml ml solver: 'rk3 compile: #t)

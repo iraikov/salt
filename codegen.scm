@@ -306,6 +306,8 @@
                                       ) 
                         sorted-eqs)))
 
+        (cond-n (length condblock))
+
         (dposblocks (let ((bucket-eqs 
                            (bucket 
                             (match-lambda*
@@ -709,6 +711,8 @@
            )
 
       `(
+        (ode-n . ,ode-n)
+        (cond-n . ,cond-n)
         (paramfun . ,paramfun)
         (initfun  . ,initfun)
         (dinitfun . ,dinitfun)
@@ -1014,15 +1018,24 @@
     (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 cerkoz cerkdp))))
         (error 'codegen-ODE/ML "unknown solver" solver))
 
-    (let ((fundefs (codegen-ODE sim)))
+    (let ((sysdefs (codegen-ODE sim)))
       
       (if mod (print-fragments (prelude/ML solver: solver libs: libs) out))
+
+      (print-fragments
+       (map (match-lambda
+             ((name . def) (list (binding->ML (B:Val name def)) nll)))
+            `((n . ,(V:C (alist-ref 'ode-n sysdefs)))
+              (nev . ,(V:C (alist-ref 'cond-n sysdefs)))))
+       out)
       
       (print-fragments
        (map (match-lambda
              (('rhsfun . def) (list))
+             (('ode-n . def) (list))
+             (('cond-n . def) (list))
              ((name . def) (list (binding->ML (B:Val name def)) nll)))
-            fundefs)
+            sysdefs)
        out)
       
       (if mod (print-fragments (list nll "end" nll) out))
@@ -1122,7 +1135,7 @@ EOF
 
 (define (codegen-ODE/C sim #!key (out (current-output-port)) (cname #f) (libs '()))
 
-    (let ((fundefs (codegen-ODE sim)))
+    (let ((sysdefs (codegen-ODE sim)))
       
       ;;(if mod (print-fragments (prelude/C solver: solver libs: libs) out))
       
@@ -1132,7 +1145,7 @@ EOF
          (let ((sexpr (binding->sexpr (B:Val (or cname name) def))))
            (fmt out (c-expr sexpr))))
         (else (begin)))
-       fundefs)
+       sysdefs)
       
       ))
 
