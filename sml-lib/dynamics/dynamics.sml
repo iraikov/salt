@@ -87,6 +87,8 @@ datatype model_response =
 val getindex = Unsafe.Array.sub
 val update = Unsafe.Array.update
 
+val vfind = Array.find
+
 fun vmap f v u = 
     let
         val n = Array.length v
@@ -141,8 +143,11 @@ fun thr (v1,v2) =
 fun fixthr (v) =
     (Array.modify (fn(x) => if Real.>(Real.abs(x), 1e~6) then x else 0.0) v; v)
 
-fun posdetect (x, e, e') =
+fun posdetect (e, e') =
     case vfind2 thr (e, e') of (SOME _) => true | NONE => false
+
+fun evdetect (e) =
+    case vfind (fn(v) => Int.>=(Real.sign (v), 0)) e of SOME _ => true | NONE => false
 
 fun condApply (SOME (RegimeCondition fcond)) =
     (fn(RegimeState (x,y,e,d,r,ext,extev,root), eout) => 
@@ -206,13 +211,15 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
              true => 
              (let
                  val (y',d',r') = evresponse_regime (fcond,fpos,fneg,fdiscrete,fregime,falloc,n,nev) (x,y,e,d,r,ext,extev)
+                 val e' = fixthr (fcond d' (x,y',e,ext,extev,falloc nev))
+                 val hasevent = evdetect (e')
              in
-                 RegimeState(x,y',e,d',r',ext,extev,false)
+                 RegimeState(x,y',e',d',r',ext,extev,hasevent)
              end)
            | false =>
              (let 
                  val e'  = fixthr (fcond d (x,y,e,ext,extev,falloc nev))
-                 val hasevent = posdetect (x, e, e')
+                 val hasevent = posdetect (e, e')
              in
                  if hasevent 
                  then RegimeState(x,y,e',d,r,ext,extev,true)
@@ -220,7 +227,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                           val x'  = x + h
                           val y'  = stepper (d,r) (ext,extev) h (x,y,falloc n)
                           val e'  = fixthr (fcond d (x',y',e,ext,extev,falloc nev))
-                          val root' = posdetect (x', e, e')
+                          val root' = posdetect (e, e')
                       in
                           RegimeState(x',y',e',d,r,ext,extev,root')
                       end)
@@ -233,13 +240,15 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
            true => 
            (let
                val y' = evresponse (fcond,fpos,fneg,falloc,n,nev) (x,y,e,ext,extev) 
+               val e'  = fixthr (fcond (x,y',e,ext,extev,falloc nev))
+               val hasevent = evdetect (e')
            in
-               EventState(x,y',e,ext,extev,false)
+               EventState(x,y',e',ext,extev,hasevent)
            end)
            | false =>
              (let 
                  val e'  = fixthr (fcond (x,y,e,ext,extev,falloc nev))
-                 val hasevent = posdetect (x, e, e')
+                 val hasevent = posdetect (e, e')
              in
                  if hasevent
                  then EventState(x,y,e',ext,extev,true)
@@ -248,7 +257,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                          val x'    = x + h
                          val y'    = stepper (ext,extev) h (x,y,falloc n)
                          val e'    = fixthr (fcond (x',y',e,ext,extev,falloc nev))
-                         val root' = posdetect (x', e, e')
+                         val root' = posdetect (e, e')
                      in
                          EventState(x',y',e',ext,extev,root')
                      end)
@@ -335,6 +344,8 @@ datatype model_response =
 val getindex = Unsafe.Array.sub
 val update = Unsafe.Array.update
 
+val vfind = Array.find
+
 fun vmap f v u = 
     let
         val n = Array.length v
@@ -400,8 +411,11 @@ fun fixthr (v) =
     (Array.modify (fn(x) => if Real.>(Real.abs(x), (!tol)) then x else 0.0) v; v)
 
 
-fun posdetect (x, e, e') =
+fun posdetect (e, e') =
     case vfind2 thr (e, e') of (SOME _) => true | NONE => false
+
+fun evdetect (e) =
+    case vfind (fn(v) => Int.>= (Real.sign (v), 0)) e of SOME _ => true | NONE => false
 
 
 fun condApply (SOME (RegimeCondition fcond)) =
@@ -488,7 +502,7 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc,n,nev)  =
                         (let
                             val x'  = x + h
                             val ev' = fixthr(fcond d (x',ys',ev,ext,extev,falloc nev))
-                            val root = posdetect (x', ev, ev')
+                            val root = posdetect (ev, ev')
                         in
                             if root 
                             then 
@@ -527,7 +541,7 @@ fun adaptive_event_solver (stepper,fcond,falloc,n,nev)  =
                         (let
                             val x'  = x + h
                             val ev' = fixthr (fcond (x',ys',ev,ext,extev,falloc nev))
-                            val root = posdetect (x', ev, ev')
+                            val root = posdetect (ev, ev')
                         in
                             if root 
                             then Root (x',ys',ev',ext,extev,h')
@@ -572,13 +586,15 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                 true =>
                 (let
                     val (y',d',r')  = evresponse_regime (fcond,fpos,fneg,fdiscrete,fregime,falloc,n,nev) (x,y,e,d,r,ext,extev)
+                    val e' = fixthr(fcond d (x,y,e,ext,extev,falloc nev))
+                    val hasevent = evdetect (e')
                 in
-                    RegimeState (x,y',e,d',r',ext,extev,h,false)
+                    RegimeState (x,y',e',d',r',ext,extev,h,hasevent)
                 end)
              | false =>  
                let
                    val e' = fixthr(fcond d (x,y,e,ext,extev,falloc nev))
-                   val hasevent = posdetect (x, e, e')
+                   val hasevent = posdetect (e, e')
                in
                    if hasevent
                    then RegimeState (x,y,e',d,r,ext,extev,h,true)
@@ -601,13 +617,15 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
            (case root of
                 true => (let
                             val y' = evresponse (fcond,fpos,fneg,falloc,n,nev) (x,y,e,ext,extev)
+                            val e' = fixthr(fcond (x,y',e,ext,extev,falloc nev))
+                            val hasevent = evdetect (e')
                         in
-                            EventState (x,y',e,ext,extev,h,false)
+                            EventState (x,y',e',ext,extev,h,hasevent)
                         end)
                | false => 
                  let
                      val e' = fixthr(fcond (x,y,e,ext,extev,falloc nev))
-                     val hasevent = posdetect (x, e, e')
+                     val hasevent = posdetect (e, e')
                  in
                      if hasevent
                      then EventState (x,y,e',ext,extev,h,true)
