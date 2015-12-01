@@ -51,9 +51,9 @@ fun printState (t,input) =
 
 fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extevinitial,tmax) =
     let
-	fun run (rs as D.RegimeState (t, input, ev, d, regime, _, _, _)) =
+	fun run (rs as D.RegimeState (t, input, xev, ev, d, regime, _, _, _)) =
             (case f rs of
-	         rs' as D.RegimeState (t',nstate,ev',d',regime',_,_,_) =>
+	         rs' as D.RegimeState (t',nstate,tev',ev',d',regime',_,_,_) =>
                  (printState (t',nstate); 
 	          if (t'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -62,14 +62,14 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.RegimeState (0.0, initial, evinitial, dinitial, rinitial, extinitial, extevinitial, false))
+	run (D.RegimeState (0.0, initial, 0.0, evinitial, dinitial, rinitial, extinitial, extevinitial, false))
 
     end
 |  start (f,initial,SOME evinitial,NONE,NONE,extinitial,extevinitial,tmax) =
     let
-	fun run (es as D.EventState (t, input, ev, _, _, _)) =
+	fun run (es as D.EventState (t, input, tev, ev, _, _, _)) =
             (case f es of
-	         es' as D.EventState (t',nstate,ev',_,_,_) =>
+	         es' as D.EventState (t',nstate,tev',ev',_,_,_) =>
                  (printState (t',nstate); 
 	          if (t'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -78,7 +78,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.EventState (0.0, initial, evinitial, extinitial, extevinitial, false))
+	run (D.EventState (0.0, initial, 0.0, evinitial, extinitial, extevinitial, false))
     end
 |  start (f,initial,NONE,NONE,NONE,extinitial,extevinitial,tmax) =
     let
