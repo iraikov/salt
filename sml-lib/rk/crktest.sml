@@ -27,8 +27,9 @@ fun exact t = 1.75*Real.Math.exp(con*(t - t0))
 
 fun showReal n = Real.toString n
 
-fun showst (t, y) = String.concat [showReal (Array.sub(y,0)), "\t", 
-                                   showReal (Array.sub(y,0) - (exact t))]
+fun showst (t, y, e) = String.concat [showReal (Array.sub(y,0)), "\t", 
+                                      showReal (Array.sub(y,0) - (exact t)), "\t", 
+                                      showReal (Array.sub(e,0))]
 
 fun gen_soln (integrator,h,t,st) =
   let 
@@ -38,7 +39,7 @@ fun gen_soln (integrator,h,t,st) =
       val tn  = Real.+(t,h)
   in 
       if t >= 5.0
-      then putStrLn (showst (tn,stn))
+      then putStrLn (showst (tn,stn,err))
       else gen_soln (integrator,h,tn,stn)
   end
 

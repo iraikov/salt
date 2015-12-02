@@ -1144,7 +1144,7 @@ EOF
 )
 
 
-(define (codegen-ODE/C name sim #!key (out (current-output-port)) (cname #f) (libs '()))
+(define (codegen-ODE/C name sim #!key (out (current-output-port)) (libs '()))
 
     (let ((sysdefs (codegen-ODE sim)))
       
@@ -1152,8 +1152,8 @@ EOF
       
       (for-each
        (match-lambda
-        (((and 'rhsfun name) . def)
-         (let ((sexpr (binding->sexpr (B:Val (or cname name) def))))
+        (('rhsfun . def)
+         (let ((sexpr (binding->sexpr (B:Val name def))))
            (fmt out (c-expr sexpr))))
         (else (begin)))
        sysdefs)
