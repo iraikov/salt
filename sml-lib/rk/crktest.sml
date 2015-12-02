@@ -62,7 +62,7 @@ fun run (integrator) =
    putStrLn "# All done!\n")
 
 
-val _ = run (make_c_rkdp(1,cb) (Array.fromList [con]))
+val _ = run (make_crkdp(1,cb) (Array.fromList [con]))
 
 
 end

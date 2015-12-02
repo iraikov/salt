@@ -16,7 +16,7 @@ val c_rkdp = _import "Dormand_Prince_5_4" public:
              real array * real array * real array * real array * real array * real array 
              -> int;
 
-fun make_c_rkdp (n, fp) =
+fun make_crkdp (n, fp) =
     let
         val t1 = Array.array (n, 0.0) 
         val t2 = Array.array (n, 0.0) 
@@ -40,8 +40,9 @@ fun make_c_rkdp (n, fp) =
         fn (p) => 
            (fn (h) => 
                (fn (tn,yn,yout,err) => 
-                   c_rkdp (n, fp, p, yn, tn, h, yout, err, t1, t2, t3, t4, t5, t6,
-                           k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12)
+                   (c_rkdp (n, fp, p, yn, tn, h, yout, err, t1, t2, t3, t4, t5, t6,
+                            k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12);
+                    (yout,err))
                 ))
     end
 

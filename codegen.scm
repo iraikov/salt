@@ -861,7 +861,7 @@
 (define (mathop->cfun op)
   (case op
     ((signal.add) '+) ((signal.sub) '-) ((signal.mul) '*) ((signal.div) '/) 
-    ((signal.pow) '^) 
+    ((signal.pow) 'pow) 
     ((signal.gte) '>=) ((signal.gt) '<=) ((signal.lt) '<) ((signal.lte) '<=)
     ((signal.neg) '-)
     ((signal.abs)    'fabs)
@@ -1013,14 +1013,14 @@
 	 ))
 
 
-(define (codegen-ODE/ML sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
+(define (codegen-ODE/ML name sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
 
-    (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 cerkoz cerkdp))))
+    (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crkdp))))
         (error 'codegen-ODE/ML "unknown solver" solver))
 
     (let ((sysdefs (codegen-ODE sim)))
       
-      (if mod (print-fragments (prelude/ML solver: solver libs: libs) out))
+      (if mod (print-fragments (prelude/ML csysname: name solver: solver libs: libs) out))
 
       (print-fragments
        (map (match-lambda
@@ -1043,7 +1043,7 @@
       ))
 
 
-(define (prelude/ML  #!key (solver 'rk4b) (libs '()))
+(define (prelude/ML  #!key (csysname "") (solver 'rk4b) (libs '()))
 `(
  #<<EOF
 structure Model = 
@@ -1052,6 +1052,7 @@ struct
 open Real
 open Math
 open RungeKutta
+open CRungeKutta
 open Dynamics
 
 fun putStrLn str = 
@@ -1103,6 +1104,16 @@ EOF
        ("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n)" ,nll)
 
        . ,(case solver  
+            ;; adaptive solvers implemented in C
+            ((crkdp)
+             `(
+               ("val cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
+               ("fun " ,solver "(n) = make_" ,solver "(n,cb)" ,nll)
+               ("fun make_stepper (n, deriv) = " ,solver " (n)" ,nll)
+               ("fun make_event_stepper (n, deriv) = " ,solver " (n)" ,nll)
+               (,nll)
+               )
+             )
             ;; adaptive solvers with interpolation
             ((cerkoz cerkdp)
              `(
@@ -1133,7 +1144,7 @@ EOF
 )
 
 
-(define (codegen-ODE/C sim #!key (out (current-output-port)) (cname #f) (libs '()))
+(define (codegen-ODE/C name sim #!key (out (current-output-port)) (cname #f) (libs '()))
 
     (let ((sysdefs (codegen-ODE sim)))
       

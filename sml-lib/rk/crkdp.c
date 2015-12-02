@@ -77,6 +77,7 @@ int Dormand_Prince_5_4(int n, int (*f)(double,double *,double *,double *), doubl
   double h4 = 0.8 * h;
   double h5 = 0.888888888889 * h;
 
+  //printf("c: h = %g\n", h);
   //printf("c: y[0] = %g\n", y[0]);
   assert ((*f)(x0, p, y, k1) == 0);
   //  printf("c: k1[0] = %g\n", k1[0]);
