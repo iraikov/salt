@@ -483,12 +483,10 @@ datatype 'a result = Next of 'a | Root of 'a
 
 fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc,n,nev)  =
     let open Real
-        fun f iter (x,ys,xev,ev,d,r,ext,extev,h) =
+        fun f iter ((x,ys,xev,ev,d,r,ext,extev,h),(yout,err)) =
             if Int.<(iter,10)
             then 
                 (let
-                    val yout = falloc n
-                    val err = falloc n
                     val (ys',e) = (stepper (d,r)) (ext,extev) h (x,ys,yout,err)
                 in
                     case predictor tol (h,e) of
@@ -502,17 +500,17 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc,n,nev)  =
                             then 
                                 (let
                                     val d'    = (case fdiscrete of 
-                                                  SOME f => f (x',ys',ev',d)
-                                                | NONE => d)
+                                                     SOME f => f (x',ys',ev',d)
+                                                   | NONE => d)
                                     val r' = fregime (ev',r)
                                 in
                                     Root (x',ys',x',ev',d',r',ext,extev,h')
                                 end)
                             else 
-                                Next (x',ys',xev,ev,d,r,ext,extev,h')
+                                    Next (x',ys',xev,ev,d,r,ext,extev,h')
                         end)
                       | Left h'  => 
-                        f (Int.+(iter,1)) (x,ys,xev,ev,d,r,ext,extev,h')
+                        f (Int.+(iter,1)) ((x,ys,xev,ev,d,r,ext,extev,h'),(yout,err))
                 end)
             else raise ConvergenceError
     in
@@ -522,12 +520,10 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc,n,nev)  =
 
 fun adaptive_event_solver (stepper,fcond,falloc,n,nev)  =
     let open Real
-        fun f iter (x,ys,xev,ev,ext,extev,h) =
+        fun f iter ((x,ys,xev,ev,ext,extev,h),(yout,err)) =
             if (Int.<(iter,10))
             then 
                 (let
-                    val yout = falloc n
-                    val err = falloc n
                     val (ys',e) = stepper (ext,extev) h (x,ys,yout,err)
                 in
                     case predictor tol (h,e) of
@@ -542,7 +538,7 @@ fun adaptive_event_solver (stepper,fcond,falloc,n,nev)  =
                             else Next (x',ys',x',ev',ext,extev,h')
                         end)
                       | Left h'  => 
-                        f (Int.+(iter,1)) (x,ys,xev,ev,ext,extev,h')
+                        f (Int.+(iter,1)) ((x,ys,xev,ev,ext,extev,h'),(yout,err))
                 end)
             else raise ConvergenceError
     in
@@ -552,20 +548,21 @@ fun adaptive_event_solver (stepper,fcond,falloc,n,nev)  =
 
 fun adaptive_solver (stepper,falloc,n)  =
     let open Real
-        fun f (x,ys,ext,extev,h) =
-            (let
-                val yout = falloc n
-                val err = falloc n
-                val (ys',e) = stepper (ext,extev) h (x,ys,yout,err)
-            in
-                case predictor tol (h,e) of
-                    Right h' => 
-                    Next (x+h,ys',ext,extev,h')
-                  | Left h'  => 
-                    f (x,ys,ext,extev,h')
-            end)
+        fun f iter ((x,ys,ext,extev,h),(yout,err)) =
+            if (Int.<(iter,10))
+            then 
+                (let
+                    val (ys',e) = stepper (ext,extev) h (x,ys,yout,err)
+                in
+                    case predictor tol (h,e) of
+                        Right h' => 
+                        Next (x+h,ys',ext,extev,h')
+                      | Left h'  => 
+                        f (Int.+(iter,1)) ((x,ys,ext,extev,h'),(yout,err))
+                end)
+            else raise ConvergenceError
     in
-        f
+        f 0
     end
 
 
@@ -592,7 +589,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                in
                    if hasevent
                    then RegimeState (x,y,x,e',d,r,ext,extev,h,true)
-                   else (case fsolver (x,y,x,e',d,r,ext,extev,h) of
+                   else (case fsolver ((x,y,x,e',d,r,ext,extev,h),(falloc n, falloc n)) of
                              Next (xn,ysn,xevn,evn,dn,rn,_,_,hn) => 
                              RegimeState (xn,ysn,xevn,evn,dn,rn,ext,extev,hn,false)
                            | Root (xn,ysn,xevn,evn,dn,rn,ext,extev,hn) => 
@@ -623,7 +620,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                  in
                      if hasevent
                      then EventState (x,y,x,e',ext,extev,h,true)
-                     else (case fsolver (x,y,x,e',ext,extev,h) of
+                     else (case fsolver ((x,y,x,e',ext,extev,h),(falloc n, falloc n)) of
                                Next (xn,ysn,xevn,evn,ext,extev,hn) => 
                                EventState (xn,ysn,xevn,evn,ext,extev,hn,false)
                              | Root (xn,ysn,xevn,evn,ext,extev,hn) => 
@@ -638,7 +635,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
        val fsolver = adaptive_solver (fstepper,falloc,n)
     in
         fn(ContState (x,y,ext,extev,h)) => 
-           (case fsolver (x,y,ext,extev,h) of
+           (case fsolver ((x,y,ext,extev,h),(falloc n, falloc n)) of
                 Next (xn,ysn,_,_,hn) => 
                 ContState (xn,ysn,ext,extev,hn)
               | Root (xn,ysn,_,_,hn) => 
