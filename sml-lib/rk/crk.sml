@@ -17,7 +17,7 @@ val c_rkdp_regime = _import "Dormand_Prince_5_4_regime" public:
              real array * real array * real array * real array * real array * real array
              -> int;
 
-fun make_crkdp_regime (n, p, d, r, ext, extev, fp) =
+fun make_crkdp_regime (n, fp) =
     let
         val t1 = Array.array (n, 0.0) 
         val t2 = Array.array (n, 0.0) 
@@ -39,13 +39,14 @@ fun make_crkdp_regime (n, p, d, r, ext, extev, fp) =
         val k11 = Array.array (n, 0.0) 
         val k12 = Array.array (n, 0.0) 
     in
-        fn (h) => 
-           (fn (tn,yn,yout,err) => 
-               (c_rkdp_regime (n, fp, p, d, r, ext, extev, yn, tn, h, yout, err, 
-                               t1, t2, t3, t4, t5, t6, t7,
-                               k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12);
-                (yout,err))
-            )
+        fn (p, d, r, ext, extev) =>
+           (fn (h) => 
+               (fn (tn,yn,yout,err) => 
+                   (c_rkdp_regime (n, fp, p, d, r, ext, extev, yn, tn, h, yout, err, 
+                                   t1, t2, t3, t4, t5, t6, t7,
+                                   k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12);
+                    (yout,err))
+               ))
     end
 
 
@@ -57,7 +58,7 @@ val c_rkdp = _import "Dormand_Prince_5_4" public:
              real array * real array * real array * real array * real array * real array
              -> int;
 
-fun make_crkdp (n, p, ext, extev, fp) =
+fun make_crkdp (n, fp) =
     let
         val t1 = Array.array (n, 0.0) 
         val t2 = Array.array (n, 0.0) 
@@ -79,12 +80,13 @@ fun make_crkdp (n, p, ext, extev, fp) =
         val k11 = Array.array (n, 0.0) 
         val k12 = Array.array (n, 0.0) 
     in
-        fn (h) => 
-           (fn (tn,yn,yout,err) => 
-               (c_rkdp (n, fp, p, ext, extev, yn, tn, h, yout, err, t1, t2, t3, t4, t5, t6, t7,
-                        k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12);
-                (yout,err))
-            )
+        fn (p, ext, extev) =>
+           (fn (h) => 
+               (fn (tn,yn,yout,err) => 
+                   (c_rkdp (n, fp, p, ext, extev, yn, tn, h, yout, err, t1, t2, t3, t4, t5, t6, t7,
+                            k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12);
+                    (yout,err))
+               ))
     end
 
 end

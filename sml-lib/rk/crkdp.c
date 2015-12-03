@@ -19,6 +19,17 @@
 #include <string.h>
 #include <math.h>
 
+int vector_zerop (int n, double *x)
+{
+  int i; int result;
+  result = 1;
+  for (i = 0; i<n; i++) 
+    {
+      result = result && (x[i] == 0.0);
+    }
+  return result;
+}
+
 void vector_sum (int n, double *x, double *y, double *result) 
 {
   int i;
@@ -94,6 +105,13 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double
   //printf("c: y[0] = %g\n", y[0]);
   (*f)(x0, p, ext, extev, y, k1);
   //  printf("c: k1[0] = %g\n", k1[0]);
+
+  if (vector_zerop (n, k1)) 
+    {
+      vector_scale(n, 1.0, y, yout); 
+      vector_scale(n, 0.0, k1, err); 
+      return 0;
+    }
   
   vector_scale(n, 1.0, k1, t1); 
   //  printf("c: t1[0] = %g\n", t1[0]);
@@ -196,6 +214,13 @@ int Dormand_Prince_5_4_regime(int n, void (*f)(double,double *,double *,int *,do
   //printf("c: y[0] = %g\n", y[0]);
   (*f)(x0, p, d, r, ext, extev, y, k1);
   //  printf("c: k1[0] = %g\n", k1[0]);
+
+  if (vector_zerop (n, k1)) 
+    {
+      vector_scale(n, 1.0, y, yout); 
+      vector_scale(n, 0.0, k1, err); 
+      return 0;
+    }
   
   vector_scale(n, 1.0, k1, t1); 
   //  printf("c: t1[0] = %g\n", t1[0]);

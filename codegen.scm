@@ -532,12 +532,13 @@
                        (V:Op 'RegimeStepper (list (V:Fn '(d r) (E:Ret (V:Fn '(ext extev) 
                                                                             (E:Ret (V:Op 'make_regime_stepper 
                                                                                          (list (V:C ode-n)
+                                                                                               rhsfun
                                                                                                (V:Var 'p) 
                                                                                                (V:Var 'd) 
                                                                                                (V:Var 'r) 
                                                                                                (V:Var 'ext) 
                                                                                                (V:Var 'extev) 
-                                                                                               rhsfun))
+                                                                                               ))
                                                                                    ))
                                                                       ))
                                                   ))
@@ -546,10 +547,11 @@
                        (V:Op 'EventStepper (list (V:Fn '(ext extev) 
                                                        (E:Ret (V:Op 'make_event_stepper
                                                                     (list (V:C ode-n) 
+                                                                          rhsfun
                                                                           (V:Var 'p)
                                                                           (V:Var 'ext) 
                                                                           (V:Var 'extev) 
-                                                                          rhsfun))
+                                                                          ))
                                                               ))
                                                  ))
                        )
@@ -557,10 +559,11 @@
                        (V:Op 'ContStepper (list  (V:Fn '(ext extev) 
                                                        (E:Ret (V:Op 'make_stepper
                                                                     (list (V:C ode-n) 
+                                                                          rhsfun
                                                                           (V:Var 'p)
                                                                           (V:Var 'ext) 
                                                                           (V:Var 'extev) 
-                                                                          rhsfun))
+                                                                          ))
                                                               ))
                                                  ))
                        )
@@ -866,9 +869,30 @@
                 (cases value v
                        (V:Fn (args body)
                              `(%fun void ,name ,(args->sexpr args) ,(stmt->sexpr body)))
-                       (else `(%var double ,name ,(value->sexpr v)))))
+                       (else 
+                        `(%var double ,name ,(value->sexpr v)))))
          ))
 
+
+(define (lbinding->sexpr x decls.env)
+  (let ((decls (car decls.env))
+        (env (cdr decls.env)))
+    (cases binding x
+           (B:Val (name v)
+                  (cases value v
+                         (V:Fn (args body)
+                               (cons
+                                (cons `(%fun void ,name ,(args->sexpr args) ,(stmt->sexpr body)) decls)
+                                (if (member name env) env (cons name env))))
+                         (else 
+                          (cons
+                           (cons (if (member name env)
+                                     `(= ,name ,(value->sexpr v))
+                                     `(%var double ,name ,(value->sexpr v))) decls)
+                           (if (member name env) env (cons name env))))
+                         ))
+           ))
+  )
 
 (define (stmt->sexpr x)
     (cases stmt x
@@ -877,7 +901,7 @@
 		    `(if ,(value->sexpr test) ,(stmt->sexpr ift) ,(stmt->sexpr iff)))
 
 	 (E:Let     (bnds body)
-                    `(%begin . ,(append (map binding->sexpr bnds) (list (stmt->sexpr body)))))
+                    `(%begin . ,(append (reverse (car (fold lbinding->sexpr '(() . ()) bnds))) (list (stmt->sexpr body)))))
 			  
 	 (E:Begin   (stmts)  
                     `(%begin . ,(map (lambda (x) (stmt->sexpr x)) stmts)))
@@ -1140,11 +1164,11 @@ EOF
             ((crkdp)
              `(
                ("val cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-               ("fun " ,(sprintf "~A_regime" solver) "(n,p,d,r,ext,extev) = make_" ,(sprintf "~A_regime" solver) "(n,p,d,r,ext,extev,cb)" ,nll)
-               ("fun " ,solver "(n,p,ext,extev) = make_" ,solver "(n,p,ext,extev,cb)" ,nll)
-               ("fun make_regime_stepper (n, p, d, r, ext, extev, deriv) = " ,(sprintf "~A_regime" solver) " (n, p, d, r, ext, extev)" ,nll)
-               ("fun make_event_stepper (n, p, ext, extev, deriv) = " ,solver " (n, p, ext, extev)" ,nll)
-               ("fun make_stepper (n, p, ext, extev, deriv) = " ,solver " (n, p, ext, extev)" ,nll)
+               ("fun " ,(sprintf "~A_regime" solver) "(n) = make_" ,(sprintf "~A_regime" solver) "(n,cb)" ,nll)
+               ("fun " ,solver "(n) = make_" ,solver "(n,cb)" ,nll)
+               ("fun make_regime_stepper (n, deriv, p, d, r, ext, extev) = " ,(sprintf "~A_regime" solver) " (n) (p, d, r, ext, extev)" ,nll)
+               ("fun make_event_stepper (n, deriv, p, ext, extev) = " ,solver " (n) (p, ext, extev)" ,nll)
+               ("fun make_stepper (n, deriv, p, ext, extev) = " ,solver " (n) (p, ext, extev)" ,nll)
                (,nll)
                )
              )
@@ -1152,9 +1176,9 @@ EOF
             ((cerkoz cerkdp)
              `(
                ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
-               ("fun make_regime_stepper (n, d, r, ext, extev, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               ("fun make_event_stepper (n, ext, extev, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               ("fun make_stepper (n, ext, extev, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_regime_stepper (n, deriv, d, r, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_event_stepper (n, deriv, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_stepper (n, deriv, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
                (,nll)
                )
              )
@@ -1162,9 +1186,9 @@ EOF
             ((rkhe rkbs rkf45 rkck rkoz rkdp rkf45 rkf78 rkv65)
              `(
                ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nll)
-               ("fun make_regime_stepper (n, d, r, ext, extev, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               ("fun make_event_stepper (n, ext, extev, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               ("fun make_stepper (n, ext, extev, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_regime_stepper (n, deriv, d, r, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_event_stepper (n, deriv, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_stepper (n, deriv, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
                (,nll)
                )
              )
