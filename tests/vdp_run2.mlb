@@ -1,10 +1,12 @@
+
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/smlnj-lib/Util/smlnj-lib.mlb
 $(SML_LIB)/basis/unsafe.mlb
 $(RK_LIB)/rk.mlb
+$(RK_LIB)/crk.mlb
 $(DYNAMICS_LIB)/dynamics.mlb
 
-structure Dynamics = FunctionalHybridDynamics1
+structure Dynamics = FunctionalHybridDynamics2
 
 local
         options.sml
@@ -13,9 +15,9 @@ in
 end
 
 local
-	iaf.sml
+	vdp.sml
 in
 	structure Model
 end
-model_run1.sml
+model_run2.sml
 

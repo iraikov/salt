@@ -24,6 +24,7 @@
     ((_ exp ...)
      (run:execute* (list `exp ...)))))
 
+(define adaptive-solvers '(rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crkdp crkbs))
 
 (define (test-model name model #!key (solver 'rk4b) (compile #f) (dir "tests"))
   (pp model)
@@ -39,7 +40,9 @@
          (c-path (make-pathname dir (string-append (->string name) ".c")))
          (c-port (open-output-file c-path))
          (sml-path (make-pathname dir (string-append (->string name) ".sml")))
-         (mlb-path (make-pathname dir (string-append (->string name) "_run.mlb")))
+         (mlb-path (if (member solver adaptive-solvers)
+                     (make-pathname dir (string-append (->string name) "_run2.mlb"))
+                     (make-pathname dir (string-append (->string name) "_run1.mlb"))))
          (sml-port (open-output-file sml-path))
          )
     (codegen-ODE/C name sim out: c-port solver: solver libs: '(interp))
@@ -54,6 +57,8 @@
               -mlb-path-var ,(sprintf "'DYNAMICS_LIB $(SALT_LIB)/dynamics'")
               ,mlb-path
               ,@(case solver 
+                 ((crk3) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crk3.c")))
+                 ((crkbs) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crkbs.c")))
                  ((crkdp) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crkdp.c")))
                  (else '()))
               ))))
@@ -282,17 +287,21 @@
 
 
 
-;(test-model 'vdp vdp solver: 'rk4b compile: #t)
-
-;(test-model 'iaf iaf solver: 'rk4b compile: #t)
-
-;(test-model 'izhfs izhfs solver: 'rkoz compile: #t)
-
-;(test-model 'iafrefr iafrefr solver: 'rk4b compile: #t)
+(test-model 'vdp vdp solver: 'rk4b compile: #t)
 (test-model 'vdp vdp solver: 'crkdp compile: #t)
 
-;(test-model 'ml ml solver: 'rk3 compile: #t)
-;(test-model 'ml ml solver: 'rkdp compile: #t)
+(test-model 'iaf iaf solver: 'rk3 compile: #t)
+(test-model 'iaf iaf solver: 'crkdp compile: #t)
+
+(test-model 'izhfs izhfs solver: 'rk4b compile: #t)
+(test-model 'izhfs izhfs solver: 'crkdp compile: #t)
+
+(test-model 'iafrefr iafrefr solver: 'rk3  compile: #t)
+(test-model 'iafrefr iafrefr solver: 'rkdp  compile: #t)
+(test-model 'iafrefr iafrefr solver: 'crkdp  compile: #t)
+
+(test-model 'ml ml solver: 'rk4b compile: #t)
+(test-model 'ml ml solver: 'crkdp compile: #t)
 
 ;(test-model 'iafsyn iafsyn)
 

@@ -71,10 +71,10 @@ datatype model_state =
 
 
 datatype model_stepper = 
-         RegimeStepper of dsc_state * regime_state -> (external_state * externalev_state) -> real -> 
-                          (real * cont_state * cont_state) -> cont_state
-         | EventStepper of (external_state * externalev_state) -> real -> (real * cont_state * cont_state) -> cont_state
-         | ContStepper of (external_state * externalev_state) -> real -> (real * cont_state * cont_state) -> cont_state
+         RegimeStepper of (dsc_state * regime_state * external_state * externalev_state *
+                           real * real * cont_state * cont_state) -> cont_state
+         | EventStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> cont_state
+         | ContStepper  of (external_state * externalev_state * real * real * cont_state * cont_state) -> cont_state
 
 datatype model_condition = 
          RegimeCondition of dsc_state -> (real * cont_state * event_state * external_state * externalev_state * event_state) -> event_state
@@ -207,7 +207,8 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
         (case root of 
              true => 
              (let
-                 val (y',d',r') = evresponse_regime (fcond,fpos,fneg,fdiscrete,fregime,falloc,n,nev) (x,y,e,d,r,ext,extev)
+                 val (y',d',r') = evresponse_regime (fcond,fpos,fneg,fdiscrete,fregime,falloc,n,nev) 
+                                                    (x,y,e,d,r,ext,extev)
                  val e' = fixthr (fcond d' (x,y',e,ext,extev,falloc nev))
                  val hasevent = posdetect (xe,e,x,e')
              in
@@ -222,7 +223,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                  then RegimeState(x,y,x,e',d,r,ext,extev,true)
                  else (let
                           val x'  = x + h
-                          val y'  = stepper (d,r) (ext,extev) h (x,y,falloc n)
+                          val y'  = stepper (d,r,ext,extev,h,x,y,falloc n)
                           val e'  = fixthr (fcond d (x',y',e,ext,extev,falloc nev))
                           val root' = posdetect (xe,e,x',e')
                       in
@@ -252,7 +253,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                  else 
                      (let 
                          val x'    = x + h
-                         val y'    = stepper (ext,extev) h (x,y,falloc n)
+                         val y'    = stepper (ext,extev,h,x,y,falloc n)
                          val e'    = fixthr (fcond (x',y',e,ext,extev,falloc nev))
                          val root' = posdetect (xe,e,x',e')
                      in
@@ -265,7 +266,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
 | integral (ContStepper stepper,NONE,fpos,fneg,NONE,NONE,falloc,n,NONE,h) =
   (fn(ContState(x,y,ext,extev)) => 
       let val x'  = x + h
-          val y'  = stepper (ext,extev) h (x,y,falloc n)
+          val y'  = stepper (ext,extev,h,x,y,falloc n)
       in
           ContState(x',y',ext,extev)
       end
@@ -322,11 +323,12 @@ datatype model_state =
          | ContState  of real * cont_state * external_state * externalev_state * real
 
 datatype model_stepper = 
-         RegimeStepper of dsc_state * regime_state -> (external_state * externalev_state) -> real -> real * cont_state * cont_state * error_state -> 
+         RegimeStepper of (dsc_state * regime_state * external_state * externalev_state * 
+                           real * real * cont_state * cont_state * error_state) ->
                           (cont_state * error_state)
-         | EventStepper of (external_state * externalev_state) -> real -> (real * cont_state * cont_state * error_state) -> 
+         | EventStepper of (external_state * externalev_state * real * real * cont_state * cont_state * error_state) -> 
                            (cont_state * error_state)
-         | ContStepper of (external_state * externalev_state) -> real -> (real * cont_state * cont_state * error_state) -> 
+         | ContStepper of (external_state * externalev_state * real * real * cont_state * cont_state * error_state) -> 
                           (cont_state * error_state)
 
 datatype model_condition = 
@@ -483,11 +485,11 @@ datatype 'a result = Next of 'a | Root of 'a
 
 fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc,n,nev)  =
     let open Real
-        fun f iter ((x,ys,xev,ev,d,r,ext,extev,h),(yout,err)) =
+        fun f iter (x,ys,xev,ev,d,r,ext,extev,h,yout,err) =
             if Int.<(iter,10)
             then 
                 (let
-                    val (ys',e) = (stepper (d,r)) (ext,extev) h (x,ys,yout,err)
+                    val (ys',e) = stepper (d,r,ext,extev,h,x,ys,yout,err)
                 in
                     case predictor tol (h,e) of
                         Right h' => 
@@ -510,7 +512,7 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc,n,nev)  =
                                     Next (x',ys',xev,ev,d,r,ext,extev,h')
                         end)
                       | Left h'  => 
-                        f (Int.+(iter,1)) ((x,ys,xev,ev,d,r,ext,extev,h'),(yout,err))
+                        f (Int.+(iter,1)) (x,ys,xev,ev,d,r,ext,extev,h',yout,err)
                 end)
             else raise ConvergenceError
     in
@@ -520,11 +522,11 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc,n,nev)  =
 
 fun adaptive_event_solver (stepper,fcond,falloc,n,nev)  =
     let open Real
-        fun f iter ((x,ys,xev,ev,ext,extev,h),(yout,err)) =
+        fun f iter (x,ys,xev,ev,ext,extev,h,yout,err) =
             if (Int.<(iter,10))
             then 
                 (let
-                    val (ys',e) = stepper (ext,extev) h (x,ys,yout,err)
+                    val (ys',e) = stepper (ext,extev,h,x,ys,yout,err)
                 in
                     case predictor tol (h,e) of
                         Right h' => 
@@ -538,7 +540,7 @@ fun adaptive_event_solver (stepper,fcond,falloc,n,nev)  =
                             else Next (x',ys',x',ev',ext,extev,h')
                         end)
                       | Left h'  => 
-                        f (Int.+(iter,1)) ((x,ys,xev,ev,ext,extev,h'),(yout,err))
+                        f (Int.+(iter,1)) (x,ys,xev,ev,ext,extev,h',yout,err)
                 end)
             else raise ConvergenceError
     in
@@ -548,17 +550,17 @@ fun adaptive_event_solver (stepper,fcond,falloc,n,nev)  =
 
 fun adaptive_solver (stepper,falloc,n)  =
     let open Real
-        fun f iter ((x,ys,ext,extev,h),(yout,err)) =
+        fun f iter (x,ys,ext,extev,h,yout,err) =
             if (Int.<(iter,10))
             then 
                 (let
-                    val (ys',e) = stepper (ext,extev) h (x,ys,yout,err)
+                    val (ys',e) = stepper (ext,extev,h,x,ys,yout,err)
                 in
                     case predictor tol (h,e) of
                         Right h' => 
                         Next (x+h,ys',ext,extev,h')
                       | Left h'  => 
-                        f (Int.+(iter,1)) ((x,ys,ext,extev,h'),(yout,err))
+                        f (Int.+(iter,1)) (x,ys,ext,extev,h',yout,err)
                 end)
             else raise ConvergenceError
     in
@@ -569,7 +571,6 @@ fun adaptive_solver (stepper,falloc,n)  =
 fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                fpos,fneg,fdiscrete,SOME fregime,falloc,n,SOME nev) =
     let
-       (*fun fstepper (d,r) = make_stepper (f(d,r))*)
        val fsolver = adaptive_regime_solver (fstepper,fcond,fdiscrete,fregime,falloc,n,nev)
     in
         fn(RegimeState (x,y,xev,e,d,r,ext,extev,h,root)) => 
@@ -589,7 +590,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                in
                    if hasevent
                    then RegimeState (x,y,x,e',d,r,ext,extev,h,true)
-                   else (case fsolver ((x,y,x,e',d,r,ext,extev,h),(falloc n, falloc n)) of
+                   else (case fsolver (x,y,x,e',d,r,ext,extev,h,falloc n,falloc n) of
                              Next (xn,ysn,xevn,evn,dn,rn,_,_,hn) => 
                              RegimeState (xn,ysn,xevn,evn,dn,rn,ext,extev,hn,false)
                            | Root (xn,ysn,xevn,evn,dn,rn,ext,extev,hn) => 
@@ -601,7 +602,6 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
   | integral (EventStepper fstepper,SOME (SCondition fcond),
                fpos,fneg,NONE,NONE,falloc,n,SOME nev) =
     let
-       (*fun fstepper (d,r) = make_stepper (f(d,r))*)
        val fsolver = adaptive_event_solver (fstepper,fcond,falloc,n,nev)
     in
         fn(EventState (x,y,xev,e,ext,extev,h,root)) => 
@@ -620,7 +620,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                  in
                      if hasevent
                      then EventState (x,y,x,e',ext,extev,h,true)
-                     else (case fsolver ((x,y,x,e',ext,extev,h),(falloc n, falloc n)) of
+                     else (case fsolver (x,y,x,e',ext,extev,h,falloc n,falloc n) of
                                Next (xn,ysn,xevn,evn,ext,extev,hn) => 
                                EventState (xn,ysn,xevn,evn,ext,extev,hn,false)
                              | Root (xn,ysn,xevn,evn,ext,extev,hn) => 
@@ -635,7 +635,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
        val fsolver = adaptive_solver (fstepper,falloc,n)
     in
         fn(ContState (x,y,ext,extev,h)) => 
-           (case fsolver ((x,y,ext,extev,h),(falloc n, falloc n)) of
+           (case fsolver (x,y,ext,extev,h,falloc n,falloc n) of
                 Next (xn,ysn,_,_,hn) => 
                 ContState (xn,ysn,ext,extev,hn)
               | Root (xn,ysn,_,_,hn) => 
@@ -692,11 +692,11 @@ datatype model_state =
          | ContState  of real * cont_state * external_state * externalev_state * real
 
 datatype model_stepper = 
-         RegimeStepper of dsc_state * regime_state -> (external_state * externalev_state) -> real -> real * cont_state* cont_state -> 
+         RegimeStepper of dsc_state * regime_state * external_state * externalev_state * real * real * cont_state * cont_state -> 
                           (cont_state * error_state * (real -> cont_state))
-         | EventStepper of (external_state * externalev_state) -> real -> (real * cont_state * cont_state) -> 
+         | EventStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> 
                            (cont_state * error_state * (real -> cont_state))
-         | ContStepper of (external_state * externalev_state) -> real -> (real * cont_state * cont_state) -> 
+         | ContStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> 
                           (cont_state * error_state)
 
 datatype model_condition = 
@@ -848,7 +848,7 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc,n,nev)  =
             if Int.<(iter,10)
             then 
                 (let
-                    val (ys',e,finterp) = (stepper (d,r)) (ext,extev) h (x,ys,yout)
+                    val (ys',e,finterp) = stepper (d,r,ext,extev,h,x,ys,yout)
                     val ev' = fixthr(fcond d (x+h,ys',ev,ext,extev,falloc nev))
                 in
                     case predictor tol (h,e) of
@@ -892,7 +892,7 @@ fun adaptive_event_solver (stepper,fcond,falloc,n,nev)  =
             if (Int.<(iter,10))
             then 
                 (let
-                    val (ys',e,finterp) = stepper (ext,extev) h (x,ys,yout)
+                    val (ys',e,finterp) = stepper (ext,extev,h,x,ys,yout)
                     val ev' = fixthr (fcond (x+h,ys',ev,ext,extev,falloc n))
                 in
                     case predictor tol (h,e) of
@@ -930,7 +930,7 @@ fun adaptive_solver (stepper,falloc,n)  =
         val yout = falloc n
         fun f (x,ys,ext,extev,h) =
             (let
-                val (ys',e) = stepper (ext,extev) h (x,ys,yout)
+                val (ys',e) = stepper (ext,extev,h,x,ys,yout)
             in
                 case predictor tol (h,e) of
                     Right h' => 

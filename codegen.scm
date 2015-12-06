@@ -1,6 +1,7 @@
 
 (define nll "\n")
 
+
 ;; based on SRV:send-reply by Oleg Kiselyov
 (define (print-fragments b out)
   (let loop ((fragments b) (result #f))
@@ -75,6 +76,8 @@
 		  (E:Noop ()         (sprintf "E:Noop"))
 		  )))
 
+(define solvers '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crk3 crkbs crkdp))
+(define adaptive-solvers '(rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crkbs crkdp))
 
 (define (codegen-primop op args)
   (case op
@@ -155,7 +158,7 @@
       ))
 
 
-(define (codegen-ODE sim)
+(define (codegen-ODE sim #!key (adaptive #f))
 
   (define (update-bucket k v alst)
     (let recur ((alst alst)
@@ -514,64 +517,118 @@
                                (E:Begin stmts)))
                     ))
             )
-            
-           (odefun    
-            (let ((rhsfun 
-                   (V:Fn '(t y dy_out)
-                         (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
-                                (stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
-                           (if (null? asgns)
-                               (E:Begin stmts)
-                               (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) asgns)
-                                      (E:Begin stmts)))
-                           ))))
-              (V:Fn '(p) 
-                    (E:Ret
-                     (cond
-                      ((pair? regblocks) 
-                       (V:Op 'RegimeStepper (list (V:Fn '(d r) (E:Ret (V:Fn '(ext extev) 
-                                                                            (E:Ret (V:Op 'make_regime_stepper 
-                                                                                         (list (V:C ode-n)
-                                                                                               rhsfun
-                                                                                               (V:Var 'p) 
-                                                                                               (V:Var 'd) 
-                                                                                               (V:Var 'r) 
-                                                                                               (V:Var 'ext) 
-                                                                                               (V:Var 'extev) 
-                                                                                               ))
-                                                                                   ))
-                                                                      ))
-                                                  ))
-                       )
-                      ((pair? condblock)
-                       (V:Op 'EventStepper (list (V:Fn '(ext extev) 
-                                                       (E:Ret (V:Op 'make_event_stepper
-                                                                    (list (V:C ode-n) 
-                                                                          rhsfun
-                                                                          (V:Var 'p)
-                                                                          (V:Var 'ext) 
-                                                                          (V:Var 'extev) 
-                                                                          ))
-                                                              ))
-                                                 ))
-                       )
-                      (else
-                       (V:Op 'ContStepper (list  (V:Fn '(ext extev) 
-                                                       (E:Ret (V:Op 'make_stepper
-                                                                    (list (V:C ode-n) 
-                                                                          rhsfun
-                                                                          (V:Var 'p)
-                                                                          (V:Var 'ext) 
-                                                                          (V:Var 'extev) 
-                                                                          ))
-                                                              ))
-                                                 ))
-                       )
-                      ))
-                    ))
-            )
-            
 
+           (stepfun 
+            (let ((rhsfun 
+                   (V:Fn (if (pair? regblocks) '(p d r ext extev) '(p ext extev))
+                         (E:Ret
+                          (V:Fn '(t y dy_out)
+                                (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
+                                       (stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
+                                  (if (null? asgns)
+                                      (E:Begin stmts)
+                                      (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) asgns)
+                                             (E:Begin stmts)))
+                                  ))
+                          ))
+                   ))
+              (V:Op (if (pair? regblocks) 'make_regime_stepper 'make_stepper)
+                    (list (V:C ode-n) rhsfun))))
+
+           (odefun    
+            (V:Fn '(p) 
+                  (E:Ret
+                   (cond
+                    ((pair? regblocks) 
+                     (V:Op 'RegimeStepper (list (V:Fn (if adaptive
+                                                          '(d r ext extev h x y yout err) 
+                                                          '(d r ext extev h x y yout))
+                                                      (E:Ret (V:Op 'stepfun 
+                                                                   (if adaptive
+                                                                       (list (V:Var 'p) 
+                                                                             (V:Var 'd) 
+                                                                             (V:Var 'r) 
+                                                                             (V:Var 'ext) 
+                                                                             (V:Var 'extev) 
+                                                                             (V:Var 'h) 
+                                                                             (V:Var 'x) 
+                                                                             (V:Var 'y) 
+                                                                             (V:Var 'yout) 
+                                                                             (V:Var 'err) 
+                                                                             )                                                                       
+                                                                       (list (V:Var 'p) 
+                                                                             (V:Var 'd) 
+                                                                             (V:Var 'r) 
+                                                                             (V:Var 'ext) 
+                                                                             (V:Var 'extev) 
+                                                                             (V:Var 'h) 
+                                                                             (V:Var 'x) 
+                                                                             (V:Var 'y) 
+                                                                             (V:Var 'yout) 
+                                                                             )
+                                                                       ))
+                                                             ))
+                                                ))
+                     )
+                    
+                    ((pair? condblock)
+                     (V:Op 'EventStepper (list (V:Fn (if adaptive
+                                                         '(ext extev h x y yout err) 
+                                                         '(ext extev h x y yout))
+                                                     (E:Ret (V:Op 'stepfun
+                                                                  (if adaptive
+                                                                      (list (V:Var 'p) 
+                                                                            (V:Var 'ext) 
+                                                                            (V:Var 'extev) 
+                                                                            (V:Var 'h) 
+                                                                            (V:Var 'x) 
+                                                                            (V:Var 'y) 
+                                                                            (V:Var 'yout) 
+                                                                            (V:Var 'err) 
+                                                                            )
+                                                                      (list (V:Var 'p) 
+                                                                            (V:Var 'ext) 
+                                                                            (V:Var 'extev) 
+                                                                            (V:Var 'h) 
+                                                                            (V:Var 'x) 
+                                                                            (V:Var 'y) 
+                                                                            (V:Var 'yout) 
+                                                                            ))
+                                                                  ))
+                                                     ))
+                           ))
+                    
+                    (else
+                     (V:Op 'ContStepper (list  (V:Fn (if adaptive
+                                                         '(ext extev h x y yout err) 
+                                                         '(ext extev h x y yout))
+                                                     (E:Ret (V:Op 'stepfun
+                                                                  (if adaptive
+                                                                      (list (V:Var 'p) 
+                                                                            (V:Var 'ext) 
+                                                                            (V:Var 'extev) 
+                                                                            (V:Var 'h) 
+                                                                            (V:Var 'x) 
+                                                                            (V:Var 'y) 
+                                                                            (V:Var 'yout) 
+                                                                            (V:Var 'err) 
+                                                                            )
+                                                                      (list (V:Var 'p) 
+                                                                            (V:Var 'ext) 
+                                                                            (V:Var 'extev) 
+                                                                            (V:Var 'h) 
+                                                                            (V:Var 'x) 
+                                                                            (V:Var 'y) 
+                                                                            (V:Var 'yout) 
+                                                                            )
+                                                                      ))
+                                                     ))
+                           ))
+                    ))
+                  ))
+            )
+
+                                    
            (initcondfun 
             (if (null? condblock)
                 (V:C 'NONE)
@@ -752,6 +809,7 @@
         (initfun  . ,initfun)
         (dinitfun . ,dinitfun)
         (rhsfun   . ,rhsfun)
+        (stepfun  . ,stepfun)
         (odefun   . ,odefun)
         (initcondfun . ,initcondfun)
         (initextfun  . ,initextfun)
@@ -1071,10 +1129,12 @@
 
 (define (codegen-ODE/ML name sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
 
-    (if (and solver (not (member solver '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crkdp))))
+  
+
+    (if (and solver (not (member solver solvers)))
         (error 'codegen-ODE/ML "unknown solver" solver))
 
-    (let ((sysdefs (codegen-ODE sim)))
+    (let ((sysdefs (codegen-ODE sim adaptive: (member solver adaptive-solvers))))
       
       (if mod (print-fragments (prelude/ML csysname: name solver: solver libs: libs) out))
 
@@ -1161,14 +1221,13 @@ EOF
 
        . ,(case solver  
             ;; adaptive solvers implemented in C
-            ((crkdp)
+            ((crkbs crkdp)
              `(
                ("val cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
                ("fun " ,(sprintf "~A_regime" solver) "(n) = make_" ,(sprintf "~A_regime" solver) "(n,cb)" ,nll)
                ("fun " ,solver "(n) = make_" ,solver "(n,cb)" ,nll)
-               ("fun make_regime_stepper (n, deriv, p, d, r, ext, extev) = " ,(sprintf "~A_regime" solver) " (n) (p, d, r, ext, extev)" ,nll)
-               ("fun make_event_stepper (n, deriv, p, ext, extev) = " ,solver " (n) (p, ext, extev)" ,nll)
-               ("fun make_stepper (n, deriv, p, ext, extev) = " ,solver " (n) (p, ext, extev)" ,nll)
+               ("fun make_regime_stepper (n, deriv) = " ,(sprintf "~A_regime" solver) " (n)" ,nll)
+               ("fun make_stepper (n, deriv) = " ,solver " (n)" ,nll)
                (,nll)
                )
              )
@@ -1176,28 +1235,47 @@ EOF
             ((cerkoz cerkdp)
              `(
                ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
-               ("fun make_regime_stepper (n, deriv, d, r, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               ("fun make_event_stepper (n, deriv, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               ("fun make_stepper (n, deriv, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               (,nll)
+               ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout,err) " ,nll
+                "end" ,nll)
+               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,ext,extev))) h (x,y,yout,err)" ,nll
+                "end" ,nll)
                )
              )
             ;; adaptive solvers with threshold detection on grid points
             ((rkhe rkbs rkf45 rkck rkoz rkdp rkf45 rkf78 rkv65)
              `(
                ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nll)
-               ("fun make_regime_stepper (n, deriv, d, r, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               ("fun make_event_stepper (n, deriv, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               ("fun make_stepper (n, deriv, ext, extev) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout,err) " ,nll
+                "end" ,nll)
+               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,ext,extev))) h (x,y,yout,err)" ,nll
+                "end" ,nll)
+               (,nll)
+               )
+             )
+            ;; fixed-step solvers implemented in C
+            ((crk3)
+             `(
+               ("val cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
+               ("fun " ,(sprintf "~A_regime" solver) "(n) = make_" ,(sprintf "~A_regime" solver) "(n,cb)" ,nll)
+               ("fun " ,solver "(n) = make_" ,solver "(n,cb)" ,nll)
+               ("fun make_regime_stepper (n, deriv) = " ,(sprintf "~A_regime" solver) " (n)" ,nll)
+               ("fun make_stepper (n, deriv) = " ,solver " (n)" ,nll)
                (,nll)
                )
              )
             (else
              `(
                ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nll)
-               ("fun make_regime_stepper (n, d, r, ext, extev, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               ("fun make_event_stepper (n, ext, extev, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
-               ("fun make_stepper (n, ext, extev, deriv) = " ,solver " (fn () => alloc n,scaler,summer,deriv)" ,nll)
+               ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, d, r, ext, extev, h, x, y, yout) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout)" ,nll
+                "end" ,nll)
+               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, ext, extev, h, x, y, yout) => (stepper (deriv (p,ext,extev))) h (x,y,yout)" ,nll
+                "end" ,nll)
                (,nll)
                ))
             ))

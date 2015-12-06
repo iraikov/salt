@@ -19,7 +19,7 @@
 #include <string.h>
 #include <math.h>
 
-int vector_zerop (int n, double *x)
+static int vector_zerop (int n, double *x)
 {
   int i; int result;
   result = 1;
@@ -30,7 +30,7 @@ int vector_zerop (int n, double *x)
   return result;
 }
 
-void vector_sum (int n, double *x, double *y, double *result) 
+static void vector_sum (int n, double *x, double *y, double *result) 
 {
   int i;
   for (i = 0; i<n; i++) 
@@ -39,7 +39,7 @@ void vector_sum (int n, double *x, double *y, double *result)
     }
 }
 
-void vector_scale (int n, double k, double *x, double *result)
+static void vector_scale (int n, double k, double *x, double *result)
 {
   int i;
   for (i = 0; i<n; i++) 
