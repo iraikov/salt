@@ -98,13 +98,13 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 
 
 val p           = Model.paramfun ()
-val initial     = Model.initfun (p) ()
-val evinitial   = optApply Model.initcondfun ()
-val dinitial    = optApply Model.dinitfun (p)
-val rinitial    = optApply Model.initregfun ()
+val initial     = Model.initfun (p) (Model.alloc Model.n)
+val evinitial   = optApply Model.initcondfun (Model.alloc Model.nev)
+val dinitial    = optApply (optApply Model.dinitfun (p)) (Model.alloc Model.ndsc)
+val rinitial    = optApply Model.initregfun (Model.bool_alloc Model.nregime)
 val extinitial  = Model.initextfun (p)
 val extevinitial  = Model.initextevfun (p)
-val next        = Model.initfun (p) ()
+val next        = Model.initfun (p) (Model.alloc Model.n)
 
 val optStatus = ref NONE
 val (opts, _) = (Options.getopt optStatus) (CommandLine.arguments())
@@ -126,5 +126,5 @@ val f = D.integral(Model.odefun(p),optApply Model.condfun p,
                    Model.n,case evinitial of SOME ev => SOME (Model.nev) | _ => NONE,
                    h)
 
-val _ = start (f,initial,evinitial,optApply dinitial (),rinitial,extinitial(),extevinitial(),next,tstop)
+val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial(),extevinitial(),next,tstop)
 

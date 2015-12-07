@@ -320,6 +320,7 @@
                             (simruntime-posresp sim))))
                       bucket-eqs))
 
+        (dsc-n (length dposblocks))
 
         (posblocks (let ((bucket-eqs 
                           (bucket 
@@ -363,6 +364,8 @@
                             [_ #f])
                            (simruntime-posresp sim))))
                      bucket-eqs))
+
+        (regime-n (length regblocks))
 
         )
     (let* (
@@ -460,15 +463,12 @@
            (initfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 ode-defs 'y_out)))
               (V:Fn '(p) 
-                    (E:Ret (V:Op 'make_real_initial
-                           (list (V:C ode-n)
-                                 (V:Fn '(y_out) 
-                                       (if (null? asgn-defs)
-                                           (E:Begin stmts)
-                                           (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
-                                                       asgn-defs)
-                                                  (E:Begin stmts))))
-                                 ))
+                    (E:Ret (V:Fn '(y_out) 
+                                 (if (null? asgn-defs)
+                                     (E:Begin stmts)
+                                     (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                 asgn-defs)
+                                            (E:Begin stmts))))
                            ))
               ))
 
@@ -479,15 +479,12 @@
                   (V:Op 'SOME
                         (list 
                          (V:Fn '(p) 
-                               (E:Ret (V:Op 'make_real_initial
-                                            (list (V:C (length discrete-defs))
-                                                  (V:Fn '(d_out)
-                                                        (if (null? asgn-defs)
-                                                            (E:Begin stmts)
-                                                            (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
-                                                                        asgn-defs)
-                                                                   (E:Begin stmts))))))
-                                      ))
+                               (E:Ret (V:Fn '(d_out)
+                                            (if (null? asgn-defs)
+                                                (E:Begin stmts)
+                                                (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                            asgn-defs)
+                                                       (E:Begin stmts))))))
                          ))
                   ))
             )
@@ -634,20 +631,18 @@
                 (V:C 'NONE)
                 (V:Op 'SOME
                       (list
-                       (V:Op 'make_real_initial
-                             (list (V:C (length condblock))
-                                   (V:Fn '(c_out) 
-                                         (E:Begin 
-                                          (append 
-                                           (list-tabulate
-                                            (length condblock)
-                                            (lambda (i) (E:Set (V:Var 'c_out) i (V:C 'negInf))))
-                                           (list (E:Ret (V:Var 'c_out)))
-                                           )
-                                          ))
-                                   ))
+                       (V:Fn '(c_out) 
+                             (E:Begin 
+                              (append 
+                               (list-tabulate
+                                (length condblock)
+                                (lambda (i) (E:Set (V:Var 'c_out) i (V:C 'negInf))))
+                               (list (E:Ret (V:Var 'c_out)))
+                               )
+                              ))
                        ))
                 ))
+           
 
            (condfun     
             (let ((used-asgns
@@ -761,18 +756,15 @@
                 (V:C 'NONE)
                 (V:Op 'SOME
                       (list 
-                       (V:Op 'make_bool_initial
-                             (list (V:C (length regblocks))
-                                   (V:Fn '(r_out) 
-                                         (E:Begin (append 
-                                                   (cons 
-                                                    (E:Set (V:Var 'r_out) 0 (V:C #t))
-                                                    (list-tabulate (length (cdr regblocks))
-                                                                   (lambda (i) (E:Set (V:Var 'r_out) (+ 1 i) (V:C #f))))
-                                                    )
-                                                   (list (E:Ret (V:Var 'r_out))))
-                                                  ))
-                                   ))
+                       (V:Fn '(r_out) 
+                             (E:Begin (append 
+                                       (cons 
+                                        (E:Set (V:Var 'r_out) 0 (V:C #t))
+                                        (list-tabulate (length (cdr regblocks))
+                                                       (lambda (i) (E:Set (V:Var 'r_out) (+ 1 i) (V:C #f))))
+                                        )
+                                       (list (E:Ret (V:Var 'r_out))))
+                                      ))
                        ))
                 ))
 
@@ -803,8 +795,10 @@
            )
 
       `(
-        (ode-n . ,ode-n)
+        (ode-n  . ,ode-n)
         (cond-n . ,cond-n)
+        (dsc-n  . ,dsc-n)
+        (regime-n . ,regime-n)
         (paramfun . ,paramfun)
         (initfun  . ,initfun)
         (dinitfun . ,dinitfun)
@@ -1142,14 +1136,20 @@
        (map (match-lambda
              ((name . def) (list (binding->ML (B:Val name def)) nll)))
             `((n . ,(V:C (alist-ref 'ode-n sysdefs)))
-              (nev . ,(V:C (alist-ref 'cond-n sysdefs)))))
+              (nev . ,(V:C (alist-ref 'cond-n sysdefs)))
+              (nregime . ,(V:C (alist-ref 'regime-n sysdefs)))
+              (ndsc . ,(V:C (alist-ref 'dsc-n sysdefs)))
+              ))
        out)
       
       (print-fragments
        (map (match-lambda
-             (('rhsfun . def) (list))
-             (('ode-n . def) (list))
-             (('cond-n . def) (list))
+             (('rhsfun . def)   (list))
+             (('ode-n . def)    (list))
+             (('cond-n . def)   (list))
+             (('cond-n . def)   (list))
+             (('dsc-n  . def)   (list))
+             (('regime-n . def) (list))
              ((name . def) (list (binding->ML (B:Val name def)) nll)))
             sysdefs)
        out)
@@ -1167,9 +1167,19 @@ struct
 
 open Real
 open Math
-open RungeKutta
-open CRungeKutta
 open Dynamics
+open RungeKutta
+
+EOF
+
+,(if (member solver '(crk3 crkdp crkbs))
+
+#<<EOF
+open CRungeKutta
+EOF
+"")
+
+#<<EOF
 
 fun putStrLn str = 
   (TextIO.output (TextIO.stdOut, str);
@@ -1213,7 +1223,6 @@ EOF
        ("fun bool_alloc n = Array.array (n, false)" ,nll)
        ("fun summer (a,b,y) = (vmap2 (fn (x,y) => x+y) (a,b,y))" ,nll)
        ("fun scaler (a,lst,y) = vmap (fn (x) => a*x) lst y" ,nll)
-       ("fun make_bool_initial (n, f) = let val a = bool_alloc n in fn () => f(a) end" ,nll)
        ("fun make_real_initial (n, f) = let val a = alloc n in fn () => f(a) end" ,nll)
        ("fun make_ext (n, f) = let val a = alloc n in fn () => f(a) end" ,nll)
        ("fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,alloc n)" ,nll)

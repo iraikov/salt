@@ -95,15 +95,16 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 |  start _ = raise Domain
 
 
-val p           = Model.paramfun()
-val initial     = Model.initfun(p) ()
-val evinitial   = optApply Model.initcondfun ()
-val dinitial    = optApply Model.dinitfun (p)
-val rinitial    = optApply Model.initregfun ()
+val p           = Model.paramfun ()
+val initial     = Model.initfun (p) (Model.alloc Model.n)
+val evinitial   = optApply Model.initcondfun (Model.alloc Model.nev)
+val dinitial    = optApply (optApply Model.dinitfun (p)) (Model.alloc Model.ndsc)
+val rinitial    = optApply Model.initregfun (Model.bool_alloc Model.nregime)
 val extinitial  = Model.initextfun (p)
 val extevinitial  = Model.initextevfun (p)
-val ynext       = Model.initfun(p) ()
-val err         = Model.initfun(p) ()
+val next        = Model.initfun (p) (Model.alloc Model.n)
+val ynext       = Model.initfun(p) (Model.alloc Model.n)
+val err         = Model.alloc Model.n
 val f = D.integral(Model.odefun(p),optApply Model.condfun p,
                    optApply Model.posfun p,optApply Model.negfun p,
                    optApply Model.dposfun p,Model.regfun,Model.alloc,
@@ -123,5 +124,5 @@ val _ = if is_help then exitHelp (CommandLine.name()) else ()
 val h0     = case is_timestep of SOME dt => dt | NONE => 0.01
 val tstop = case is_time of SOME t => t | NONE => 150.0
 
-val _ = start (f,initial,evinitial,optApply dinitial (),rinitial,extinitial(),extevinitial(),tstop,h0,ynext,err)
+val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial(),extevinitial(),tstop,h0,ynext,err)
 
