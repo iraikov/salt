@@ -46,11 +46,11 @@ fun printState (t,input) =
     end
       
 
-fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extevinitial,tmax,h0) =
+fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extevinitial,tmax,h0,ynext,err) =
     let
-	fun run (rs as D.RegimeState (t, input, tev, ev, d, regime, ext, extev, h, _)) =
+	fun run (rs as D.RegimeState (t, input, tev, ev, d, regime, ext, extev, h, _, _, _)) =
             (case f rs of
-	         rs' as D.RegimeState (t',nstate,tev',ev',d',regime',_,_,h',_) =>
+	         rs' as D.RegimeState (t',nstate,tev',ev',d',regime',_,_,h',_,_,_) =>
                  (printState (t',nstate); 
 	          if (t'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -60,13 +60,13 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.RegimeState (0.0, initial, 0.0, evinitial, dinitial, rinitial, extinitial, extevinitial, h0, false))
+	run (D.RegimeState (0.0, initial, 0.0, evinitial, dinitial, rinitial, extinitial, extevinitial, h0, ynext, err, false))
     end
-|  start (f,initial,SOME evinitial,NONE,NONE,extinitial,extevinitial,tmax,h0) =
+|  start (f,initial,SOME evinitial,NONE,NONE,extinitial,extevinitial,tmax,h0,ynext,err) =
     let
-	fun run (es as D.EventState (t, input, tev, ev, ext, extev, h, _)) =
+	fun run (es as D.EventState (t, input, tev, ev, ext, extev, h, _, _, _)) =
             (case f es of
-	         es' as D.EventState (t',nstate,tev',ev',_,_,h',_) =>
+	         es' as D.EventState (t',nstate,tev',ev',_,_,h',_,_,_) =>
                  (printState (t',nstate); 
 	          if (t'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -75,13 +75,13 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.EventState (0.0, initial, 0.0, evinitial, extinitial, extevinitial, h0, false))
+	run (D.EventState (0.0, initial, 0.0, evinitial, extinitial, extevinitial, h0, ynext, err, false))
     end
-|  start (f,initial,NONE,NONE,NONE,ext,extev,tmax,h0) =
+|  start (f,initial,NONE,NONE,NONE,ext,extev,tmax,h0,ynext,err) =
     let
-	fun run (cs as D.ContState (t, input, ext, extev, h)) =
+	fun run (cs as D.ContState (t, input, ext, extev, h, _, _)) =
             (case f cs of
-	         cs' as D.ContState (t',nstate,_,_,h') =>
+	         cs' as D.ContState (t',nstate,_,_,h',_,_) =>
                  (printState (t',nstate); 
 	          if (t'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -90,7 +90,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.ContState (0.0, initial, ext, extev, h0))
+	run (D.ContState (0.0, initial, ext, extev, h0, ynext, err))
     end
 |  start _ = raise Domain
 
@@ -102,6 +102,8 @@ val dinitial    = optApply Model.dinitfun (p)
 val rinitial    = optApply Model.initregfun ()
 val extinitial  = Model.initextfun (p)
 val extevinitial  = Model.initextevfun (p)
+val ynext       = Model.initfun(p) ()
+val err         = Model.initfun(p) ()
 val f = D.integral(Model.odefun(p),optApply Model.condfun p,
                    optApply Model.posfun p,optApply Model.negfun p,
                    optApply Model.dposfun p,Model.regfun,Model.alloc,
@@ -121,5 +123,5 @@ val _ = if is_help then exitHelp (CommandLine.name()) else ()
 val h0     = case is_timestep of SOME dt => dt | NONE => 0.01
 val tstop = case is_time of SOME t => t | NONE => 150.0
 
-val _ = start (f,initial,evinitial,optApply dinitial (),rinitial,extinitial(),extevinitial(),tstop,h0)
+val _ = start (f,initial,evinitial,optApply dinitial (),rinitial,extinitial(),extevinitial(),tstop,h0,ynext,err)
 

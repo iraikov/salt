@@ -51,6 +51,7 @@
     (close-output-port c-port)
     (if compile
         (run (mlton 
+              -profile alloc
               -default-ann "'allowFFI true'"
               -mlb-path-var ,(sprintf "'SALT_LIB ~A/sml-lib'" SALT-DIR)
               -mlb-path-var ,(sprintf "'RK_LIB $(SALT_LIB)/rk'")
@@ -297,13 +298,13 @@
 (test-model 'izhfs izhfs solver: 'crkdp compile: #t)
 
 (test-model 'iafrefr iafrefr solver: 'rk3  compile: #t)
-(test-model 'iafrefr iafrefr solver: 'rkdp  compile: #t)
 (test-model 'iafrefr iafrefr solver: 'crkdp  compile: #t)
 
 (test-model 'ml ml solver: 'rk4b compile: #t)
 (test-model 'ml ml solver: 'crkdp compile: #t)
 
 ;(test-model 'iafsyn iafsyn)
+
 
 
 
