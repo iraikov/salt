@@ -11,14 +11,14 @@ salt [options...] [input files ...]
 ## Introduction
 
 
-{{SALT}} is an implementation of a domain-specific language for
+SALT is an implementation of a domain-specific language for
 equation-based model. This implementation follows the work of Tom
 Short and the Julia Sims.jl library
 (http:https://github.com/tshort/Sims.jl), which is in turn based on
-David Broman's MKL  simulator and the work of George Giorgidze and
-Henrik Nilsson in functional hybrid modeling.  Following
-Sims.jl, a nodal formulation is used based on David Broman's
-thesis (http://www.bromans.com/david/publ/thesis-2010-david-broman.pdf) :  
+David Broman's MKL simulator and the work of George Giorgidze and
+Henrik Nilsson in functional hybrid modeling.  Following Sims.jl, a
+nodal formulation is used based on David Broman's thesis
+(http://www.bromans.com/david/publ/thesis-2010-david-broman.pdf) :
 
 ```
 David Broman. Meta-Languages and Semantics for
