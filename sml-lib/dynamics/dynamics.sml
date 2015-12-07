@@ -463,7 +463,7 @@ fun evresponse (fcond,fpos,fneg) =
             let 
                 val y' =  case fneg of 
                               NONE => fpos(x,y,e,ext,extev,yrsp)
-                            | SOME (SResponse f) => f (x,fpos(x,y,e,ext,extev,falloc n),e,ext,extev,yrsp)
+                            | SOME (SResponse f) => f (x,fpos(x,y,e,ext,extev,yrsp),e,ext,extev,yrsp)
                             | _ => (putStrLn "FunctionalHybridDynamics2: EventState integral response"; 
                                     raise Domain)
             in
