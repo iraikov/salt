@@ -139,6 +139,8 @@ fun thr (v1,v2) =
         case (s1,s2) of
             (~1,1) => true
           | (~1,0) => true
+          | (1,1)  => true
+          | (1,0)  => true
           | (_,_)  => false
     end
 
@@ -407,6 +409,8 @@ fun thr (v1,v2) =
         case (s1,s2) of
             (~1,1) => true
           | (~1,0) => true
+          | (1,0)  => true
+          | (1,1)  => true
           | (_,_)  => false
     end
 
