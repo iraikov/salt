@@ -77,7 +77,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 	printState (0.0, initial);
 	run (D.EventState (0.0, initial, 0.0, evinitial, extinitial, extevinitial, h0, ynext, rsp, err, evnext, false))
     end
-|  start (f,initial,NONE,NONE,NONE,ext,extev,tmax,h0,ynext,rsp,err) =
+|  start (f,initial,NONE,NONE,NONE,ext,extev,tmax,h0,ynext,rsp,err,NONE) =
     let
 	fun run (cs as D.ContState (t, input, ext, extev, h, _, _, _)) =
             (case f cs of
