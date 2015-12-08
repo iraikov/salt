@@ -49,11 +49,11 @@ fun printState (t,input) =
     end
       
 
-fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extevinitial,next,rsp,tmax) =
+fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extevinitial,next,rsp,SOME enext,tmax) =
     let
-	fun run (rs as D.RegimeState (t, input, xev, ev, d, regime, _, _, _, _, _)) =
+	fun run (rs as D.RegimeState (t, input, xev, ev, d, regime, _, _, _, _, _, _)) =
             (case f rs of
-	         rs' as D.RegimeState (t',nstate,tev',ev',d',regime',_,_,_,_,_) =>
+	         rs' as D.RegimeState (t',nstate,tev',ev',d',regime',_,_,_,_,_,_) =>
                  (printState (t',nstate); 
 	          if (t'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -62,13 +62,13 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.RegimeState (0.0, initial, 0.0, evinitial, dinitial, rinitial, extinitial, extevinitial, next, rsp, false))
+	run (D.RegimeState (0.0, initial, 0.0, evinitial, dinitial, rinitial, extinitial, extevinitial, next, rsp, enext, false))
     end
-|  start (f,initial,SOME evinitial,NONE,NONE,extinitial,extevinitial,next,rsp,tmax) =
+|  start (f,initial,SOME evinitial,NONE,NONE,extinitial,extevinitial,next,rsp,SOME enext,tmax) =
     let
-	fun run (es as D.EventState (t, input, tev, ev, _, _, _, _, _)) =
+	fun run (es as D.EventState (t, input, tev, ev, _, _, _, _, _, _)) =
             (case f es of
-	         es' as D.EventState (t',nstate,tev',ev',_,_,_,_,_) =>
+	         es' as D.EventState (t',nstate,tev',ev',_,_,_,_,_,_) =>
                  (printState (t',nstate); 
 	          if (t'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -77,9 +77,9 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.EventState (0.0, initial, 0.0, evinitial, extinitial, extevinitial, next, rsp, false))
+	run (D.EventState (0.0, initial, 0.0, evinitial, extinitial, extevinitial, next, rsp, enext, false))
     end
-|  start (f,initial,NONE,NONE,NONE,extinitial,extevinitial,next,rsp,tmax) =
+|  start (f,initial,NONE,NONE,NONE,extinitial,extevinitial,next,rsp,NONE,tmax) =
     let
 	fun run (cs as D.ContState (t, input, ext, extevinitial, next, rsp)) =
             (case f cs of
@@ -106,6 +106,7 @@ val extinitial  = Model.initextfun (p)
 val extevinitial  = Model.initextevfun (p)
 val next        = Model.initfun (p) (Model.alloc Model.n)
 val rsp         = Model.initfun (p) (Model.alloc Model.n)
+val evnext      = optApply Model.initcondfun (Model.alloc Model.nev)
 
 val optStatus = ref NONE
 val (opts, _) = (Options.getopt optStatus) (CommandLine.arguments())
@@ -123,9 +124,7 @@ val tstop = case is_time of SOME t => t | NONE => 150.0
 
 val f = D.integral(Model.odefun(p),optApply Model.condfun p,
                    optApply Model.posfun p,optApply Model.negfun p,
-                   optApply Model.dposfun p,Model.regfun,Model.alloc,
-                   Model.n,case evinitial of SOME ev => SOME (Model.nev) | _ => NONE,
-                   h)
+                   optApply Model.dposfun p,Model.regfun,h)
 
-val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial(),extevinitial(),next,rsp,tstop)
+val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial(),extevinitial(),next,rsp,evnext,tstop)
 
