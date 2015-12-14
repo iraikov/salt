@@ -653,7 +653,9 @@
                            '() condblock)))))
               (if (null? condblock)
                   (V:C 'NONE)
-                  (let ((fnval (V:Fn '(t y c ext extev c_out) 
+                  (let ((fnval (V:Fn  (if (pair? regblocks) 
+                                         '(t y c d ext extev c_out)
+                                         '(t y c ext extev c_out))
                                      (let ((stmts (codegen-set-stmts codegen-expr1 condblock 'c_out)))
                                        (if (null? used-asgns)
                                            (E:Begin stmts)
@@ -664,12 +666,41 @@
                           (list 
                            (V:Fn '(p) 
                                  (E:Ret (if (null? regblocks)
-                                            (V:Op 'SCondition (list fnval))
-                                            (V:Op 'RegimeCondition (list (V:Fn '(d) (E:Ret fnval))))))
-                                 ))
+                                            (V:Op 'SCondition (list (V:Op 'make_cond (list (V:Var 'p) fnval))))
+                                            (V:Op 'RegimeCondition  (list (V:Op 'make_regime_cond (list (V:Var 'p) fnval)))))
+                                        ))
+                           ))
+                    ))
+              ))
+
+           (condrhsfun
+            (let ((used-asgns
+                   (map
+                    (lambda (index) (assv index asgns))
+                    (delete-duplicates
+                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
+                           '() condblock)))))
+              (and (not (null? condblock))
+                   (V:Fn
+                    (if (pair? regblocks) 
+                        '((double . t) ((%pointer double) . p) 
+                          ((%pointer double) . y) ((%pointer double) . c) 
+                          ((%pointer double) . d) ((%pointer double) . ext) ((%pointer double) . extev) 
+                          ((%pointer double) . c_out))
+                        '((double . t) ((%pointer double) . p) 
+                           ((%pointer double) . y) ((%pointer double) . c) 
+                           ((%pointer double) . ext) ((%pointer double) . extev) 
+                           ((%pointer double) . c_out)))
+                    (let ((stmts (codegen-set-stmts* codegen-expr1 condblock 'c_out)))
+                      (if (null? used-asgns)
+                          (E:Begin stmts)
+                          (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                       used-asgns)
+                                 (E:Begin stmts))
                           ))
-                  ))
-            )
+                    ))
+              ))
+
 
            (posfun      
             (if (null? posblocks)
@@ -809,6 +840,7 @@
         (initextfun  . ,initextfun)
         (initextevfun  . ,initextevfun)
         (condfun . ,condfun)
+        (condrhsfun . ,condrhsfun)
         (posfun  . ,posfun)
         (negfun  . ,negfun)
         (dposfun . ,dposfun)
@@ -1145,6 +1177,7 @@
       (print-fragments
        (map (match-lambda
              (('rhsfun . def)   (list))
+             (('condrhsfun . def)   (list))
              (('ode-n . def)    (list))
              (('cond-n . def)   (list))
              (('cond-n . def)   (list))
@@ -1232,9 +1265,18 @@ EOF
             ;; adaptive solvers implemented in C
             ((crkbs crkdp)
              `(
-               ("val cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-               ("fun " ,(sprintf "~A_regime" solver) "(n) = make_" ,(sprintf "~A_regime" solver) "(n,cb)" ,nll)
-               ("fun " ,solver "(n) = make_" ,solver "(n,cb)" ,nll)
+               ("val c_regime_cond_eval = _import * : "
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array * real array  -> unit;" ,nll)
+               ("val c_cond_eval = _import * : "
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array  -> unit;", nll)
+               ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
+               ("fun make_regime_cond (p,f) = let val fe = c_regime_cond_eval condcb in "
+                "fn(t,y,c,d,ext,extev,c_out) => (fe (t,p,y,c,d,ext,extev,c_out); c_out) end" ,nll)
+               ("fun make_cond (p,f) = let val fe = c_cond_eval condcb in "
+                "fn(t,y,c,ext,extev,c_out) => (fe (t,p,y,c,ext,extev,c_out); c_out) end" ,nll)
+               ("val odecb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
+               ("fun " ,(sprintf "~A_regime" solver) "(n) = make_" ,(sprintf "~A_regime" solver) "(n,odecb)" ,nll)
+               ("fun " ,solver "(n) = make_" ,solver "(n,odecb)" ,nll)
                ("fun make_regime_stepper (n, deriv) = " ,(sprintf "~A_regime" solver) " (n)" ,nll)
                ("fun make_stepper (n, deriv) = " ,solver " (n)" ,nll)
                (,nll)
@@ -1243,6 +1285,8 @@ EOF
             ;; adaptive solvers with interpolation
             ((cerkoz cerkdp)
              `(
+               ("fun make_regime_cond (p, f) = f" ,nll)
+               ("fun make_cond (p, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
                ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
                 "fn (p, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout,err) " ,nll
@@ -1255,6 +1299,8 @@ EOF
             ;; adaptive solvers with threshold detection on grid points
             ((rkhe rkbs rkf45 rkck rkoz rkdp rkf45 rkf78 rkv65)
              `(
+               ("fun make_regime_cond (p, f) = f" ,nll)
+               ("fun make_cond (p, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nll)
                ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
                 "fn (p, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout,err) " ,nll
@@ -1268,6 +1314,15 @@ EOF
             ;; fixed-step solvers implemented in C
             ((crk3)
              `(
+               ("val c_regime_cond_eval = _import * : "
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array * real array  -> unit;" ,nll)
+               ("val c_cond_eval = _import * : "
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array  -> unit;", nll)
+               ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
+               ("fun make_regime_cond (p,f) = let val fe = c_regime_cond_eval condcb in "
+                "fn(t,y,c,d,ext,extev,c_out) => (fe (t,p,y,c,d,ext,extev,c_out); c_out) end" ,nll)
+               ("fun make_cond (p,f) = let val fe = c_cond_eval condcb in "
+                "fn(t,y,c,ext,extev,c_out) => (fe (t,p,y,c,ext,extev,c_out); c_out) end" ,nll)
                ("val cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
                ("fun " ,(sprintf "~A_regime" solver) "(n) = make_" ,(sprintf "~A_regime" solver) "(n,cb)" ,nll)
                ("fun " ,solver "(n) = make_" ,solver "(n,cb)" ,nll)
@@ -1278,6 +1333,8 @@ EOF
              )
             (else
              `(
+               ("fun make_regime_cond (p, f) = f" ,nll)
+               ("fun make_cond (p, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nll)
                ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
                 "fn (p, d, r, ext, extev, h, x, y, yout) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout)" ,nll
@@ -1303,6 +1360,10 @@ EOF
         (('rhsfun . def)
          (let ((sexpr (binding->sexpr (B:Val name def))))
            (fmt out (c-expr sexpr))))
+        (('condrhsfun . def)
+         (if def
+             (let ((sexpr (binding->sexpr (B:Val (string->symbol (string-append "cond" (symbol->string name))) def))))
+               (fmt out (c-expr sexpr)))))
         (else (begin)))
        sysdefs)
       
