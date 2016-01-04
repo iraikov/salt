@@ -599,12 +599,13 @@
          `(neg abs atan asin acos sin cos exp ln
                sqrt tan cosh sinh tanh hypot gamma lgamma log10 log2 log1p ldexp cube
                round ceiling floor 
-               random.exponential))
+               heaviside random.exponential))
         (op-names
          `(signal.neg signal.abs signal.atan signal.asin signal.acos signal.sin signal.cos signal.exp signal.ln
                       signal.sqrt signal.tan signal.cosh signal.sinh signal.tanh signal.hypot signal.gamma signal.lgamma signal.log10
                       signal.log2 signal.log1p signal.ldexp signal.cube
                       signal.round signal.ceiling signal.floor
+                      signal.heaviside 
                       random.exponential)))
     (fold (lambda (k v env)
             (let ((binding (gen-binding k v)))
@@ -1571,7 +1572,7 @@
 
 
 (define (units-primop f args units-args)
-  (d 'units-primop "f = ~A units-args = ~A~%" f units-args)
+  (d 'units-primop "f = ~A units-args = ~A args = ~A~%" f units-args args)
   (let ((u (case f 
              ((signal.add signal.sub) 
               (if (unit-equal? (car units-args) (cadr units-args))
@@ -1618,28 +1619,29 @@
            (or (and u (cdr u)) (env-lookup e env) unitless)))
         ((pair? e)
          (let ((op (car e)) (args (cdr e)))
-           (d 'expr-units "op = ~A args = ~A~%" op args)
-           (case op
-             ((signal.primop) 
-              (units-primop (car args) (cdr args) 
-                            (map (lambda (e) (expr-units e env)) (cdr args))))
-             ((signal.reinit) 
-              (units-reinit args env))
-             ((signal.if)     
-              (units-if args env))
-             ((signal.let)    
-              (units-let args env))
-             ((signal.call)  
-              (let ((f (car args))
-                    (fargs (cadr args)))
-                (units-function-call f fargs env)
-                ))
-             (else e)
-             )))
+           (let ((u (case op
+                      ((signal.primop) 
+                       (units-primop (car args) (cdr args) 
+                                     (map (lambda (e) (expr-units e env)) (cdr args))))
+                      ((signal.reinit) 
+                       (units-reinit args env))
+                      ((signal.if)     
+                       (units-if args env))
+                      ((signal.let)    
+                       (units-let args env))
+                      ((signal.call)  
+                       (let ((f (car args))
+                             (fargs (cadr args)))
+                         (units-function-call f fargs env)
+                         ))
+                      (else e)
+                      )))
+             (d 'expr-units "op = ~A args = ~A u = ~A~%" op args u)
+             u)))
         ((var-def? e)
          (expr-units (subst-symbol (var-def-sym e) env) env))
         ((free-variable? e)
-         (expr-units (free-variable-name e) env))
+         (error 'expr-units "unknown variable" (free-variable-name e)))
         ((variable? e)
          (expr-units (variable-value e) env))
         ((discrete-variable? e)
@@ -1877,13 +1879,13 @@
                         (ddim (if (equal? (quantity-int dim) (quantity-int Unity))
                                   (quantity-int dim)
                                   (- (quantity-int dim) (quantity-int Time)))))
+                    (d 'reduce-eq "ddim = ~A rhs = ~A ~%" ddim rhs)
                     (let ((rhs-units (expr-units rhs unit-env)))
                       (d 'reduce-eq "ddim = ~A dims(rhs-units) = ~A ~%" ddim (unit-dims rhs-units))
                       (if (equal? ddim (quantity-int (unit-dims rhs-units)))
                           `(setindex dy_out ,(cdr yindex) ,expr)
                           (error 'reduce-eq "dimension mismatch in rhs" 
-                                 (variable-name y) (variable-label y)
-                                 dim (unit-dims rhs-units)))
+                                 (variable-label y) ddim (unit-dims rhs-units)))
                     ))
               ))
            )

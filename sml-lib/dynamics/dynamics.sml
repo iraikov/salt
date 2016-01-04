@@ -30,6 +30,9 @@ val signal_gte = (op >=)
 val signal_lt = (op <)
 val signal_lte = (op <=)
 
+fun signal_heaviside (x) = 
+    if x < 0.0 then 0.0 else 1.0
+
 end
 
 structure FunctionalHybridDynamics1 =

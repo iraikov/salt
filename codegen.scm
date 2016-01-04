@@ -1155,8 +1155,6 @@
 
 (define (codegen-ODE/ML name sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
 
-  
-
     (if (and solver (not (member solver solvers)))
         (error 'codegen-ODE/ML "unknown solver" solver))
 
@@ -1349,11 +1347,20 @@ EOF
 )
 
 
+(define (prelude/C  #!key (libs '()))
+`(
+ #<<EOF
+#define signal_heaviside(x) (x<0.0 ? 0.0 : 1.0)
+
+EOF
+))
+
+
 (define (codegen-ODE/C name sim #!key (out (current-output-port)) (libs '()))
 
     (let ((sysdefs (codegen-ODE sim)))
       
-      ;;(if mod (print-fragments (prelude/C solver: solver libs: libs) out))
+      (print-fragments (prelude/C libs: libs) out)
       
       (for-each
        (match-lambda
