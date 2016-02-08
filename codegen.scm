@@ -482,7 +482,7 @@
                                (E:Ret (V:Fn '(d_out)
                                             (if (null? asgn-defs)
                                                 (E:Begin stmts)
-                                                (E:Let (map (lambda (x) (B:Val (car x) (codegen-expr1 (cdr x))))
+                                                (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
                                                             asgn-defs)
                                                        (E:Begin stmts))))))
                          ))
@@ -491,11 +491,27 @@
 
            (initextfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 externals 'ext_out)))
-              (V:Fn '(p) (E:Ret (V:Op 'make_ext (list (V:C (length externals)) (V:Fn '(ext_out) (E:Begin stmts))))))))
+              (V:Fn '(p) (E:Ret (V:Op 'make_ext (list (V:C (length externals)) 
+                                                      (V:Fn '(ext_out) 
+                                                            (if (null? asgn-defs)
+                                                                (E:Begin stmts)
+                                                                (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                                            asgn-defs)
+                                                                       (E:Begin stmts))))))
+                                                                ))
+              ))
 
            (initextevfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 externalevs 'extev_out)))
-              (V:Fn '(p) (E:Ret (V:Op 'make_ext (list (V:C (length externalevs)) (V:Fn '(extev_out) (E:Begin stmts))))))))
+              (V:Fn '(p) (E:Ret (V:Op 'make_ext (list (V:C (length externalevs)) 
+                                                      (V:Fn '(extev_out) 
+                                                            (if (null? asgn-defs)
+                                                                (E:Begin stmts)
+                                                                (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                                            asgn-defs)
+                                                                       (E:Begin stmts))))))
+                                ))
+              ))
 
 
            (rhsfun 
