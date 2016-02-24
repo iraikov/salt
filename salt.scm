@@ -563,15 +563,17 @@
           (let ((binding (gen-binding k v)))
             (extend-env-with-binding env binding)))
           empty-env
-        `(E 1/E E^2 E^PI/4 LOG2E LOG10E LN2 LN3 LNPI LN10 1/LN2 1/LN10 PI PI/2
-            PI/4 1/PI 2/PI 2/SQRTPI SQRTPI PI^2 DEGREE SQRT2 1/SQRT2 SQRT3 SQRT5
-            SQRT10 CUBERT2 CUBERT3 4THRT2 GAMMA1/2 GAMMA1/3 GAMMA2/3 PHI LNPHI
-            1/LNPHI EULER E^EULER SIN1 COS1 ZETA3)
-        (map (lambda (x) (constant 'number x unitless))
-             (list E 1/E E^2 E^PI/4 LOG2E LOG10E LN2 LN3 LNPI LN10 1/LN2 1/LN10 PI PI/2
-                   PI/4 1/PI 2/PI 2/SQRTPI SQRTPI PI^2 DEGREE SQRT2 1/SQRT2 SQRT3 SQRT5
-                   SQRT10 CUBERT2 CUBERT3 4THRT2 GAMMA1/2 GAMMA1/3 GAMMA2/3 PHI LNPHI
-                   1/LNPHI EULER E^EULER SIN1 COS1 ZETA3))
+        `(UNITZERO 
+          E 1/E E^2 E^PI/4 LOG2E LOG10E LN2 LN3 LNPI LN10 1/LN2 1/LN10 PI PI/2
+          PI/4 1/PI 2/PI 2/SQRTPI SQRTPI PI^2 DEGREE SQRT2 1/SQRT2 SQRT3 SQRT5
+          SQRT10 CUBERT2 CUBERT3 4THRT2 GAMMA1/2 GAMMA1/3 GAMMA2/3 PHI LNPHI
+          1/LNPHI EULER E^EULER SIN1 COS1 ZETA3)
+        (cons (constant 'number 0.0 'unitbottom)
+              (map (lambda (x) (constant 'number x unitless))
+                   (list E 1/E E^2 E^PI/4 LOG2E LOG10E LN2 LN3 LNPI LN10 1/LN2 1/LN10 PI PI/2
+                         PI/4 1/PI 2/PI 2/SQRTPI SQRTPI PI^2 DEGREE SQRT2 1/SQRT2 SQRT3 SQRT5
+                         SQRT10 CUBERT2 CUBERT3 4THRT2 GAMMA1/2 GAMMA1/3 GAMMA2/3 PHI LNPHI
+                         1/LNPHI EULER E^EULER SIN1 COS1 ZETA3)))
         ))
      
 
@@ -1517,13 +1519,19 @@
         (else e)
         ))
 
+(define (units-unify u1 u2)
+  (cond ((and (unit? u1) (unit? u2))
+         (unit-equal? u1 u2))
+        ((and (unit? u2) (equal? u1 'unitbottom)) #t)
+        ((and (unit? u1) (equal? u2 'unitbottom)) #t)
+        (else #f)))
 
 (define (units-reinit args env)
   (let ((x (cadr args))
         (y (caddr args)))
     (let ((xu (expr-units x env))
           (yu (expr-units y env)))
-      (if (unit-equal? xu yu)
+      (if (units-unify xu yu)
           xu
           (error 'units-reinit "units mismatch in reinit" args))
       ))
@@ -1539,14 +1547,14 @@
             (d 'units-if "cu = ~A xu = ~A yu = ~A~%" cu xu yu)
             ;; TODO: this is not necessary if regime equations take
             ;; into account units of quantities
-            (if (or (unit-equal? xu yu)
-                    (and (not (unitless? xu)) (unitless? yu))
-                    (and (unitless? xu) (not (unitless? yu))))
-                (if (unitless? xu) yu xu)
-                (error 'units-reinit "units mismatch in if" args))
-            ))
-         (else (error 'units-reinit "invalid arguments to if" args))
-         ))
+            (cond 
+             ((units-unify xu yu) (if (unit? xu) xu yu))
+             ((and (not (unitless? xu)) (unitless? yu)) xu)
+             ((and (unitless? xu) (not (unitless? yu))) yu)
+             (else (error 'units-reinit "units mismatch in if" args)))
+          ))
+  (else (error 'units-reinit "invalid arguments to if" args))
+  ))
 
 
 (define (units-let args env)
@@ -1575,7 +1583,7 @@
   (d 'units-primop "f = ~A units-args = ~A args = ~A~%" f units-args args)
   (let ((u (case f 
              ((signal.add signal.sub) 
-              (if (unit-equal? (car units-args) (cadr units-args))
+              (if (units-unify (car units-args) (cadr units-args))
                   (car units-args) 
                   (error 'units-primop "units mismatch" f units-args
                          (quantity-int (unit-dims (car units-args)))
@@ -1589,7 +1597,7 @@
              ((signal.neg) 
               (car units-args))
              (else unitless))))
-    (d 'units-primop "u = ~A~%" u)
+    (d 'units-primop "u = ~A dims(u) = ~A~%" u (unit-dims u))
     u))
 
 
@@ -1636,7 +1644,7 @@
                          ))
                       (else e)
                       )))
-             (d 'expr-units "op = ~A args = ~A u = ~A~%" op args u)
+             (d 'expr-units "op = ~A args = ~A u = ~A dims(u) = ~A~%" op args u (unit-dims u))
              u)))
         ((var-def? e)
          (expr-units (subst-symbol (var-def-sym e) env) env))
@@ -1881,7 +1889,7 @@
                                   (- (quantity-int dim) (quantity-int Time)))))
                     (d 'reduce-eq "ddim = ~A rhs = ~A ~%" ddim rhs)
                     (let ((rhs-units (expr-units rhs unit-env)))
-                      (d 'reduce-eq "ddim = ~A dims(rhs-units) = ~A ~%" ddim (unit-dims rhs-units))
+                      (d 'reduce-eq "ddim = ~A rhs-units = ~A dims(rhs-units) = ~A ~%" ddim rhs-units (unit-dims rhs-units))
                       (if (equal? ddim (quantity-int (unit-dims rhs-units)))
                           `(setindex dy_out ,(cdr yindex) ,expr)
                           (error 'reduce-eq "dimension mismatch in rhs" 
