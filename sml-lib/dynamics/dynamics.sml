@@ -22,6 +22,7 @@ val signal_cos = cos
 val signal_cosh = cosh
 val signal_tanh = tanh
 val signal_ln = ln
+val signal_exp = exp
                       
 val signal_max = max
 val signal_min = min
@@ -82,7 +83,7 @@ datatype model_stepper =
          | ContStepper  of (external_state * externalev_state * real * real * cont_state * cont_state) -> cont_state
 
 datatype model_condition = 
-         RegimeCondition of (real * cont_state * event_state * dsc_state * external_state * externalev_state * event_state) -> event_state
+         RegimeCondition of (real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * event_state) -> event_state
          | SCondition of (real * cont_state * event_state * external_state * externalev_state * event_state) -> event_state
 
 datatype model_response = 
@@ -152,7 +153,7 @@ fun posdetect (x, e, x', e') =
 
 fun condApply (SOME (RegimeCondition fcond)) =
     (fn(RegimeState (x,y,xe,e,d,r,ext,extev,ynext,yrsp,enext,root)) => 
-        let val e' = fixthr (fcond (x,y,e,d,ext,extev,enext))
+        let val e' = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
         in
             RegimeState (x,y,x,e',d,r,ext,extev,ynext,yrsp,e,root)
         end
@@ -213,14 +214,14 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
              (let
                  val (y',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
                                                     (x,y,e,d,r,ext,extev,yrsp)
-                 val e' = fixthr (fcond  (x,y',e,d',ext,extev,enext))
+                 val e' = fixthr (fcond  (x,y',e,d',r,ext,extev,enext))
                  val hasevent = posdetect (xe,e,x,e')
              in
                  RegimeState(x,y',x,e',d',r',ext,extev,ynext,y,e,hasevent)
              end)
            | false =>
              (let 
-                 val e'  = fixthr (fcond (x,y,e,d,ext,extev,enext))
+                 val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
                  val hasevent = posdetect (xe,e,x,e')
              in
                  if hasevent 
@@ -228,7 +229,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                  else (let
                           val x'  = x + h
                           val y'  = stepper (d,r,ext,extev,h,x,y,ynext)
-                          val e'  = fixthr (fcond (x',y',e,d,ext,extev,enext))
+                          val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
                           val root' = posdetect (xe,e,x',e')
                       in
                           RegimeState(x',y',x',e',d,r,ext,extev,y,yrsp,e,root')
@@ -339,7 +340,7 @@ datatype model_stepper =
                           (cont_state * error_state)
 
 datatype model_condition = 
-         RegimeCondition of (real * cont_state * event_state * dsc_state * external_state * externalev_state * event_state) -> event_state
+         RegimeCondition of (real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * event_state) -> event_state
          | SCondition of (real * cont_state * event_state * external_state * externalev_state * event_state) -> event_state
 
 datatype model_response = 
@@ -420,7 +421,7 @@ fun posdetect (x, e, x', e') =
 
 fun condApply (SOME (RegimeCondition fcond)) =
     (fn(RegimeState (x,y,xe,e,d,r,ext,extev,h,ynext,yrsp,errnext,enext,root)) => 
-        let val e' = fixthr (fcond (x,y,e,d,ext,extev,enext))
+        let val e' = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
         in
             RegimeState (x,y,x,e',d,r,ext,extev,h,ynext,yrsp,errnext,e,root)
         end
@@ -499,7 +500,7 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime)  =
                         Right h' => 
                         (let
                             val x'  = x + h
-                            val ev' = fixthr(fcond (x',ys',ev,d,ext,extev,enext))
+                            val ev' = fixthr(fcond (x',ys',ev,d,r,ext,extev,enext))
                             val root = posdetect (xev,ev,x',ev')
                         in
                             if root 
@@ -582,14 +583,14 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                 true =>
                 (let
                     val (y',d',r')  = evresponse_regime (fpos,fneg,fdiscrete,fregime) (x,y,e,d,r,ext,extev,yrsp)
-                    val e' = fixthr(fcond (x,y,e,d,ext,extev,enext))
+                    val e' = fixthr(fcond (x,y,e,d,r,ext,extev,enext))
                     val hasevent = posdetect (xev,e,x,e')
                 in
                     RegimeState (x,y',x,e',d',r',ext,extev,h,ynext,y,errnext,e,hasevent)
                 end)
              | false =>  
                let
-                   val e' = fixthr(fcond (x,y,e,d,ext,extev,enext))
+                   val e' = fixthr(fcond (x,y,e,d,r,ext,extev,enext))
                    val hasevent = posdetect (xev,e,x,e')
                in
                    if hasevent
@@ -704,7 +705,7 @@ datatype model_stepper =
                           (cont_state * error_state)
 
 datatype model_condition = 
-         RegimeCondition of (real * cont_state * event_state * dsc_state * external_state * externalev_state * event_state) -> event_state
+         RegimeCondition of (real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * event_state) -> event_state
          | SCondition of (real * cont_state * event_state * external_state * externalev_state * event_state) -> event_state
 
 datatype model_response = 
@@ -769,7 +770,7 @@ fun fixthr (v) =
 
 fun condApply (SOME (RegimeCondition fcond)) =
     (fn(RegimeState (x,y,e,d,r,ext,extev,h,root), eout) => 
-        let val e' = fixthr (fcond (x,y,e,d,ext,extev,eout))
+        let val e' = fixthr (fcond (x,y,e,d,r,ext,extev,eout))
         in
             RegimeState (x,y,e',d,r,ext,extev,h,root)
         end
@@ -853,7 +854,7 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc,n,nev)  =
             then 
                 (let
                     val (ys',e,finterp) = stepper (d,r,ext,extev,h,x,ys,yout)
-                    val ev' = fixthr(fcond (x+h,ys',ev,d,ext,extev,falloc nev))
+                    val ev' = fixthr(fcond (x+h,ys',ev,d,r,ext,extev,falloc nev))
                 in
                     case predictor tol (h,e) of
                         Right h' => 
@@ -864,13 +865,13 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime,falloc,n,nev)  =
                                      let
                                          val ysc = if theta > 0.0 then finterp theta else ys'
                                      in
-                                         Array.sub(fixthr(fcond (x+theta*h, ysc, ev, d, ext, extev, falloc nev)), evind)
+                                         Array.sub(fixthr(fcond (x+theta*h, ysc, ev, d, r, ext, extev, falloc nev)), evind)
                                      end
-                                 val y0    = Array.sub(fixthr (fcond (x,ys,ev,d,ext,extev,falloc n)), evind)
+                                 val y0    = Array.sub(fixthr (fcond (x,ys,ev,d,r,ext,extev,falloc n)), evind)
                                  val theta = secant tol fy y0 1.0 0.0 0
                                  val x'    = x+(theta)*h
                                  val ys''  = if theta > 0.0 then finterp (theta) else ys'
-                                 val ev''  = fixthr (fcond (x',ys'',ev,d,ext,extev,falloc nev))
+                                 val ev''  = fixthr (fcond (x',ys'',ev,d,r,ext,extev,falloc nev))
                                  val d'    = (case fdiscrete of 
                                                   SOME f => f (x',ys'',ev'',d)
                                                 | NONE => d)
@@ -965,7 +966,7 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                                  fpos(x,y,e,ext,extev,d,falloc n)
                                | SOME _ => (putStrLn "FunctionalHybridDynamics3: RegimeState integral response"; 
                                             raise Domain)
-                    val  e' = fcond (x,y',e,d,ext,extev,falloc nev)
+                    val  e' = fcond (x,y',e,d,r,ext,extev,falloc nev)
                 in
                     RegimeState (x,y',e',d,r,ext,extev,h,false) 
                 end)

@@ -368,6 +368,7 @@
         (regime-n (length regblocks))
 
         )
+
     (let* (
 
            (codegen-expr1 (codegen-expr ode-inds ode-order invcindexmap))
@@ -390,18 +391,20 @@
                                                  (lambda (x) x))))
                         
            (asgn-idxs (delete-duplicates
-                       (filter-map
-                        (match-lambda [('setindex 'dy_out index val) #f]
-                                      [(or ('setindex 'y_out index val)
-                                           ('reduceindex 'y_out index val)) index]
-                                      [eq (error 'codegen "unknown equation type" eq)])
-                        eqblock)))
+                       (append
+                        (map car asgn-defs)
+                        (filter-map
+                         (match-lambda [('setindex 'dy_out index val) #f]
+                                       [(or ('setindex 'y_out index val)
+                                            ('reduceindex 'y_out index val)) index]
+                                       [eq (error 'codegen "unknown equation type" eq)])
+                         eqblock))
+                       ))
 
            (asgn-dag (fold (match-lambda* 
                             [(('setindex 'dy_out index val) dag) dag]
                             [(('setindex 'y_out index val) dag)
-                             (let ((edges (map (lambda (src) (cons src index)) 
-                                               (fold-asgns asgn-idxs val))))
+                             (let ((edges (fold-asgns asgn-idxs val)))
                                (if (null? edges) (cons `(,index) dag)
                                    (fold (lambda (e dag) (update-edge e dag))  
                                          dag edges)))]
@@ -532,19 +535,27 @@
             )
 
            (stepfun 
-            (let ((rhsfun 
+            (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
+
+                  (used-asgns
+                   (map
+                    (lambda (index) (or (assv index asgns) (assv index asgn-defs)))
+                    (delete-duplicates
+                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
+                           '() odes))))
+                  (rhsfun 
                    (V:Fn (if (pair? regblocks) '(p d r ext extev) '(p ext extev))
                          (E:Ret
                           (V:Fn '(t y dy_out)
-                                (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
-                                       (stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
-                                  (if (null? asgns)
-                                      (E:Begin stmts)
-                                      (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) asgns)
-                                             (E:Begin stmts)))
-                                  ))
-                          ))
-                   ))
+                                (let ((stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
+                                   (if (null? used-asgns)
+                                       (E:Begin stmts)
+                                       (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) used-asgns)
+                                              (E:Begin stmts))
+                                       ))
+                                ))
+                         ))
+                  )
               (V:Op (if (pair? regblocks) 'make_regime_stepper 'make_stepper)
                     (list (V:C ode-n) rhsfun))))
 
@@ -670,7 +681,7 @@
               (if (null? condblock)
                   (V:C 'NONE)
                   (let ((fnval (V:Fn  (if (pair? regblocks) 
-                                         '(t y c d ext extev c_out)
+                                         '(t y c d r ext extev c_out)
                                          '(t y c ext extev c_out))
                                      (let ((stmts (codegen-set-stmts codegen-expr1 condblock 'c_out)))
                                        (if (null? used-asgns)
@@ -1285,7 +1296,7 @@ EOF
                 "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array  -> unit;", nll)
                ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
                ("fun make_regime_cond (p,f) = let val fe = c_regime_cond_eval condcb in "
-                "fn(t,y,c,d,ext,extev,c_out) => (fe (t,p,y,c,d,ext,extev,c_out); c_out) end" ,nll)
+                "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
                ("fun make_cond (p,f) = let val fe = c_cond_eval condcb in "
                 "fn(t,y,c,ext,extev,c_out) => (fe (t,p,y,c,ext,extev,c_out); c_out) end" ,nll)
                ("val odecb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
@@ -1334,7 +1345,7 @@ EOF
                 "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array  -> unit;", nll)
                ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
                ("fun make_regime_cond (p,f) = let val fe = c_regime_cond_eval condcb in "
-                "fn(t,y,c,d,ext,extev,c_out) => (fe (t,p,y,c,d,ext,extev,c_out); c_out) end" ,nll)
+                "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
                ("fun make_cond (p,f) = let val fe = c_cond_eval condcb in "
                 "fn(t,y,c,ext,extev,c_out) => (fe (t,p,y,c,ext,extev,c_out); c_out) end" ,nll)
                ("val cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
