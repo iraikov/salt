@@ -40,7 +40,7 @@
          parse elaborate simcreate codegen-ODE codegen-ODE/ML codegen-ODE/C 
          math-constant-env math-binop-env math-unop-env 
          model-quantities model-units
-         verbose
+         verbose add-trace clear-trace
 
          constant
          empty-env env-lookup extend-env-with-binding env->list
@@ -128,10 +128,27 @@
 
 (define verbose (make-parameter 0))
 
+(define trace-locations (make-parameter '()))
+
+(define (add-trace loc)
+  (if (not (member loc (trace-locations)))
+      (trace-locations (cons loc (trace-locations)))))
+
+(define (clear-trace loc)
+  (trace-locations '()))
+
 
 (define (d loc fstr . args)
   (let ([port (current-error-port)])
     (if (positive? (verbose)) 
+	(begin 
+          (fprintf port "~A: " loc)
+          (apply fprintf port fstr args)
+          (flush-output port) ) )))
+
+(define (trace loc fstr . args)
+  (let ([port (current-error-port)])
+    (if (member loc (trace-locations))
 	(begin 
           (fprintf port "~A: " loc)
           (apply fprintf port fstr args)
@@ -811,21 +828,20 @@
      expr (env-stack-show env-stack))
 
   (let recur ((e expr))
-
-    (d 'resolve "e: ~A~%" e)
+    (trace 'resolve "e: ~A~%" e)
 
     (cond
      
      ((free-variable? e)
       (let ((assoc-var-def (env-stack-lookup (free-variable-name e) env-stack)))
-        (d 'resolve "free-var: e = ~A assoc-var-def = ~A~%" (free-variable-name e) assoc-var-def)
+        (trace 'resolve "free-var: e = ~A assoc-var-def = ~A~%" (free-variable-name e) assoc-var-def)
         (if assoc-var-def
             (let recur ((resval (binding-value assoc-var-def)))
               (let ((resval1 (resolve resval env-stack)))
                 (if (equal? resval resval1) resval
                     (recur resval1))))
             (let ((assoc-unit (assv (free-variable-name e) (model-units))))
-              (d 'resolve "free-var: e = ~A assoc-unit = ~A~%" (free-variable-name e) assoc-unit)
+              (trace 'resolve "free-var: e = ~A assoc-unit = ~A~%" (free-variable-name e) assoc-unit)
               (if assoc-unit
                   (constant 'number 1.0 (cdr assoc-unit))
                   e)))
@@ -921,8 +937,8 @@
 
      ((pair? e)
       (let ((op (car e)) (args (cdr e)))
-        (d 'resolve "op = ~A~%" op)
-        (d 'resolve "args = ~A~%" args)
+        (trace 'resolve "op = ~A~%" op)
+        (trace 'resolve "args = ~A~%" args)
         (case op
           ((signal.if)   `(,op . ,(map recur args)))
           ((signal.cond) `(,op . ,(map recur args)))
@@ -944,14 +960,14 @@
 
   (let recur ((e expr))
 
-    (d 'resolve-reinit "e: ~A~%" e)
+    (trace 'resolve-reinit "e: ~A~%" e)
 
     (cond
 
      ((pair? e)
       (let ((op (car e)) (args (cdr e)))
-        (d 'resolve "op = ~A~%" op)
-        (d 'resolve "args = ~A~%" args)
+        (trace 'resolve "op = ~A~%" op)
+        (trace 'resolve "args = ~A~%" args)
         (case op
           ((reinit)   (reinit evname (car args) (cadr args)))
           (else       e))
@@ -971,7 +987,7 @@
                    (equations1
                     (let ((s1 (resolve s env-stack))
                           (expr1 (resolve expr env-stack)))
-                      (d 'merge-regime-eq "s1 = ~A~%expr1 = ~A~%" s1 expr1) 
+                      (trace 'merge-regime-eq "s1 = ~A~%expr1 = ~A~%" s1 expr1) 
                       (if (null? equations)
                           (list (list s1 `(signal.if ,(make-regime-variable name) 
                                                      ,expr1 ,(constant 'number 0.0 unitless))))
@@ -980,8 +996,8 @@
                              (fold (match-lambda* 
                                     [((and eq (s2 expr2)) (eqs found?))
                                      (begin
-                                       (d 'merge-regime-eq "s1 = ~A~%s2 = ~A~%" s1 s2)
-                                       (d 'merge-regime-eq "expr1 = ~A expr2 = ~A~%" expr1 expr2)
+                                       (trace 'merge-regime-eq "s1 = ~A~%s2 = ~A~%" s1 s2)
+                                       (trace 'merge-regime-eq "expr1 = ~A expr2 = ~A~%" expr1 expr2)
                                        (if (equal? (variable-identity s2) (variable-identity s1))
                                            (list (cons (list s1 `(signal.if ,(make-regime-variable name) 
                                                                             ,expr1 ,expr2)) eqs)
@@ -999,7 +1015,7 @@
                            ))
                       ))
                    )
-               (d 'merge-regime-eq "regime-eq = ~A equations1 = ~A~%" regime-eq equations1)
+               (trace 'merge-regime-eq "regime-eq = ~A equations1 = ~A~%" regime-eq equations1)
                equations1)
   ))
   
@@ -1177,7 +1193,7 @@
           )
 
         (let ((en (car entries)))
-          (d 'elaborate "en = ~A~%" en)
+          (trace 'elaborate "en = ~A~%" en)
 
           (if (astdecls? en)
 
@@ -1202,7 +1218,7 @@
                      (($ variable name label value has-history dim)
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (make-variable name label resolved-value has-history dim)))
-                        (d 'elaborate "variable: name = ~A label = ~A value = ~A~%" name label value)
+                        (trace 'elaborate "variable: name = ~A label = ~A value = ~A~%" name label value)
                         (recur (cdr entries) env-stack
                                (cons (cons name resolved-value) definitions)
                                discrete-definitions
@@ -1229,7 +1245,7 @@
                         ))
 
                      (($ parameter name label value dim)
-                      (d 'elaborate "parameter: label = ~A value = ~A~%" label value)
+                      (trace 'elaborate "parameter: label = ~A value = ~A~%" label value)
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (parameter name label resolved-value dim)))
                         (recur (cdr entries) env-stack
@@ -1256,7 +1272,7 @@
                       )
 
                      (($ field name label value dim)
-                      (d 'elaborate "field: label = ~A value = ~A~%" label value)
+                      (trace 'elaborate "field: label = ~A value = ~A~%" label value)
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (field name label resolved-value dim)))
                         (recur (cdr entries) env-stack
@@ -1271,7 +1287,7 @@
                         ))
 
                      (($ external name label initial-value dim)
-                      (d 'elaborate "external: label = ~A initial-value = ~A~%" label initial-value)
+                      (trace 'elaborate "external: label = ~A initial-value = ~A~%" label initial-value)
                       (let* ((resolved-initial (resolve initial-value env-stack))
                              (en1 (external name label resolved-initial dim)))
                         (recur (cdr entries) env-stack
@@ -1286,7 +1302,7 @@
                         ))
 
                      (($ externalev name label initial-value dim)
-                      (d 'elaborate "externalevs: label = ~A initial-value = ~A~%" label initial-value)
+                      (trace 'elaborate "externalevs: label = ~A initial-value = ~A~%" label initial-value)
                       (let* ((resolved-initial (resolve initial-value env-stack))
                              (en1 (externalev name label resolved-initial dim)))
                         (recur (cdr entries) env-stack
@@ -1301,8 +1317,8 @@
                         ))
 
                      (($ equation s expr)
-                      (d 'elaborate "equation: unresolved rhs = ~A~%" expr)
-                      (d 'elaborate "equation: rhs = ~A~%" (resolve expr env-stack))
+                      (trace 'elaborate "equation: unresolved rhs = ~A~%" expr)
+                      (trace 'elaborate "equation: rhs = ~A~%" (resolve expr env-stack))
                       (recur (cdr entries) env-stack
                              definitions discrete-definitions parameters fields externals externalevs
                              (cons (list (resolve s env-stack) (resolve expr env-stack)) equations)
@@ -1322,8 +1338,8 @@
                       (let (
                             (condition-index (length conditions))
                             )
-                        (d 'elaborate "structural-event: name = ~A label = ~A event = ~A ~%" name label event)
-                        (d 'elaborate "structural-event: target = ~A~%" target)
+                        (trace 'elaborate "structural-event: name = ~A label = ~A event = ~A ~%" name label event)
+                        (trace 'elaborate "structural-event: target = ~A~%" target)
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions parameters fields externals externalevs
                                ;; TODO: merge units of regime quantities properly
@@ -1471,9 +1487,9 @@
       (match f (($ function name formals body)
                 (let ((args (subst-pair-arg arg env-stack)))
                   (let ((fenv (function-call-env formals args empty-env)))
-                    (d 'subst-function-call "fenv = ~A~%" (map car (env->list fenv)))
+                    (trace 'subst-function-call "fenv = ~A~%" (map car (env->list fenv)))
                     (let ((expr1 (subst-expr body (push-env-stack fenv env-stack))))
-                      (d 'subst-function-call "expr1 = ~A~%" expr1)
+                      (trace 'subst-function-call "expr1 = ~A~%" expr1)
                       expr1))
                   ))
              (($ free-variable name)
@@ -1490,7 +1506,7 @@
          (subst-symbol e env-stack))
         ((pair? e)
          (let ((op (car e)) (args (cdr e)))
-           (d 'subst-expr "op = ~A args = ~A~%" op args)
+           (trace 'subst-expr "op = ~A args = ~A~%" op args)
            (case op
              ((signal.reinit) (cons 'signal.reinit (subst-reinit args env-stack)))
              ((signal.if)     (cons 'signal.if (subst-if args env-stack)))
@@ -1501,7 +1517,7 @@
              ((signal.call)  
               (let ((f (car args))
                     (fargs (cadr args)))
-                (d 'subst-expr "f = ~A fargs = ~A~%" f args)
+                (trace 'subst-expr "f = ~A fargs = ~A~%" f args)
                 (subst-function-call f fargs env-stack)
                 ))
              ((signal.primop)  
@@ -1544,7 +1560,7 @@
           (let ((cu (expr-units c env))
                 (xu (expr-units x env))
                 (yu (expr-units y env)))
-            (d 'units-if "cu = ~A xu = ~A yu = ~A~%" cu xu yu)
+            (trace 'units-if "cu = ~A xu = ~A yu = ~A~%" cu xu yu)
             ;; TODO: this is not necessary if regime equations take
             ;; into account units of quantities
             (cond 
@@ -1597,7 +1613,7 @@
              ((signal.neg) 
               (car units-args))
              (else unitless))))
-    (d 'units-primop "u = ~A dims(u) = ~A~%" u (unit-dims u))
+    (trace 'units-primop "u = ~A~%" u)
     u))
 
 
@@ -1605,16 +1621,16 @@
   (d 'units-function-call "f = ~A arg = ~A~%" f arg)
   (if (symbol? f)
       (let ((units-args (units-pair-arg arg env)))
-        (d 'units-function-call "units-args = ~A~%" units-args)
+        (trace 'units-function-call "units-args = ~A~%" units-args)
         (units-primop f arg units-args))
       (match-let
        ((($ function name formals body) f))
        (let ((fenv (function-call-env formals arg empty-env)))
-         (d 'units-function-call "fenv = ~A~%" fenv)
+         (trace 'units-function-call "fenv = ~A~%" fenv)
          (let ((u (expr-units 
                    (subst-expr body (push-env-stack fenv empty-env-stack))
                    env)))
-           (d 'units-function-call "u = ~A~%" u)
+           (trace 'units-function-call "u = ~A~%" u)
            u)
          ))
       ))
@@ -1624,6 +1640,7 @@
   (d 'expr-units "e = ~A~%" e)
   (cond ((symbol? e)
          (let ((u (assv e (model-units))))
+           (trace 'expr-units "(symbol? e) => e = ~A u = ~A~%" e u)
            (or (and u (cdr u)) (env-lookup e env) unitless)))
         ((pair? e)
          (let ((op (car e)) (args (cdr e)))
@@ -1644,26 +1661,42 @@
                          ))
                       (else e)
                       )))
-             (d 'expr-units "op = ~A args = ~A u = ~A dims(u) = ~A~%" op args u (unit-dims u))
+             (trace 'expr-units "(pair? e) => op = ~A args = ~A u = ~A~%" e args u)
              u)))
         ((var-def? e)
-         (expr-units (subst-symbol (var-def-sym e) env) env))
+         (let ((u (expr-units (subst-symbol (var-def-sym e) env) env)))
+           (trace 'expr-units "(var-def? e) => e = ~A u = ~A~%" e u)
+           u))
         ((free-variable? e)
          (error 'expr-units "unknown variable" (free-variable-name e)))
         ((variable? e)
-         (expr-units (variable-value e) env))
+         (let ((u (expr-units (variable-value e) env)))
+           (trace 'expr-units "(variable? e) => e = ~A u = ~A~%" e u)
+           u))
         ((discrete-variable? e)
-         (expr-units (discrete-variable-value e) env))
+         (let ((u (expr-units (discrete-variable-value e) env)))
+           (trace 'expr-units "(discrete-variable? e) => e = ~A u = ~A~%" e u)
+           u))
         ((parameter? e)
-         (expr-units (parameter-value e) env))
+         (let ((u (expr-units (parameter-value e) env)))
+           (trace 'expr-units "(parameter? e) => e = ~A u = ~A~%" e u)
+           u))
         ((field? e)
-         (expr-units (field-value e) env))
+         (let ((u (expr-units (field-value e) env)))
+           (trace 'expr-units "(field? e) => e = ~A u = ~A~%" e u)
+           u))
         ((external? e)
-         (expr-units (external-initial e) env))
+         (let ((u (expr-units (external-initial e) env)))
+           (trace 'expr-units "(external? e) => e = ~A u = ~A~%" e u)
+           u))
         ((left-var? e)
-         (expr-units (left-var-u e) env))
+         (let ((u (expr-units (left-var-u e) env)))
+           (trace 'expr-units "(left-var? e) => e = ~A u = ~A~%" e u)
+           u))
         ((constant? e)
-         (constant-unit e)) 
+         (let ((u (constant-unit e)))
+           (trace 'expr-units "(constant? e) => e = ~A u = ~A~%" e u)
+           u))
         (else e))
   )
          
@@ -1679,7 +1712,6 @@
         (extevindexmap (alist-ref 'extevindexmap indexmaps))
         )
   (d 'reduce-expr "expr = ~A~%" expr)
-  (d 'reduce-expr "cindexmap = ~A~%" (env->list cindexmap))
   (match expr
 
          (($ pair-arg fst snd)
@@ -1749,7 +1781,7 @@
 
          (($ parameter name label value dim)
           (let ((yindex (env-lookup name pindexmap)))
-            (d 'reduce-expr "pindexmap = ~A~%" pindexmap)
+            (trace 'reduce-expr "pindexmap = ~A~%" pindexmap)
             (if (not yindex)
                 (error 'reduce-expr "parameter not in index" name)
                 `(getindex p ,(cdr yindex)))
@@ -1757,7 +1789,7 @@
 
          (($ field name label value dim)
           (let ((yindex (env-lookup name pindexmap)))
-            (d 'reduce-expr "pindexmap = ~A~%" pindexmap)
+            (trace 'reduce-expr "pindexmap = ~A~%" pindexmap)
             (if (not yindex)
                 (error 'reduce-expr "parameter not in index" name)
                 `(getindex p ,(cdr yindex)))
@@ -1765,7 +1797,7 @@
 
          (($ external name label initial dim)
           (let ((yindex (env-lookup name extindexmap)))
-            (d 'reduce-expr "extindexmap = ~A~%" extindexmap)
+            (trace 'reduce-expr "extindexmap = ~A~%" extindexmap)
             (if (not yindex)
                 (error 'reduce-expr "external not in index" name)
                 `(ext ,(cdr yindex) ,(variable-name model-time)))
@@ -1773,7 +1805,7 @@
 
          (($ externalev name label initial dim)
           (let ((yindex (env-lookup name extevindexmap)))
-            (d 'reduce-expr "extevindexmap = ~A~%" (env->list extevindexmap))
+            (trace 'reduce-expr "extevindexmap = ~A~%" (env->list extevindexmap))
             (if (not yindex)
                 (error 'reduce-expr "external event not in index" name)
                 `(extev ,(cdr yindex) ,(variable-label model-time)))
@@ -1823,7 +1855,6 @@
         )
 
   (d 'reduce-constant-expr "expr = ~A~%" expr)
-  (d 'reduce-constant-expr "cindexmap = ~A~%" (env->list cindexmap))
   (match expr
 
          (($ pair-arg fst snd)
@@ -1887,9 +1918,9 @@
                         (ddim (if (equal? (quantity-int dim) (quantity-int Unity))
                                   (quantity-int dim)
                                   (- (quantity-int dim) (quantity-int Time)))))
-                    (d 'reduce-eq "ddim = ~A rhs = ~A ~%" ddim rhs)
+                    (trace 'reduce-eq "ddim = ~A rhs = ~A ~%" ddim rhs)
                     (let ((rhs-units (expr-units rhs unit-env)))
-                      (d 'reduce-eq "ddim = ~A rhs-units = ~A dims(rhs-units) = ~A ~%" ddim rhs-units (unit-dims rhs-units))
+                      (trace 'reduce-eq "ddim = ~A dims(rhs-units) = ~A ~%" ddim (unit-dims rhs-units))
                       (if (equal? ddim (quantity-int (unit-dims rhs-units)))
                           `(setindex dy_out ,(cdr yindex) ,expr)
                           (error 'reduce-eq "dimension mismatch in rhs" 
@@ -1904,7 +1935,7 @@
                   (error 'reduce-eq "variable not in index" name)
                   (let ((expr (reduce-expr rhs indexmaps)))
                     (let ((rhs-units (expr-units rhs unit-env)))
-                      (d 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
+                      (trace 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
                       (if (equal? dim (unit-dims rhs-units))
                           `(setindex y_out ,(cdr yindex) ,expr)
                           (error 'reduce-eq "dimension mismatch in rhs" 
@@ -1921,7 +1952,7 @@
                   (error 'reduce-eq "variable not in index" y)
                   (let ((expr (reduce-expr (make-call op `(getindex y ,(cdr yindex)) rhs) indexmaps)))
                     (let ((rhs-units (expr-units rhs unit-env)))
-                      (d 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
+                      (trace 'reduce-eq "dim = ~A dims(rhs-units) = ~A ~%" dim (unit-dims rhs-units))
                       (if (equal? dim (unit-dims rhs-units))
                           `(reduceindex y_out ,(cdr yindex) ,expr)
                           (error 'reduce-eq "dimension mismatch in rhs" 
@@ -1937,15 +1968,15 @@
                   (expr (reduce-expr rhs indexmaps)))
               (if (not evindex)
                   (error 'reduce-eq "event identifier not found in indexmap" name))
-              (d 'reduce-eq "evcondition name = ~A~%" name)
-              (d 'reduce-eq "expr = ~A~%" expr)
+              (trace 'reduce-eq "evcondition name = ~A~%" name)
+              (trace 'reduce-eq "expr = ~A~%" expr)
               (if (expr-units rhs unit-env)
                   `(setindex c_out ,(cdr evindex) ,expr)
                   (error 'reduce-eq "dimension mismatch in condition" expr))
               ))
            
            (($ evresponse name rhs)
-            (d 'reduce-eq "evresponse name = ~A rhs = ~A~%" name rhs)
+            (trace 'reduce-eq "evresponse name = ~A rhs = ~A~%" name rhs)
             (let ((y (match rhs
                             (('signal.reinit e ($ left-var u) yindex . rest) u)
                             (error 'reduce-eq "unknown event response equation" eq))))
@@ -1998,7 +2029,6 @@
 (define (simcreate eqset)
 
   (let* ((nodemap    (equation-set-nodemap eqset))
-         (dd         (d 'simcreate "nodemap = ~A~%" nodemap) )
          (regimemap  (equation-set-regimemap eqset))
          (dimenv     (equation-set-dimenv eqset))
          (conditions (equation-set-conditions eqset))
@@ -2008,8 +2038,6 @@
           (fold (lambda (p env)
                   (let* ((name (car p)) (rhs (cdr p))
                          (rhs-units (expr-units rhs env)))
-                    (d 'unit-env "rhs-units = ~A (env-lookup dimenv name) ~A~%" 
-                       rhs-units (env-lookup name dimenv))
                     (if (equal? (quantity-int (binding-value (env-lookup name dimenv)))
                                 (quantity-int (unit-dims rhs-units)))
                         (extend-env-with-binding
@@ -2128,9 +2156,6 @@
                       (extevindexmap . ,extevindexmap)
                       ))
          
-         (dd (d 'reduce-expr "extindexmap = ~A~%" (env->list extindexmap)))
-         (dd (d 'reduce-expr "extevindexmap = ~A~%" (env->list extevindexmap)))
-
          (param-block 
           (map (lambda (x) (reduce-constant-expr (cdr x) indexmaps))
                (append (equation-set-parameters eqset)
