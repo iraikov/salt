@@ -712,7 +712,8 @@
                     (if (pair? regblocks) 
                         '((double . t) ((%pointer double) . p) 
                           ((%pointer double) . y) ((%pointer double) . c) 
-                          ((%pointer double) . d) ((%pointer double) . ext) ((%pointer double) . extev) 
+                          ((%pointer double) . d) ((%pointer int) . r) 
+                          ((%pointer double) . ext) ((%pointer double) . extev) 
                           ((%pointer double) . c_out))
                         '((double . t) ((%pointer double) . p) 
                            ((%pointer double) . y) ((%pointer double) . c) 
@@ -1291,7 +1292,7 @@ EOF
             ((crkbs crkdp)
              `(
                ("val c_regime_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array * real array  -> unit;" ,nll)
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
                ("val c_cond_eval = _import * : "
                 "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array  -> unit;", nll)
                ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
@@ -1340,7 +1341,7 @@ EOF
             ((crk3)
              `(
                ("val c_regime_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array * real array  -> unit;" ,nll)
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * bool array * real array * real array  -> unit;" ,nll)
                ("val c_cond_eval = _import * : "
                 "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array  -> unit;", nll)
                ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
