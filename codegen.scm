@@ -1022,14 +1022,15 @@
                     `(%begin . ,(append (reverse (car (fold lbinding->sexpr '(() . ()) bnds))) (list (stmt->sexpr body)))))
 			  
 	 (E:Begin   (stmts)  
-                    `(%begin . ,(map (lambda (x) (stmt->sexpr x)) stmts)))
+                    (let ((stmts1 (map (lambda (x) (stmt->sexpr x)) stmts)))
+                      `(%begin . ,(if (null? stmts1) (list fmt-null) stmts1))))
 
 	 (E:Set   (v i x)  
                     `(vector-set! ,(value->sexpr v) ,i ,(value->sexpr x) ))
 
 	 (E:Ret     (v)  (value->sexpr v))
 		    
-	 (E:Noop    () `(%begin))
+	 (E:Noop    () `(%begin ,fmt-null))
 	 ))
 
 (define (mathop->cfun op)
