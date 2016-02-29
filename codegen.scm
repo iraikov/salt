@@ -526,10 +526,16 @@
                       '((double . t) ((%pointer double) . p) ((%pointer double) . ext) ((%pointer double) . extev) 
                         ((%pointer double) . y) ((%pointer double) . dy_out)))
                   (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
+                         (used-asgns
+                          (map
+                           (lambda (index) (or (assv index asgns) (assv index asgn-defs)))
+                           (delete-duplicates
+                            (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
+                                  '() odes))))
                          (stmts (codegen-set-stmts* codegen-expr1 odes 'dy_out)))
-                    (if (null? asgns)
+                    (if (null? used-asgns)
                         (E:Begin stmts)
-                        (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) asgns)
+                        (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) used-asgns)
                                (E:Begin stmts)))
                     ))
             )
@@ -1341,7 +1347,7 @@ EOF
             ((crk3)
              `(
                ("val c_regime_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * bool array * real array * real array  -> unit;" ,nll)
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
                ("val c_cond_eval = _import * : "
                 "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array  -> unit;", nll)
                ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
