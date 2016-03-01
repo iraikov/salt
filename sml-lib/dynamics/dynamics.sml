@@ -168,24 +168,26 @@ fun condApply (SOME (RegimeCondition fcond)) =
   | condApply (NONE) = raise Domain
 
 fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
-    case fpos of 
-        SOME (RegimeResponse fpos) =>
-        (fn(x,y,e,d,r,ext,extev,yrsp) =>
-            let
-                val y' = case fneg of 
-                             NONE => fpos(x,y,e,d,ext,extev,yrsp)
-                           | SOME (RegimeResponse f) => f (x,fpos(x,y,e,d,ext,extev,yrsp),e,d,ext,extev,yrsp)
-                           | _ => (putStrLn "FunctionalHybridDynamics1: RegimeState integral response"; 
-                                   raise Domain)
-                val d'  =  (case fdiscrete of 
-                                SOME f => f (x,y',e,d)
-                              | NONE => d)
-                val r'  = fregime (e,r)
-            in
-                (y',d',r')
-            end)
-      | _ => (putStrLn "FunctionalHybridDynamics1: unsupported event response configuration"; 
-              raise Domain)
+    fn(x,y,e,d,r,ext,extev,yrsp) =>
+       let
+           val y'  = case fpos of 
+                         SOME (RegimeResponse f) =>
+                         f (x,y,e,d,ext,extev,yrsp)
+                       | NONE => y
+                       | _ => (putStrLn "FunctionalHybridDynamics1: RegimeState integral response"; 
+                               raise Domain)
+           val y'' = case fneg of 
+                         NONE => y'
+                       | SOME (RegimeResponse f) => f (x,y',e,d,ext,extev,yrsp)
+                       | _ => (putStrLn "FunctionalHybridDynamics1: RegimeState integral response"; 
+                               raise Domain)
+           val d'  =  (case fdiscrete of 
+                           SOME f => f (x,y'',e,d)
+                         | NONE => d)
+           val r'  = fregime (e,r)
+       in
+           (y'',d',r')
+       end
     
 
 fun evresponse (fpos,fneg) =
@@ -437,24 +439,27 @@ fun condApply (SOME (RegimeCondition fcond)) =
     
 
 fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
-    case fpos of 
-        SOME (RegimeResponse fpos) =>
-        (fn(x,y,e,d,r,ext,extev,yrsp) =>
-            let
-                val y' = case fneg of 
-                             NONE => fpos(x,y,e,d,ext,extev,yrsp)
-                           | SOME (RegimeResponse f) => f (x,fpos(x,y,e,d,ext,extev,yrsp),e,d,ext,extev,yrsp)
-                           | _ => (putStrLn "FunctionalHybridDynamics2: RegimeState integral response"; 
-                                   raise Domain)
-                val d'  =  (case fdiscrete of 
-                                SOME f => f (x,y',e,d)
-                              | NONE => d)
-                val r'  = fregime (e,r)
-            in
-                (y',d',r')
-            end)
-      | _ => (putStrLn "FunctionalHybridDynamics2: unsupported event response configuration"; 
-              raise Domain)
+    fn(x,y,e,d,r,ext,extev,yrsp) =>
+       let
+           val y'  = case fpos of 
+                         SOME (RegimeResponse f) =>
+                         f (x,y,e,d,ext,extev,yrsp)
+                       | NONE => y
+                       | _ => (putStrLn "FunctionalHybridDynamics1: RegimeState integral response"; 
+                               raise Domain)
+           val y'' = case fneg of 
+                         NONE => y'
+                       | SOME (RegimeResponse f) => f (x,y',e,d,ext,extev,yrsp)
+                       | _ => (putStrLn "FunctionalHybridDynamics1: RegimeState integral response"; 
+                               raise Domain)
+           val d'  =  (case fdiscrete of 
+                           SOME f => f (x,y'',e,d)
+                         | NONE => d)
+           val r'  = fregime (e,r)
+       in
+           (y'',d',r')
+       end
+
 
 fun evresponse (fpos,fneg) =
     case fpos of 

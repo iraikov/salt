@@ -27,13 +27,13 @@
  *	rkfe, rk3, rk4a, rk4b
  *
  * adaptive solvers:
- *	rkhe, rkbs, rkoz, rkf45, rkck, rkdp, rkdpb, rkf78, rkv65
+ *	rkhe, rkbs, rkoz3, rkf45, rkck, rkdp, rkdpb, rkf78, rkv65
  *
  * adaptive solvers with interpolation (CERK):
- *	cerkoz, cerkdp
+ *	cerkoz3, cerkdp
  *
  * auxiliary non-adaptive solvers (error estimators from the adaptive ones):
- *	rkhe_aux, rkbs_aux, rkoz_aux, rkf45_aux, rkck_aux, rkdp_aux, rkdpb_aux, 
+ *	rkhe_aux, rkbs_aux, rkoz3_aux, rkf45_aux, rkck_aux, rkdp_aux, rkdpb_aux, 
  *      rkf78_aux, rkv65_aux
  *
  * use rk4[ab] if you don't need an adaptive solver, rkdp or rkv65 if
@@ -329,7 +329,6 @@ fun bk_sum (bs: RCL list)
            (ks, h: real)
            (theta: real, ts: 'a list, yout: 'a) = 
     let 
-
         fun recur ((d,ns)::bs, ks, fs, ts) =
             let
                 val (bsum,_) = foldl (fn (n,(sum,theta)) => 
@@ -527,12 +526,12 @@ val r1_oz = [31//144, 529//1152, 125//384]	(* third-order coeffs *)
 val r2_oz = [1//24, 23//24] (* second-order coeffs *)
 val bs_oz = ratToRCL r1_oz
 val ds_oz = ratToRCL (diffs (r1_oz, r2_oz))
-fun make_rkoz (): 'a stepper2 = core2 (cs_oz, as_oz, bs_oz, ds_oz)
-val show_rkoz = rk_show2 ("Owren-Zennaro 3(2)", cs_oz, as_oz, bs_oz, ds_oz)
+fun make_rkoz3 (): 'a stepper2 = core2 (cs_oz, as_oz, bs_oz, ds_oz)
+val show_rkoz3 = rk_show2 ("Owren-Zennaro 3(2)", cs_oz, as_oz, bs_oz, ds_oz)
 
 val bs_oz_aux = ratToRCL r2_oz
-fun make_rkoz_aux (): 'a stepper1 = core1 (cs_oz, as_oz, bs_oz_aux)
-val show_rkoz_aux = rk_show1 ("Owren-Zennaro (2)", cs_oz, as_oz, bs_oz_aux)
+fun make_rkoz3_aux (): 'a stepper1 = core1 (cs_oz, as_oz, bs_oz_aux)
+val show_rkoz3_aux = rk_show1 ("Owren-Zennaro (2)", cs_oz, as_oz, bs_oz_aux)
 
 (* interpolation coeffs for continuous method *)
 val ws_oz = ratToRCLs [[RAT 1, ~65//48, 41//72],
@@ -540,8 +539,8 @@ val ws_oz = ratToRCLs [[RAT 1, ~65//48, 41//72],
                        [RAT 0, 125//128, ~125//192],
                        [RAT 0, RAT ~1, RAT 1]]
 
-fun make_cerkoz (): 'a stepper3  = core3 (cs_oz, as_oz, bs_oz, ds_oz, ws_oz)
-val show_cerkoz = rk_show3 ("Continuous Owren-Zennaro 3(2)", cs_oz, as_oz, bs_oz, ds_oz, ws_oz)
+fun make_cerkoz3 (): 'a stepper3  = core3 (cs_oz, as_oz, bs_oz, ds_oz, ws_oz)
+val show_cerkoz3 = rk_show3 ("Continuous Owren-Zennaro 3(2)", cs_oz, as_oz, bs_oz, ds_oz, ws_oz)
 
 (* Runge-Kutta-Norsett, order 3/4 *)
 

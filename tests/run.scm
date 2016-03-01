@@ -288,17 +288,17 @@
 
 
 
-;; (test-model 'vdp vdp solver: 'rk4b compile: #t)
-;; (test-model 'vdp vdp solver: 'crkdp compile: #t)
+(test-model 'vdp vdp solver: 'rk4b compile: #t)
+(test-model 'vdp vdp solver: 'crkdp compile: #t)
 
-;; (test-model 'ml ml solver: 'rk4b compile: #t)
-;; (test-model 'ml ml solver: 'crkdp compile: #t)
+(test-model 'ml ml solver: 'rk4b compile: #t)
+(test-model 'ml ml solver: 'crkdp compile: #t)
 
-;; (test-model 'iaf iaf solver: 'rk3 compile: #t)
-;; (test-model 'iaf iaf solver: 'crkdp compile: #t)
+(test-model 'iaf iaf solver: 'rk3 compile: #t)
+(test-model 'iaf iaf solver: 'crkdp compile: #t)
 
-;; (test-model 'izhfs izhfs solver: 'rk4b compile: #t)
-;; (test-model 'izhfs izhfs solver: 'crkdp compile: #t)
+(test-model 'izhfs izhfs solver: 'rk4b compile: #t)
+(test-model 'izhfs izhfs solver: 'crkdp compile: #t)
 
 (test-model 'iafrefr iafrefr solver: 'rk3  compile: #t)
 (test-model 'iafrefr iafrefr solver: 'crkdp  compile: #t)

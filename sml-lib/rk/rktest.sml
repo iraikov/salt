@@ -8,7 +8,7 @@ struct
 open RungeKutta
 
 fun summer(a,b,y) = Real.+(a,b)
-fun scaler(a,b) = Real.* (a,b)
+fun scaler(a,b,y) = Real.* (a,b)
 fun alloc () = 0.0
 
 infix 7 */
@@ -52,7 +52,7 @@ fun gen_soln1 (integrator,h,t,st) =
 
 fun gen_soln2 (integrator,h,t,st) =
   let 
-      val (stn,en) = integrator (t,st,st)
+      val (stn,en) = integrator (t,st,st,st)
       val tn       = Real.+(t,h)
   in 
       if t >= 5.0
@@ -73,7 +73,7 @@ fun do_case1 integrator n =
 fun solver1 (integrator,stats) =
   (putStrLn stats;
    putStrLn "# step yf err";
-   List.app (do_case1 (integrator (alloc,scaler,summer,deriv)))
+   List.app (do_case1 (integrator (alloc,scaler,summer) deriv))
 	    (List.tabulate (15, fn x => x - 2));
    putStrLn "# All done!\n")
 
@@ -90,13 +90,13 @@ fun do_case2 integrator n =
 fun solver2 (integrator,stats) =
   (putStrLn stats;
    putStrLn "# step yf err";
-   List.app (do_case2 (integrator (alloc,scaler,summer,deriv)))
+   List.app (do_case2 (integrator (alloc,scaler,summer) deriv))
 	    (List.tabulate (15, fn x => x - 2));
    putStrLn "# All done!\n")
 
 fun gen_soln3 (integrator,h,t,st) =
   let 
-      val (stn,en,inp) = integrator (t,st,st)
+      val (stn,en,inp) = integrator (t,st,st,st)
       val tn       = Real.+(t,h)
   in 
       if t >= 5.0
@@ -118,7 +118,7 @@ fun do_case3 integrator n =
 fun solver3 (integrator,stats) =
   (putStrLn stats;
    putStrLn "# step yf err uf";
-   List.app (do_case3 (integrator (alloc,scaler,summer,deriv)))
+   List.app (do_case3 (integrator (alloc,scaler,summer) deriv))
 	    (List.tabulate (15, fn x => x - 2));
    putStrLn "# All done!\n")
 
@@ -130,7 +130,7 @@ val rk4b: real stepper1 = make_rk4b()
 
 val rkhe:  real stepper2 = make_rkhe()
 val rkbs:  real stepper2 = make_rkbs()
-val rkoz:  real stepper2 = make_rkoz()
+val rkoz3:  real stepper2 = make_rkoz3()
 val rkn34: real stepper2 = make_rkn34()
 val rkf45: real stepper2 = make_rkf45()
 val rkck:  real stepper2 = make_rkck()
@@ -141,7 +141,7 @@ val rkv65: real stepper2 = make_rkv65()
 
 val rkhe_aux:  real stepper1  = make_rkhe_aux()
 val rkbs_aux:  real stepper1  = make_rkbs_aux()
-val rkoz_aux: real stepper1  = make_rkoz_aux()
+val rkoz3_aux: real stepper1  = make_rkoz3_aux()
 val rkn34_aux: real stepper1  = make_rkn34_aux()
 val rkf45_aux: real stepper1  = make_rkf45_aux()
 val rkck_aux:  real stepper1  = make_rkck_aux()
@@ -151,7 +151,7 @@ val rkf78_aux: real stepper1  = make_rkf78_aux()
 val rkv65_aux: real stepper1  = make_rkv65_aux()
 
 val cerkdp:  real stepper3 = make_cerkdp()
-val cerkoz:  real stepper3 = make_cerkoz()
+val cerkoz3:  real stepper3 = make_cerkoz3()
 
 
 fun run() =
@@ -163,7 +163,7 @@ fun run() =
   putStrLn "#### Adaptive Solvers";
   List.app solver2 [(rkhe, show_rkhe),
                     (rkbs, show_rkbs),
-                    (rkoz, show_rkoz),
+                    (rkoz3, show_rkoz3),
                     (rkn34, show_rkn34),
                     (rkf45, show_rkf45),
                     (rkck, show_rkck),
@@ -172,12 +172,12 @@ fun run() =
                     (rkf78, show_rkf78),
                     (rkv65, show_rkv65)];
   putStrLn "#### Continuous Solvers";
-  List.app solver3 [(cerkoz, show_cerkoz)];
+  List.app solver3 [(cerkoz3, show_cerkoz3)];
   List.app solver3 [(cerkdp, show_cerkdp)];
   putStrLn "#### Auxiliary Solvers: Error Estimators from Adaptives";
   List.app solver1 [(rkhe_aux, show_rkhe_aux),
 		    (rkbs_aux, show_rkbs_aux),
-		    (rkoz_aux, show_rkoz_aux),
+		    (rkoz3_aux, show_rkoz3_aux),
 		    (rkn34_aux, show_rkn34_aux),
 		    (rkf45_aux, show_rkf45_aux),
 		    (rkck_aux, show_rkck_aux),

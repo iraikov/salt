@@ -79,6 +79,9 @@
 (define solvers '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crk3 crkbs crkdp))
 (define adaptive-solvers '(rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crkbs crkdp))
 
+(define (filter-assv key alst)
+  (filter-map (lambda (x) (and (eqv? key (car x)) x)) alst))
+
 (define (codegen-primop op args)
   (case op
     ((signal.mul)
@@ -243,6 +246,16 @@
              (else ax))
       ))
 
+  (define (fold-used-asgns blocks asgn-idxs asgn-defs asgns)
+    (fold
+     (lambda (index ax) 
+       (let ((asgns1 (filter-assv index asgns)))
+         (if (null? asgns1) (cons (assv index asgn-defs) ax)
+             (append asgns1 ax))))
+     '()
+     (delete-duplicates
+      (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
+            '() blocks))))
 
   (define (codegen-set-stmts codegen-expr exprs out)
     (let recur ((i 0) (exprs exprs) (stmts '()))
@@ -282,6 +295,8 @@
         (externalevs    (simruntime-externalev-definitions sim))
         (eqblock        (simruntime-eqblock sim))
 
+        (trstmt (trace 'codegen-ODE "eqblock: ~A~%" eqblock))
+
         (ode-inds 
          (sort
           (filter-map 
@@ -308,6 +323,7 @@
                                       [eq (error 'codegen "unknown condition type" eq)]
                                       ) 
                         sorted-eqs)))
+        (trstmt (trace 'codegen-ODE "condblock: ~A~%" condblock))
 
         (cond-n (length condblock))
 
@@ -319,6 +335,7 @@
                              [else #f])
                             (simruntime-posresp sim))))
                       bucket-eqs))
+        (trstmt (trace 'codegen-ODE "dposblocks: ~A~%" dposblocks))
 
         (dsc-n (length dposblocks))
 
@@ -339,6 +356,8 @@
                             (list i `(setindex y_out ,i (getindex y ,i)))
                             posblock-assoc)))))
 
+        (trstmt (trace 'codegen-ODE "posblocks: ~A~%" posblocks))
+
         (negblocks (let ((bucket-eqs 
                           (bucket 
                            (match-lambda*
@@ -356,6 +375,8 @@
                             (list i `(setindex y_out ,i (getindex y ,i)))
                             negblock-assoc)))))
 
+        (trstmt (trace 'codegen-ODE "negblocks: ~A~%" negblocks))
+
         (regblocks (let ((bucket-eqs 
                           (bucket 
                            (match-lambda*
@@ -364,6 +385,7 @@
                             [_ #f])
                            (simruntime-posresp sim))))
                      bucket-eqs))
+        (trstmt (trace 'codegen-ODE "regblocks: ~A~%" regblocks))
 
         (regime-n (length regblocks))
 
@@ -378,6 +400,9 @@
                                         (list-ref defs index))) 
                                  (list-tabulate (length invcindexmap) 
                                                 (lambda (x) x))))
+
+           (trstmt (trace 'codegen-ODE "ode-defs: ~A~%" ode-defs))
+
            (asgn-defs (filter-map (lambda (index) 
                                     (and (not (member index ode-inds))
                                          (let ((invassoc (assv index invcindexmap)))
@@ -390,6 +415,8 @@
                                   (list-tabulate (length invcindexmap) 
                                                  (lambda (x) x))))
                         
+           (trstmt (trace 'codegen-ODE "asgn-defs: ~A~%" asgn-defs))
+
            (asgn-idxs (delete-duplicates
                        (append
                         (map car asgn-defs)
@@ -416,6 +443,8 @@
                                          dag edges)))]
                             [eq (error 'codegen "unknown equation type" eq)])
                            '() eqblock))
+
+           (trstmt (trace 'codegen-ODE "asgn-dag: ~A~%" asgn-dag))
 
            (asgn-order (topological-sort asgn-dag eq?))
            
@@ -445,6 +474,8 @@
                                 [eq (error 'codegen "unknown equation type" eq)])
                   eqblock) ax))
               '() asgn-order)))
+
+           (trstmt (trace 'codegen-ODE "asgns: ~A~%" asgns))
 
            (odeblock 
             (sort 
@@ -526,12 +557,7 @@
                       '((double . t) ((%pointer double) . p) ((%pointer double) . ext) ((%pointer double) . extev) 
                         ((%pointer double) . y) ((%pointer double) . dy_out)))
                   (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
-                         (used-asgns
-                          (map
-                           (lambda (index) (or (assv index asgns) (assv index asgn-defs)))
-                           (delete-duplicates
-                            (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
-                                  '() odes))))
+                         (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns))
                          (stmts (codegen-set-stmts* codegen-expr1 odes 'dy_out)))
                     (if (null? used-asgns)
                         (E:Begin stmts)
@@ -543,25 +569,21 @@
            (stepfun 
             (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
 
-                  (used-asgns
-                   (map
-                    (lambda (index) (or (assv index asgns) (assv index asgn-defs)))
-                    (delete-duplicates
-                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
-                           '() odes))))
-                  (rhsfun 
-                   (V:Fn (if (pair? regblocks) '(p d r ext extev) '(p ext extev))
+                   (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns))
+                   
+                   (rhsfun 
+                    (V:Fn (if (pair? regblocks) '(p d r ext extev) '(p ext extev))
                          (E:Ret
                           (V:Fn '(t y dy_out)
                                 (let ((stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
-                                   (if (null? used-asgns)
-                                       (E:Begin stmts)
-                                       (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) used-asgns)
-                                              (E:Begin stmts))
-                                       ))
+                                  (if (null? used-asgns)
+                                      (E:Begin stmts)
+                                      (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) used-asgns)
+                                             (E:Begin stmts))
+                                      ))
                                 ))
                          ))
-                  )
+                   )
               (V:Op (if (pair? regblocks) 'make_regime_stepper 'make_stepper)
                     (list (V:C ode-n) rhsfun))))
 
@@ -676,14 +698,10 @@
                        ))
                 ))
            
-
            (condfun     
-            (let ((used-asgns
-                   (map
-                    (lambda (index) (assv index asgns))
-                    (delete-duplicates
-                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
-                           '() condblock)))))
+
+            (let ((used-asgns (fold-used-asgns condblock asgn-idxs asgn-defs asgns)))
+
               (if (null? condblock)
                   (V:C 'NONE)
                   (let ((fnval (V:Fn  (if (pair? regblocks) 
@@ -707,12 +725,8 @@
               ))
 
            (condrhsfun
-            (let ((used-asgns
-                   (map
-                    (lambda (index) (assv index asgns))
-                    (delete-duplicates
-                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
-                           '() condblock)))))
+            (let ((used-asgns (fold-used-asgns condblock asgn-idxs asgn-defs asgns)))
+
               (and (not (null? condblock))
                    (V:Fn
                     (if (pair? regblocks) 
@@ -743,11 +757,8 @@
                       (list 
                        (let* (
                               (blocks (fold-reinit-blocks ode-inds posblocks))
-                              (used-asgns
-                               (map (lambda (index) (assv index asgns))
-                                    (delete-duplicates
-                                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
-                                           '() blocks))))
+                              (used-asgns (fold-used-asgns blocks asgn-idxs asgn-defs asgns))
+                              
                               (fnval (V:Fn (if (null? regblocks) '(t y c ext extev y_out) '(t y c d ext extev y_out))
                                            (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'y_out)))
                                              (if (null? used-asgns)
@@ -770,11 +781,8 @@
                       (list 
                        (let* (
                               (blocks (fold-reinit-blocks ode-inds negblocks))
-                              (used-asgns
-                               (map (lambda (index) (assv index asgns))
-                                    (delete-duplicates
-                                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
-                                           '() blocks))))
+                              (used-asgns (fold-used-asgns blocks asgn-idxs asgn-defs asgns))
+
                               (fnval (V:Fn (if (null? regblocks) '(t y c ext extev y_out) '(t y c d ext extev y_out))
                                            (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'y_out)))
                                              (if (null? used-asgns)
@@ -798,11 +806,8 @@
                       (list 
                        (let* (
                               (blocks (fold-reinit-blocks ode-inds dposblocks))
-                              (used-asgns
-                               (map (lambda (index) (assv index asgns))
-                                    (delete-duplicates
-                                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
-                                           '() blocks))))
+                              (used-asgns (fold-used-asgns blocks asgn-idxs asgn-defs asgns))
+
                               (fnval (V:Fn '(t y c d d_out)
                                            (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'd_out)))
                                              (if (null? used-asgns)
@@ -838,12 +843,10 @@
                 (V:C 'NONE)
                 (V:Op 'SOME
                       (list 
-                       (let* ((blocks (fold-regime-reinit-blocks regblocks))
-                              (used-asgns
-                               (map (lambda (index) (assv index asgns))
-                                    (delete-duplicates
-                                     (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
-                                          '() blocks)))))
+                       (let* (
+                              (blocks (fold-regime-reinit-blocks regblocks))
+                              (used-asgns (fold-used-asgns blocks asgn-idxs asgn-defs asgns))
+                              )
                          (V:Op 'make_transition
                                (list (V:C (length blocks))
                                      (V:Fn '(c r r_out) 
