@@ -288,20 +288,89 @@
 
 
 
-(test-model 'vdp vdp solver: 'rk4b compile: #t)
-(test-model 'vdp vdp solver: 'crkdp compile: #t)
+(define adex 
+  (parse
+  `(
+    (define Isyn  =  parameter 210.0)
 
-(test-model 'ml ml solver: 'rk4b compile: #t)
-(test-model 'ml ml solver: 'crkdp compile: #t)
+    (define C     = parameter 200.0)
+    (define gL    = parameter 10.0)
+    (define EL    = parameter -58.0)
+    (define VT    = parameter -50.0)
+    (define Delta = parameter 2.0)
+    (define theta = parameter -45.0)
+    (define trefractory = parameter 0.25)
+              
+    (define a = parameter 2.0)
+    (define b = parameter 100.0)
+    (define tau_w = parameter 120.0)
+              
+    (define Vr = parameter -46.0)
 
-(test-model 'iaf iaf solver: 'rk3 compile: #t)
-(test-model 'iaf iaf solver: 'crkdp compile: #t)
+    (define V = unknown Vr)
+    (define W = unknown Vr)
 
-(test-model 'izhfs izhfs solver: 'rk4b compile: #t)
-(test-model 'izhfs izhfs solver: 'crkdp compile: #t)
+    ((der (V)) = (( ((- gL) * (V - EL)) + (gL * Delta * (exp ((V - VT) / Delta))) + (- W) + Isyn) / C))
+    ((der (W)) = (((a * (V - EL)) - W) / tau_w))
 
-(test-model 'iafrefr iafrefr solver: 'rk3  compile: #t)
-(test-model 'iafrefr iafrefr solver: 'crkdp  compile: #t)
+    (event (V - theta)
+           ((V := Vr))
+           ((W := W + b))
+           )
+    ))
+  )
+
+
+(define hr 
+  (parse
+  `(
+
+    (define I = parameter 0.5)
+                       
+    (define a = parameter 1.0)
+    (define b = parameter 3.0)
+    (define c = parameter 1.0)
+    (define d = parameter 5.0)
+
+    (define r = parameter 1e-3)
+    (define s = parameter 4.0)
+    (define xr = parameter -8 / 5)
+
+    (fun (phi x) = - a * x ^ 3 + b * x ^ 2)
+    (fun (psi x) = c - d * x ^ 2)
+
+    (define x = unknown -1.0)
+    (define y = unknown 0.0)
+    (define z = unknown 0.0)
+    
+    ((der (x)) = y + phi(x) - z + I)
+    ((der (y)) = psi(x) - y)
+    ((der(z))  = r * (s * (x - xr) - z))
+    
+    )
+  ))
+
+
+;; (test-model 'vdp vdp solver: 'rk4b compile: #t)
+;; (test-model 'vdp vdp solver: 'crkdp compile: #t)
+
+;; (test-model 'ml ml solver: 'rk4b compile: #t)
+;; (test-model 'ml ml solver: 'crkdp compile: #t)
+
+;; (test-model 'iaf iaf solver: 'rk3 compile: #t)
+;; (test-model 'iaf iaf solver: 'crkdp compile: #t)
+
+;; (test-model 'izhfs izhfs solver: 'rk4b compile: #t)
+;; (test-model 'izhfs izhfs solver: 'crkdp compile: #t)
+
+;; (test-model 'iafrefr iafrefr solver: 'rk3  compile: #t)
+;; (test-model 'iafrefr iafrefr solver: 'crkdp  compile: #t)
+
+;; (test-model 'adex adex solver: 'rk3  compile: #t)
+;; (test-model 'adex adex solver: 'crkdp  compile: #t)
+
+(test-model 'hr hr solver: 'rk3  compile: #t)
+(test-model 'hr hr solver: 'crkdp  compile: #t)
 
 ;(test-model 'iafsyn iafsyn)
 

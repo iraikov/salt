@@ -23,8 +23,8 @@ val options =
       desc=G.NoArg (fn() => Help),
       help="show help"},
 
-     {short="t",
-      long=["time"],
+     {short="d",
+      long=["duration"],
       desc=G.ReqArg (fn(x) => Time (valOf(Real.fromString x)), "N"),
       help="simulation duration"},
 
