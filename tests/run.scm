@@ -68,6 +68,7 @@
 
 ;(verbose 1)
 
+;; Van der Pol oscillator
 (define vdp 
   (parse 
    `(
@@ -78,7 +79,7 @@
      )
    ))
 
-
+;; Leaky integrate-and-fire neuron
 (define iaf 
   (parse 
    `(
@@ -101,6 +102,7 @@
    ))
 
 
+;; Leaky integrate-and-fire neuron with refractory period
 (define iafrefr
   (parse 
    `(
@@ -136,8 +138,7 @@
    ))
 
 
-
-
+;; Izhikevich spiking neuron model 
 (define izhfs 
   (parse 
    `(
@@ -195,6 +196,7 @@
    ))
 
 
+;; Alpha function synapse
 (define alphasyn 
   (parse
   `(
@@ -236,6 +238,7 @@
 ))
 
 
+;; Integrate and fire neuron with alpha synapse
 (define iafsyn
   (parse
    `(
@@ -251,7 +254,7 @@
   )
 
 
-
+;; Morris-Lecar model
 (define ml 
   (parse
   `(
@@ -287,7 +290,7 @@
   ))
 
 
-
+;; Adaptive exponential integrate-and-fire neuron model
 (define adex 
   (parse
   `(
@@ -320,7 +323,7 @@
     ))
   )
 
-
+;; Hindmarsh-Rose neuron model
 (define hr 
   (parse
   `(
@@ -351,26 +354,93 @@
   ))
 
 
-;; (test-model 'vdp vdp solver: 'rk4b compile: #t)
-;; (test-model 'vdp vdp solver: 'crkdp compile: #t)
 
-;; (test-model 'ml ml solver: 'rk4b compile: #t)
-;; (test-model 'ml ml solver: 'crkdp compile: #t)
+;; Wang, X.-J. and Buzsaki G. (1996) Gamma oscillations by synaptic
+;; inhibition in a hippocampal interneuronal network.
+;; J. Neurosci. 16, 6402-6413.
+(define wb
+  (parse
+  `(
 
-;; (test-model 'iaf iaf solver: 'rk3 compile: #t)
-;; (test-model 'iaf iaf solver: 'crkdp compile: #t)
+    (fun (am v) = 0.1 * (v + 35.0) / (1.0 - exp(- (v + 35.0) / 10.0)))
+    (fun (bm v) = 4.0 * exp( - (v + 60.0) / 18.0))
+    (fun (minf v) = am(v) / (am(v) + bm(v)))
 
-;; (test-model 'izhfs izhfs solver: 'rk4b compile: #t)
-;; (test-model 'izhfs izhfs solver: 'crkdp compile: #t)
+    (fun (ah v) = 0.07 * exp(- (v + 58.0) / 20.0))
+    (fun (bh v) = 1.0 / (1.0 + exp( - (v + 28.0) / 10.0)))
 
-;; (test-model 'iafrefr iafrefr solver: 'rk3  compile: #t)
-;; (test-model 'iafrefr iafrefr solver: 'crkdp  compile: #t)
+    (fun (an v) = 0.01 * (v + 34.0) / (1.0 - exp(- (v + 34.0) / 10.0)))
+    (fun (bn v) = 0.125 * exp(- (v + 44.0) / 80.0))
 
-;; (test-model 'adex adex solver: 'rk3  compile: #t)
-;; (test-model 'adex adex solver: 'crkdp  compile: #t)
+
+    (define I = parameter 1.0)
+
+    (define diam = parameter 5.6419)
+    (define L = parameter 5.6419)
+
+    (define C_m = parameter 1)
+
+    (define gbar_Na = parameter 0.035)
+    (define gbar_K  = parameter 0.009)
+    (define g_L     = parameter 0.0001)
+
+    (define E_Na = parameter 55)
+    (define E_K  = parameter -90)
+    (define E_L  = parameter -65)
+              
+    (define v = unknown -20.0) ;; mV
+
+    (define area = parameter PI * L * diam)
+    
+    (define h   = unknown 0.283)
+    (define n   = unknown 0.265)
+
+    (define I_Na = unknown 0.0) ;; Current
+    (define I_K  = unknown 0.0) ;; Current
+    (define I_L  = unknown 0.0) ;; Current
+
+    (define g_Na = unknown 0.0) ;; Conductance
+    (define g_K  = unknown 0.0) ;; Conductance
+    
+    ((der (v)) = ((I * (100.0 / area)) - 1e3 * (I_K + I_Na + I_L)) / C_m)
+
+    ((der (n)) = 5.0 * (an(v) * (1 - n) - bn(v) * n))
+    ((der (h)) = 5.0 * (ah(v) * (1 - h) - bh(v) * h))
+
+    ((g_Na) = minf(v) ^ 3 * h * gbar_Na)
+    ((g_K)  = n ^ 4 * gbar_K)
+    
+    ((I_Na) = g_Na * (v - E_Na))
+    ((I_K)  = g_K  * (v - E_K))
+    ((I_L)  = g_L  * (v - E_L))
+    
+    ))
+  )
+
+
+(test-model 'vdp vdp solver: 'rk4b compile: #t)
+(test-model 'vdp vdp solver: 'crkdp compile: #t)
+
+(test-model 'ml ml solver: 'rk4b compile: #t)
+(test-model 'ml ml solver: 'crkdp compile: #t)
+
+(test-model 'iaf iaf solver: 'rk3 compile: #t)
+(test-model 'iaf iaf solver: 'crkdp compile: #t)
+
+(test-model 'izhfs izhfs solver: 'rk4b compile: #t)
+(test-model 'izhfs izhfs solver: 'crkdp compile: #t)
+
+(test-model 'iafrefr iafrefr solver: 'rk3  compile: #t)
+(test-model 'iafrefr iafrefr solver: 'crkdp  compile: #t)
+
+(test-model 'adex adex solver: 'rk3  compile: #t)
+(test-model 'adex adex solver: 'crkdp  compile: #t)
 
 (test-model 'hr hr solver: 'rk3  compile: #t)
 (test-model 'hr hr solver: 'crkdp  compile: #t)
+
+(test-model 'wb wb solver: 'rk3  compile: #t)
+(test-model 'wb wb solver: 'crkdp  compile: #t)
 
 ;(test-model 'iafsyn iafsyn)
 
