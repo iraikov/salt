@@ -1342,7 +1342,6 @@
                         (trace 'elaborate "structural-event: target = ~A~%" target)
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions parameters fields externals externalevs
-                               ;; TODO: merge units of regime quantities properly
                                (fold (lambda (eq ax) (merge-regime-eq name eq ax env-stack)) equations regime) initial
                                (cons (make-evcondition event (resolve condition env-stack)) conditions)
                                (append (cons
@@ -1811,6 +1810,15 @@
             (if (not yindex)
                 (error 'reduce-expr "external event not in index" name)
                 `(extev ,(cdr yindex) ,(variable-label model-time)))
+            ))
+
+         (('signal.if ifcond ift iff)
+          (let ((expr1 (reduce-expr ifcond indexmaps))
+                (expr2 (reduce-expr ift indexmaps))
+                (expr3 (reduce-expr iff indexmaps)))
+            (if (and (constant? expr2) (constant? expr3)
+                     (= (constant-value expr2) (constant-value expr3)))
+                ift `(signal.if ,expr1 ,expr2 ,expr3))
             ))
 
          (('signal.let lbnds body)

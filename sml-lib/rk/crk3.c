@@ -83,16 +83,17 @@ int Runge_Kutta_3(int n, void (*f)(double,double *,double *,double *,double *,do
                   double *k1, double *k2, double *k3, 
                   double *t1, double *t2, double *t3, double *t4, double *t5, double *t6)
 {
-  double h2 = 0.5 * h;
+  double h2;
+
+  if (n == 0)
+    {
+      return 0;
+    }
+
+  h2 = 0.5 * h;
 
   (*f)(x0, p, ext, extev, y, k1);
   // printf("c: k1[0] = %g\n", k1[0]);
-
-  if (vector_zerop (n, k1)) 
-    {
-      vector_scale(n, 1.0, y, yout); 
-      return 0;
-    }
   
   vector_scale(n, 1.0, k1, t1); 
   vector_scale(n, h/2.0, t1, t2); 
@@ -123,15 +124,16 @@ int Runge_Kutta_3_regime(int n, void (*f)(double,double *,double *,int *,double 
                          double *k1, double *k2, double *k3, 
                          double *t1, double *t2, double *t3, double *t4, double *t5, double *t6)
 {
-  double h2 = 0.5 * h;
+  double h2;
 
-  (*f)(x0, p, d, r, ext, extev, y, k1);
-
-  if (vector_zerop (n, k1)) 
+  if (n == 0)
     {
-      vector_scale(n, 1.0, y, yout); 
       return 0;
     }
+
+  h2 = 0.5 * h;
+
+  (*f)(x0, p, d, r, ext, extev, y, k1);
   
   vector_scale(n, 1.0, k1, t1); 
   vector_scale(n, h/2.0, t1, t2); 

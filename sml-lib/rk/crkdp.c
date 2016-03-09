@@ -96,23 +96,23 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double
                        double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, double *t10, 
                        double *t11, double *t12)
 {
-  double h2 = 0.2 * h;
-  double h3 = 0.3 * h;
-  double h4 = 0.8 * h;
-  double h5 = 0.888888888889 * h;
+  double h2, h3, h4, h5;
+
+  if (n == 0)
+    {
+      return 0;
+    }
+
+  h2 = 0.2 * h;
+  h3 = 0.3 * h;
+  h4 = 0.8 * h;
+  h5 = 0.888888888889 * h;
 
   //printf("c: h = %g\n", h);
   //printf("c: y[0] = %g\n", y[0]);
   (*f)(x0, p, ext, extev, y, k1);
   //  printf("c: k1[0] = %g\n", k1[0]);
 
-  if (vector_zerop (n, k1)) 
-    {
-      vector_scale(n, 1.0, y, yout); 
-      vector_scale(n, 0.0, k1, err); 
-      return 0;
-    }
-  
   vector_scale(n, 1.0, k1, t1); 
   //  printf("c: t1[0] = %g\n", t1[0]);
   vector_scale(n, h/5.0, t1, t2); 
@@ -205,22 +205,22 @@ int Dormand_Prince_5_4_regime(int n, void (*f)(double,double *,double *,int *,do
                               double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, double *t10, 
                               double *t11, double *t12)
 {
-  double h2 = 0.2 * h;
-  double h3 = 0.3 * h;
-  double h4 = 0.8 * h;
-  double h5 = 0.888888888889 * h;
+  double h2, h3, h4, h5;
+
+  if (n == 0)
+    {
+      return 0;
+    }
+
+  h2 = 0.2 * h;
+  h3 = 0.3 * h;
+  h4 = 0.8 * h;
+  h5 = 0.888888888889 * h;
 
   //printf("c: h = %g\n", h);
   //printf("c: y[0] = %g\n", y[0]);
   (*f)(x0, p, d, r, ext, extev, y, k1);
   //  printf("c: k1[0] = %g\n", k1[0]);
-
-  if (vector_zerop (n, k1)) 
-    {
-      vector_scale(n, 1.0, y, yout); 
-      vector_scale(n, 0.0, k1, err); 
-      return 0;
-    }
   
   vector_scale(n, 1.0, k1, t1); 
   //  printf("c: t1[0] = %g\n", t1[0]);
