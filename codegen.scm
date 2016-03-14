@@ -1291,7 +1291,10 @@ val RandomState = RandomInit ()
 val RandomZT = RandomMTZig.ztnew()
 
 fun random_uniform () = RandomMTZig.randUniform RandomState
+fun random_unifrange (a, b) = a + (RandomMTZig.randUniform RandomState) * (b-a)
+fun random_normal () = RandomMTZig.randNormal (RandomState, RandomZT)
 fun random_exponential (mu) = mu * RandomMTZig.randExp (RandomState, RandomZT)
+fun random_poisson (lam) = RandomMTZig.randPoisson (lam, RandomState, RandomZT)
 
 
 EOF
