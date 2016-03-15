@@ -552,6 +552,7 @@
 ;; The number of base quantities defined
 (define Q 9)
 
+
 (define (parse-dim-vector dims)
   (let ((n (length dims)))
     (if (< n Q)
@@ -576,6 +577,15 @@
   
 
 (define (parse-definition env args)
+
+  (define (parse-dim pattern u)
+    (let ((dim-assoc (assv u (model-quantities))))
+      (if (not dim-assoc)
+          (salt:error 'parse-definition "unknown dimension in definition"
+                      pattern u))
+      (cdr dim-assoc)
+      ))
+  
   (if (pair? args)
       (let ((pattern (car args))
             (exp-or-body (cdr args)))
@@ -583,12 +593,13 @@
          ((symbol? pattern)
           (match exp-or-body
                  (('= 'discrete ('dim u) . expr)
-                  (discrete
-                   (parse-expression env (parse-sym-infix-expr expr))
-                   (free-variable-name 
-                    (parse-variable env pattern))
-                   (cdr (assv u (model-quantities)))
-                   ))
+                  (let ((dim-val (parse-dim pattern u)))
+                    (discrete
+                     (parse-expression env (parse-sym-infix-expr expr))
+                     (free-variable-name 
+                      (parse-variable env pattern))
+                     dim-val)
+                  ))
                  (('= 'discrete . expr)
                   (discrete
                    (parse-expression env (parse-sym-infix-expr expr))
@@ -596,15 +607,12 @@
                     (parse-variable env pattern))
                    Unity))
                  (('= 'unknown ('dim u) . expr)
-                  (let ((dim-assoc (assv u (model-quantities))))
-                    (if (not dim-assoc)
-                        (salt:error 'parse-definition "unknown dimension in definition"
-                                    pattern u))
+                  (let ((dim-val (parse-dim pattern u)))
                     (unknown
                      (parse-expression env (parse-sym-infix-expr expr))
                      (free-variable-name 
                       (parse-variable env pattern))
-                     (cdr dim-assoc))
+                     dim-val)
                     ))
                  (('= 'unknown . expr)
                   (unknown
@@ -613,16 +621,13 @@
                     (parse-variable env pattern))
                    Unity))
                  (('= 'parameter ('dim u) . expr)
-                  (let ((dim-assoc (assv u (model-quantities))))
-                    (if (not dim-assoc)
-                        (salt:error 'parse-definition "unknown dimension in parameter definition"
-                                    pattern u))
+                  (let ((dim-val (parse-dim pattern u)))
                     (parameter
                      (gensym 'p)
                      (free-variable-name 
                       (parse-variable env pattern))
                      (parse-expression env (parse-sym-infix-expr expr))
-                     (cdr dim-assoc))
+                     dim-val)
                     ))
                  (('= 'parameter . expr)
                   (parameter
@@ -633,17 +638,14 @@
                    Unity
                    ))
                  (('= 'external ('dim u) . expr)
-                  (let ((dim-assoc (assv u (model-quantities))))
-                    (if (not dim-assoc)
-                        (salt:error 'parse-definition "unknown dimension in external definition"
-                                    pattern u))
+                  (let ((dim-val (parse-dim pattern u)))
                     (external
                      (gensym 'ext)
                      (free-variable-name 
                       (parse-variable env pattern))
                      (parse-expression env (parse-sym-infix-expr expr))
-                     (cdr dim-assoc))
-                     ))
+                     dim-val)
+                    ))
                  (('= 'external . expr)
                   (external
                    (gensym 'ext)
@@ -653,17 +655,14 @@
                    Unity
                    ))
                  (('= 'external-event ('dim u) . expr)
-                  (let ((dim-assoc (assv u (model-quantities))))
-                    (if (not dim-assoc)
-                        (salt:error 'parse-definition "unknown dimension in external event definition"
-                                    pattern u))
+                  (let ((dim-val (parse-dim pattern u)))
                     (externalev
                      (gensym 'ext)
                      (free-variable-name 
                       (parse-variable env pattern))
                      (parse-expression env (parse-sym-infix-expr expr))
-                     (cdr dim-assoc))
-                     ))
+                     dim-val)
+                    ))
                  (('= 'external-event . expr)
                   (externalev
                    (gensym 'ext)
