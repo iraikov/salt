@@ -409,7 +409,7 @@
 
 
 (define-record-printer (pair-arg x out)
-  (fprintf out "#(pair-arg ~A ~A)"
+  (fprintf out "(~A . ~A)"
 	   (pair-arg-fst x)
 	   (pair-arg-snd x)
            ))
@@ -424,7 +424,7 @@
 
 
 (define-record-printer (pair-formal x out)
-  (fprintf out "#(pair-formal ~A ~A)"
+  (fprintf out "<~A . ~A>"
 	   (pair-formal-fst x)
 	   (pair-formal-snd x)
            ))
@@ -826,8 +826,8 @@
 
 (define (resolve expr env-stack)
 
-  (d 'resolve "expr: ~A env-stack: ~A~%" 
-     expr (env-stack-show env-stack))
+  (trace 'resolve "expr: ~A env-stack: ~A~%" 
+         expr (env-stack-show env-stack))
 
   (let recur ((e expr))
     (trace 'resolve "e: ~A~%" e)
@@ -1201,6 +1201,11 @@
 
               (let ((decls1 (rename-decls (astdecls-decls en))))
 
+                (trace 'elaborate "decls1 = ~A~%" decls1)
+                (trace 'elaborate "model-env decls1 = ~A~%" (env->list (model-env decls1)))
+                (trace 'elaborate "env = ~A~%" (env-stack-show (push-env-stack (model-env decls1) env-stack)))
+
+
                 (recur (append decls1 (cons 'pop-env-stack (cdr entries)))
                        (push-env-stack (model-env decls1) env-stack)
                        definitions discrete-definitions parameters fields externals externalevs
@@ -1210,12 +1215,15 @@
               (match en  
 
                      ('pop-env-stack
-                      (recur (cdr entries) (pop-env-stack env-stack)
-                             definitions discrete-definitions parameters fields externals externalevs
-                             equations initial conditions pos-responses neg-responses 
-                             functions nodemap regimemap dimenv
-                             )
-                      )
+                      (begin
+                        (trace 'elaborate "pop-env-stack: env = ~A~%" (env-stack-show env-stack))
+                        (trace 'elaborate "pop-env-stack: (pop-env-stack env) = ~A~%" (env-stack-show (pop-env-stack env-stack)))
+                        (recur (cdr entries) (pop-env-stack env-stack)
+                               definitions discrete-definitions parameters fields externals externalevs
+                               equations initial conditions pos-responses neg-responses 
+                               functions nodemap regimemap dimenv
+                               )
+                        ))
 
                      (($ variable name label value has-history dim)
                       (let* ((resolved-value (resolve value env-stack))
@@ -1319,8 +1327,10 @@
                         ))
 
                      (($ equation s expr)
+                      (trace 'elaborate "equation: unresolved s = ~A~%" s)
                       (trace 'elaborate "equation: unresolved rhs = ~A~%" expr)
-                      (trace 'elaborate "equation: rhs = ~A~%" (resolve expr env-stack))
+                      (trace 'elaborate "equation: resolved rhs = ~A~%" (resolve expr env-stack))
+                      (trace 'elaborate "equation: resolved s = ~A~%" (resolve s env-stack))
                       (recur (cdr entries) env-stack
                              definitions discrete-definitions parameters fields externals externalevs
                              (cons (list (resolve s env-stack) (resolve expr env-stack)) equations)

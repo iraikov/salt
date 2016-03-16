@@ -72,6 +72,11 @@
 (define empty-env (EmptyEnv))
 ; returns the empty environment
 
+(define (env-empty? e)
+  (cases env e
+         (EmptyEnv () #t)
+         (Env (first rest) #f)))
+
 (define (extend-env-with-binding e binding)
   ; extends env with a binding, which hides any other binding in env
   ; for the same key
