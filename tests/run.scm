@@ -67,6 +67,7 @@
 )
 
 ;(verbose 1)
+;(add-trace 'codegen-ODE)
 
 ;; Van der Pol oscillator
 (define vdp 
@@ -185,6 +186,7 @@
      (define gL   = parameter 0.2)
      (define vL   = parameter -70.0)
      (define C    = parameter 1.0)
+     (define vreset = parameter -65.0)
 
      ((der(v)) = ( ((- gL) * (v - vL)) + Isyn) / C)
 
@@ -208,6 +210,7 @@
      (define taus  = parameter 2.5)
      (define f     = parameter -100.0)
      (define s0    = parameter 0.5)
+     (define gain  = parameter 1.0)
 
      (define S  = unknown 0.0)
      (define SS = unknown 0.0)
@@ -215,6 +218,7 @@
      (define gsyn  = unknown 0.0)
 
      (define grid_input = external 0.0)
+     (define grid_ev = external-event 0.0)
 
      ((der (S)) = (alpha * (1 - S) - beta * S))
      ((der (SS)) = ((s0 - SS) / taus))
@@ -228,9 +232,9 @@
              (SS := 0))
             )
 
-     (event (grid_input)
+     (event (grid_ev)
             (
-             (S := S)
+             (S := S + grid_input)
              (SS := (SS + f * (1 - SS)))
             )
             )

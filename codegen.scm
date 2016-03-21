@@ -79,8 +79,8 @@
 (define solvers '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crk3 crkbs crkdp))
 (define adaptive-solvers '(rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crkbs crkdp))
 
-(define (filter-assv key alst)
-  (filter-map (lambda (x) (and (eqv? key (car x)) x)) alst))
+(define (filter-assoc key alst)
+  (filter-map (lambda (x) (and (equal? key (car x)) x)) alst))
 
 (define (codegen-primop op args)
   (case op
@@ -98,7 +98,7 @@
       
 
 
-(define (codegen-expr ode-inds ode-order invcindexmap)
+(define (codegen-expr ode-inds ode-order invcindexmap invextindexmap)
   (lambda (expr)
     (let recur ((expr expr))
       (match expr
@@ -115,11 +115,13 @@
                      (let ((ode-index-assoc (assv index ode-order)))
                        (V:Sub (recur vect) (cdr ode-index-assoc)))
                      (V:Var (cdr (assv index invcindexmap)))))
+                ((yext)
+                 (V:Var (cdr (assv index invextindexmap))))
                 (else (V:Sub (recur vect) index))))
-             (('ext index t)
-              (recur `(getindex ext ,index)))
-             (('extev index t)
-              (recur `(signal.primop signal.sub ,t (getindex extev ,index))))
+             ;(('ext index t)
+             ; (recur `(getindex ext ,index)))
+             ;(('extev index t)
+             ; (recur `(signal.primop signal.sub ,t (getindex extev ,index))))
              (($ constant 'number val unit)
               (V:C val))
              (('signal.if test ift iff)
@@ -239,24 +241,41 @@
               (fold recur ax args))
              (('getindex 'y index)
               (if (member index asgn-idxs)
-                  (cons index ax) ax))
+                  (cons `(y ,index) ax) ax))
+             (('getindex 'yext index)
+              (cons `(ext ,index) ax))
              (($ constant 'number val unit) ax)
              (('signal.if test ift iff)
               (recur iff (recur ift (recur test ax))))
+             (('signal.reinit test dflt upd)
+              (recur test (recur dflt (recur upd ax))))
              (else ax))
       ))
 
 
-  (define (fold-used-asgns blocks asgn-idxs asgn-defs asgns asgn-dag)
+
+  (define (fold-used-asgns blocks asgn-idxs asgn-defs asgns asgn-dag ext-defs)
       (fold
-       (lambda (index ax) 
-         (let ((asgns1 (filter-assv index asgns)))
-           (if (null? asgns1) (cons (assv index asgn-defs) ax)
-               (append asgns1 ax))))
+       (match-lambda* 
+        [((and index ('y _)) ax)
+         (let ((asgns1 (filter-assoc index asgns)))
+           (if (null? asgns1) 
+               (let ((def (assoc index asgn-defs)))
+                 (if def (cons def ax) ax))
+               (append asgns1 ax)))]
+        [((and index ('ext _)) ax)
+         (let ((asgns1 (filter-assoc index asgns)))
+           (if (null? asgns1) 
+               (let ((def (assoc index ext-defs)))
+                 (if def (cons def ax) ax))
+               (append asgns1 ax)))]
+        )
        '() 
        (let recur ((order (delete-duplicates
-                           (fold (lambda (expr ax) (append (fold-asgns asgn-idxs expr) ax))
+                           (fold (lambda (expr ax) 
+                                   (append (fold-asgns asgn-idxs expr) ax))
                                  '() blocks))))
+         
          (let ((order1 (if (null? order) '()
                            (filter-map (lambda (x) 
                                          (and (pair? (cdr x)) 
@@ -299,6 +318,8 @@
         (invcindexmap   (map (lambda (x) (cons (cdr x) (car x))) (env->list cindexmap)))
         (dindexmap      (simruntime-dindexmap sim))
         (rindexmap      (simruntime-rindexmap sim))
+        (extindexmap    (simruntime-extindexmap sim))
+        (invextindexmap (map (lambda (x) (cons (cdr x) (car x))) (env->list extindexmap)))
         (defs           (simruntime-definitions sim))
         (discrete-defs  (simruntime-discrete-definitions sim))
         (params         (simruntime-parameters sim))
@@ -314,6 +335,7 @@
            (match-lambda [('setindex 'dy_out index val) index] 
                          [('setindex 'y_out index val)  #f] 
                          [('reduceindex 'y_out index val)  #f] 
+                         [('reduceindex 'yext_out index val)  #f] 
                          [eq (error 'codegen "unknown equation type" eq)])
            eqblock) <))
 
@@ -404,7 +426,7 @@
 
     (let* (
 
-           (codegen-expr1 (codegen-expr ode-inds ode-order invcindexmap))
+           (codegen-expr1 (codegen-expr ode-inds ode-order invcindexmap invextindexmap))
 
            (ode-defs (filter-map (lambda (index) 
                                    (and (member index ode-inds)
@@ -420,13 +442,17 @@
                                            (if (not invassoc)
                                                (error 'codegen "unknown continuous quantity index" 
                                                       index invcindexmap)
-                                               (list index
+                                               (list `(y ,index)
                                                      (cdr invassoc)
                                                      (list-ref defs index))))))
                                   (list-tabulate (length invcindexmap) 
                                                  (lambda (x) x))))
                         
            (trstmt (trace 'codegen-ODE "asgn-defs: ~A~%" asgn-defs))
+
+           (ext-defs (map (match-lambda [(index . name) 
+                                         `((ext ,index) ,name (getindex ext ,index))])
+                          invextindexmap))
 
            (asgn-idxs (delete-duplicates
                        (append
@@ -435,6 +461,7 @@
                          (match-lambda [('setindex 'dy_out index val) #f]
                                        [(or ('setindex 'y_out index val)
                                             ('reduceindex 'y_out index val)) index]
+                                       [('reduceindex 'yext_out index val) #f]
                                        [eq (error 'codegen "unknown equation type" eq)])
                          eqblock))
                        ))
@@ -442,15 +469,31 @@
            (asgn-dag (fold (match-lambda* 
                             [(('setindex 'dy_out index val) dag) dag]
                             [(('setindex 'y_out index val) dag)
-                             (let ((edges (fold-asgns asgn-idxs val)))
-                               (if (null? edges) (cons `(,index) dag)
-                                   (fold (lambda (e dag) (update-edge (cons e index) dag))
-                                         dag edges)))]
+                             (let ((srcs (fold-asgns asgn-idxs val)))
+                               (if (null? srcs) (cons `((y ,index)) dag)
+                                   (fold (lambda (src dag) (update-edge (cons src `(y ,index)) dag))
+                                         dag srcs)))]
                             [(('reduceindex 'y_out index val) dag)
-                             (let ((edges (filter-map (lambda (src) (and (not (= src index)) (cons src index))) 
+                             (let ((edges (filter-map (match-lambda
+                                                       [(and src ('y srcindex))
+                                                        (and (not (= srcindex index)) (cons src `(y ,index)))]
+                                                       [(and src ('ext srcindex))
+                                                        (cons src `(y ,index))]
+                                                       [src (error 'codegen "unknown node type" src)])
                                                       (fold-asgns asgn-idxs val))))
-                               (if (null? edges) (cons `(,index) dag)
-                                   (fold (lambda (e dag) (update-edge (cons e index) dag))
+                               (if (null? edges) (cons `((0 ,index)) dag)
+                                   (fold (lambda (e dag) (update-edge e dag))
+                                         dag edges)))]
+                            [(('reduceindex 'yext_out index val) dag)
+                             (let ((edges (filter-map (match-lambda
+                                                       [(and src ('ext srcindex))
+                                                        (and (not (= srcindex index)) (cons src `(ext ,index)))]
+                                                       [(and src ('y srcindex))
+                                                        (cons src `(ext ,index))]
+                                                       [src (error 'codegen "unknown node type" src)])
+                                                      (fold-asgns asgn-idxs val))))
+                               (if (null? edges) (cons `((ext ,index)) dag)
+                                   (fold (lambda (e dag) (update-edge e dag))
                                          dag edges)))]
                             [eq (error 'codegen "unknown equation type" eq)])
                            '() eqblock))
@@ -460,31 +503,46 @@
            (asgn-order (topological-sort asgn-dag eq?))
            
            (asgns 
-            (append 
-             (delete-duplicates
+            (delete-duplicates
+             (append 
               (filter-map
                (match-lambda [('setindex 'dy_out index val) #f] 
                              [('setindex 'y_out index val) #f] 
                              [('reduceindex 'y_out index val)
-                              (let ((asgn-def (assv index asgn-defs)))
+                              (let ((asgn-def (assoc `(y ,index) asgn-defs)))
                                 (match asgn-def
-                                       ((_ name rhs) asgn-def)
+                                       ((index name rhs) `(,index ,name ,rhs))
                                        (else (error 'codegen "unknown asgn index" index)))
                                 )]
+                             [('reduceindex 'yext_out index val) 
+                              `((ext ,index) ,(cdr (assv index invextindexmap)) (getindex ext ,index))]
                              [eq (error 'codegen "unknown equation type" eq)])
-               eqblock))
+               eqblock)
              (fold-right
-              (lambda (ordindex ax)
+              (lambda (ordtindex ax)
                 (append 
                  (filter-map
-                  (match-lambda [('setindex 'dy_out index val) #f] 
-                                [(or ('setindex 'y_out index val)  
-                                     ('reduceindex 'y_out index val))
-                                 (and (= index ordindex) 
-                                      (list index (cdr (assv index invcindexmap)) val))]
-                                [eq (error 'codegen "unknown equation type" eq)])
+                  (match ordtindex
+                         [('y ordindex)
+                          (match-lambda [('setindex 'dy_out index val) #f] 
+                                        [(or ('setindex 'y_out index val)  
+                                             ('reduceindex 'y_out index val))
+                                         (and (= index ordindex) 
+                                              (list ordtindex (cdr (assv index invcindexmap)) val))]
+                                        [('reduceindex 'yext_out index val) #f]
+                                        [eq (error 'codegen "unknown equation type" eq)])]
+                         [('ext ordindex)
+                          (match-lambda [('setindex 'dy_out index val) #f] 
+                                        [(or ('setindex 'y_out index val)  
+                                             ('reduceindex 'y_out index val)) #f]
+                                        [('reduceindex 'yext_out index val) 
+                                         (and (= index ordindex) 
+                                              (list ordtindex (cdr (assv index invextindexmap)) val))]
+                                        [eq (error 'codegen "unknown equation type" eq)])]
+                         [else (error 'codegen "unknown index type" ordtindex)])
                   eqblock) ax))
-              '() asgn-order)))
+              '() asgn-order)
+             ) equal?))
 
            (trstmt (trace 'codegen-ODE "asgns: ~A~%" asgns))
 
@@ -494,6 +552,7 @@
               (match-lambda [(and ode ('setindex 'dy_out index val)) ode] 
                             [('setindex 'y_out index val)  #f]
                             [('reduceindex 'y_out index val)  #f]
+                            [('reduceindex 'yext_out index val)  #f]
                             [eq (error 'codegen "unknown equation type" eq)])
               eqblock)
              (match-lambda*
@@ -568,7 +627,7 @@
                       '((double . t) ((%pointer double) . p) ((%pointer double) . ext) ((%pointer double) . extev) 
                         ((%pointer double) . y) ((%pointer double) . dy_out)))
                   (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
-                         (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns asgn-dag))
+                         (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns asgn-dag ext-defs))
                          (stmts (codegen-set-stmts* codegen-expr1 odes 'dy_out)))
                     (if (null? used-asgns)
                         (E:Begin stmts)
@@ -580,7 +639,7 @@
            (stepfun 
             (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
 
-                   (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns asgn-dag))
+                   (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns asgn-dag ext-defs))
                    
                    (rhsfun 
                     (V:Fn (if (pair? regblocks) '(p d r ext extev) '(p ext extev))
@@ -711,8 +770,8 @@
            
            (condfun     
 
-            (let ((used-asgns (fold-used-asgns condblock asgn-idxs asgn-defs asgns asgn-dag)))
-
+            (let ((used-asgns (fold-used-asgns condblock asgn-idxs asgn-defs asgns asgn-dag ext-defs)))
+              
               (if (null? condblock)
                   (V:C 'NONE)
                   (let ((fnval (V:Fn  (if (pair? regblocks) 
@@ -736,8 +795,7 @@
               ))
 
            (condrhsfun
-            (let ((used-asgns (fold-used-asgns condblock asgn-idxs asgn-defs asgns asgn-dag)))
-
+            (let ((used-asgns (fold-used-asgns condblock asgn-idxs asgn-defs asgns asgn-dag ext-defs)))
               (and (not (null? condblock))
                    (V:Fn
                     (if (pair? regblocks) 
@@ -768,7 +826,7 @@
                       (list 
                        (let* (
                               (blocks (fold-reinit-blocks ode-inds posblocks))
-                              (used-asgns (fold-used-asgns blocks asgn-idxs asgn-defs asgns asgn-dag))
+                              (used-asgns (fold-used-asgns (map cdr blocks) asgn-idxs asgn-defs asgns asgn-dag ext-defs))
                               
                               (fnval (V:Fn (if (null? regblocks) '(t y c ext extev y_out) '(t y c d ext extev y_out))
                                            (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'y_out)))
@@ -792,7 +850,7 @@
                       (list 
                        (let* (
                               (blocks (fold-reinit-blocks ode-inds negblocks))
-                              (used-asgns (fold-used-asgns blocks asgn-idxs asgn-defs asgns asgn-dag))
+                              (used-asgns (fold-used-asgns (map cdr blocks) asgn-idxs asgn-defs asgns asgn-dag ext-defs))
 
                               (fnval (V:Fn (if (null? regblocks) '(t y c ext extev y_out) '(t y c d ext extev y_out))
                                            (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'y_out)))
@@ -817,7 +875,7 @@
                       (list 
                        (let* (
                               (blocks (fold-reinit-blocks ode-inds dposblocks))
-                              (used-asgns (fold-used-asgns blocks asgn-idxs asgn-defs asgns asgn-dag))
+                              (used-asgns (fold-used-asgns (map cdr blocks) asgn-idxs asgn-defs asgns asgn-dag ext-defs))
 
                               (fnval (V:Fn '(t y c d d_out)
                                            (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'd_out)))
@@ -856,7 +914,7 @@
                       (list 
                        (let* (
                               (blocks (fold-regime-reinit-blocks regblocks))
-                              (used-asgns (fold-used-asgns blocks asgn-idxs asgn-defs asgns asgn-dag))
+                              (used-asgns (fold-used-asgns (map cdr blocks) asgn-idxs asgn-defs asgns asgn-dag ext-defs))
                               )
                          (V:Op 'make_transition
                                (list (V:C (length blocks))
