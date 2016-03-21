@@ -481,7 +481,7 @@
                                                         (cons src `(y ,index))]
                                                        [src (error 'codegen "unknown node type" src)])
                                                       (fold-asgns asgn-idxs val))))
-                               (if (null? edges) (cons `((0 ,index)) dag)
+                               (if (null? edges) (cons `((y ,index)) dag)
                                    (fold (lambda (e dag) (update-edge e dag))
                                          dag edges)))]
                             [(('reduceindex 'yext_out index val) dag)
@@ -501,6 +501,7 @@
            (trstmt (trace 'codegen-ODE "asgn-dag: ~A~%" asgn-dag))
 
            (asgn-order (topological-sort asgn-dag eq?))
+
            
            (asgns 
             (delete-duplicates
