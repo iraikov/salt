@@ -304,38 +304,34 @@
                 ))
             )
 
+;(let ((def (assoc index asgn-defs)))
+;  (if def (list (+ n 1) (cons (cons n def) lst)) (list n lst)))
+
+;(let ((def (assoc index ext-defs)))
+;  (if def (cons (cons n def) lst) (list (+ n 1) lst)))
+
           (eq-nodes
            (cadr
             (fold
              (match-lambda* 
               [((and index ('y _)) (n lst))
                (let ((asgns1 (filter-assoc index asgns)))
-                 (if (null? asgns1) 
-                     (let ((def (assoc index asgn-defs)))
-                       (if def (list (+ n 1) (cons (cons n def) lst)) (list n lst)))
-                     (let ((ns-asgns1 (list-tabulate (length asgns1) (lambda (i) (+ i n)))))
-                       (list (+ n (length asgns1)) (append (map cons ns-asgns1 asgns1) lst)))))]
+                 (let ((ns-asgns1 (list-tabulate (length asgns1) (lambda (i) (+ i n)))))
+                   (list (+ n (length asgns1)) (append (map cons ns-asgns1 asgns1) lst))))]
               [((and index ('ext _)) (n lst))
                (let ((asgns1 (filter-assoc index asgns)))
-                 (if (null? asgns1) 
-                     (let ((def (assoc index ext-defs)))
-                       (if def (cons (cons n def) lst) (list (+ n 1) lst)))
-                     (let ((ns-asgns1 (list-tabulate (length asgns1) (lambda (i) (+ i n)))))
-                       (list (+ n (length asgns1)) (append (map cons ns-asgns1 asgns1) lst)))))]
+                 (let ((ns-asgns1 (list-tabulate (length asgns1) (lambda (i) (+ i n)))))
+                   (list (+ n (length asgns1)) (append (map cons ns-asgns1 asgns1) lst))))]
               )
              '(0 ())
              order
              )))
-
-          (dd (begin (print "eq-nodes = ") (pp eq-nodes)))
 
           (eq-node-map
            (map (match-lambda
                  ((eqid index name rhs)
                   (cons index eqid)))
                 eq-nodes))
-
-          (dd (begin (print "eq-node-map = ") (pp eq-node-map)))
 
           (eq-dag 
            (map
@@ -344,12 +340,13 @@
               (cons eqid (fold-eqids eqid index eq-node-map rhs))))
             eq-nodes))
 
-          (dd (begin (print "eq-dag = ") (pp eq-dag)))
           (eq-order (topological-sort eq-dag eq?))
           )
 
-      (print "eq-order = ") (pp eq-order)
-      (map (lambda (eqid) (cdr (assoc eqid eq-nodes))) eq-order)
+      (append
+       (filter-map (lambda (kv) (assoc (car kv) asgn-defs)) eq-node-map)
+       (filter-map (lambda (kv) (assoc (car kv) ext-defs)) eq-node-map)
+       (map (lambda (eqid) (cdr (assoc eqid eq-nodes))) (reverse eq-order)))
       
     ))
 
@@ -571,20 +568,6 @@
            
            (asgns 
             (delete-duplicates
-             (append 
-              (filter-map
-               (match-lambda [('setindex 'dy_out index val) #f] 
-                             [('setindex 'y_out index val) #f] 
-                             [('reduceindex 'y_out index val)
-                              (let ((asgn-def (assoc `(y ,index) asgn-defs)))
-                                (match asgn-def
-                                       ((index name rhs) `(,index ,name ,rhs))
-                                       (else (error 'codegen "unknown asgn index" index)))
-                                )]
-                             [('reduceindex 'yext_out index val) 
-                              `((ext ,index) ,(cdr (assv index invextindexmap)) (getindex ext ,index))]
-                             [eq (error 'codegen "unknown equation type" eq)])
-               eqblock)
              (fold-right
               (lambda (ordtindex ax)
                 (append 
@@ -609,7 +592,7 @@
                          [else (error 'codegen "unknown index type" ordtindex)])
                   eqblock) ax))
               '() asgn-order)
-             ) equal?))
+             equal?))
 
            (trstmt (trace 'codegen-ODE "asgns: ~A~%" asgns))
 
