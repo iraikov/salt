@@ -231,6 +231,7 @@
       blocks)
      (lambda (x y) (< (car x) (car y))))
     )
+
     
   (define (fold-asgns asgn-idxs expr)
     (let recur ((expr expr) (ax '()))
@@ -255,37 +256,102 @@
 
 
   (define (fold-used-asgns blocks asgn-idxs asgn-defs asgns asgn-dag ext-defs)
-      (fold
-       (match-lambda* 
-        [((and index ('y _)) ax)
-         (let ((asgns1 (filter-assoc index asgns)))
-           (if (null? asgns1) 
-               (let ((def (assoc index asgn-defs)))
-                 (if def (cons def ax) ax))
-               (append asgns1 ax)))]
-        [((and index ('ext _)) ax)
-         (let ((asgns1 (filter-assoc index asgns)))
-           (if (null? asgns1) 
-               (let ((def (assoc index ext-defs)))
-                 (if def (cons def ax) ax))
-               (append asgns1 ax)))]
-        )
-       '() 
-       (let recur ((order (delete-duplicates
-                           (fold (lambda (expr ax) 
-                                   (append (fold-asgns asgn-idxs expr) ax))
-                                 '() blocks))))
-         
-         (let ((order1 (if (null? order) '()
-                           (filter-map (lambda (x) 
-                                         (and (pair? (cdr x)) 
-                                              (not (member (car x) order))
-                                              (member (cadr x) order) (car x)))
-                                       asgn-dag))))
-           (if (null? order1) order
-               (recur (append order order1)))
-           ))
-       ))
+    
+    (define (fold-eqids myeqid myindex eq-node-map expr)
+      (let recur ((expr expr) (ax '()))
+        (match expr
+               ((? symbol?) ax)
+               ((? boolean?) ax)
+               (('signal.primop op . args)
+                (fold recur ax args))
+               (('getindex 'y index)
+                (if (and (member index asgn-idxs)
+                         (not (equal? `(y ,index) myindex)))
+                    (append (map 
+                             (match-lambda ((index . eqid) eqid))
+                             (filter-assoc `(y ,index) eq-node-map)) ax)
+                    ax))
+               (('getindex 'yext index)
+                (if (not (equal? `(ext ,index) myindex))
+                    (append (map 
+                             (match-lambda ((index . eqid) eqid))
+                             (filter-assoc `(ext ,index) eq-node-map)) ax)
+                    ax))
+               (($ constant 'number val unit) ax)
+               (('signal.if test ift iff)
+                (recur iff (recur ift (recur test ax))))
+               (('signal.reinit test dflt upd)
+                (recur test (recur dflt (recur upd ax))))
+               (else ax))
+        ))
+
+    (let* (
+           (order
+            (let recur ((order (delete-duplicates
+                                (fold (lambda (expr ax) 
+                                        (append (fold-asgns asgn-idxs expr) ax))
+                                      '() blocks))))
+              
+              (let ((order1 (if (null? order) '()
+                                (filter-map (lambda (x) 
+                                              (and (pair? (cdr x)) 
+                                                   (not (member (car x) order))
+                                                   (member (cadr x) order) (car x)))
+                                            asgn-dag))))
+                (if (null? order1) 
+                    order
+                    (recur (append order1 order)))
+                ))
+            )
+
+          (eq-nodes
+           (cadr
+            (fold
+             (match-lambda* 
+              [((and index ('y _)) (n lst))
+               (let ((asgns1 (filter-assoc index asgns)))
+                 (if (null? asgns1) 
+                     (let ((def (assoc index asgn-defs)))
+                       (if def (list (+ n 1) (cons (cons n def) lst)) (list n lst)))
+                     (let ((ns-asgns1 (list-tabulate (length asgns1) (lambda (i) (+ i n)))))
+                       (list (+ n (length asgns1)) (append (map cons ns-asgns1 asgns1) lst)))))]
+              [((and index ('ext _)) (n lst))
+               (let ((asgns1 (filter-assoc index asgns)))
+                 (if (null? asgns1) 
+                     (let ((def (assoc index ext-defs)))
+                       (if def (cons (cons n def) lst) (list (+ n 1) lst)))
+                     (let ((ns-asgns1 (list-tabulate (length asgns1) (lambda (i) (+ i n)))))
+                       (list (+ n (length asgns1)) (append (map cons ns-asgns1 asgns1) lst)))))]
+              )
+             '(0 ())
+             order
+             )))
+
+          (dd (begin (print "eq-nodes = ") (pp eq-nodes)))
+
+          (eq-node-map
+           (map (match-lambda
+                 ((eqid index name rhs)
+                  (cons index eqid)))
+                eq-nodes))
+
+          (dd (begin (print "eq-node-map = ") (pp eq-node-map)))
+
+          (eq-dag 
+           (map
+            (match-lambda
+             ((eqid index name rhs)
+              (cons eqid (fold-eqids eqid index eq-node-map rhs))))
+            eq-nodes))
+
+          (dd (begin (print "eq-dag = ") (pp eq-dag)))
+          (eq-order (topological-sort eq-dag eq?))
+          )
+
+      (print "eq-order = ") (pp eq-order)
+      (map (lambda (eqid) (cdr (assoc eqid eq-nodes))) eq-order)
+      
+    ))
 
   (define (codegen-set-stmts codegen-expr exprs out)
     (let recur ((i 0) (exprs exprs) (stmts '()))
