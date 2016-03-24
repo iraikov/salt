@@ -76,8 +76,8 @@
 		  (E:Noop ()         (sprintf "E:Noop"))
 		  )))
 
-(define solvers '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crk3 crkbs crkdp))
-(define adaptive-solvers '(rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crkbs crkdp))
+(define solvers '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz3 rkdp rkf45 rkf78 rkv65 crk3 crkbs crkdp))
+(define adaptive-solvers '(rkhe rkbs rkck rkoz3 rkdp rkf45 rkf78 rkv65 crkbs crkdp))
 
 (define (filter-assoc key alst)
   (filter-map (lambda (x) (and (equal? key (car x)) x)) alst))
@@ -1424,6 +1424,20 @@ EOF
        ("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n)" ,nll)
 
        . ,(case solver  
+            ;; adaptive solvers with interpolation
+            ((cerkoz cerkdp)
+             `(
+               ("fun make_regime_cond (p, f) = f" ,nll)
+               ("fun make_cond (p, f) = f" ,nll)
+               ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
+               ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout,err) " ,nll
+                "end" ,nll)
+               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,ext,extev))) h (x,y,yout,err)" ,nll
+                "end" ,nll)
+               )
+             )
             ;; adaptive solvers implemented in C
             ((crkbs crkdp)
              `(
@@ -1444,22 +1458,8 @@ EOF
                (,nll)
                )
              )
-            ;; adaptive solvers with interpolation
-            ((cerkoz cerkdp)
-             `(
-               ("fun make_regime_cond (p, f) = f" ,nll)
-               ("fun make_cond (p, f) = f" ,nll)
-               ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
-               ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout,err) " ,nll
-                "end" ,nll)
-               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,ext,extev))) h (x,y,yout,err)" ,nll
-                "end" ,nll)
-               )
-             )
             ;; adaptive solvers with threshold detection on grid points
-            ((rkhe rkbs rkf45 rkck rkoz rkdp rkf45 rkf78 rkv65)
+            ((rkhe rkbs rkf45 rkck rkoz3 rkdp rkf45 rkf78 rkv65)
              `(
                ("fun make_regime_cond (p, f) = f" ,nll)
                ("fun make_cond (p, f) = f" ,nll)

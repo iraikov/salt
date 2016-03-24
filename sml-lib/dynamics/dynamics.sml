@@ -592,10 +592,12 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
                 true =>
                 (let
                     val (y',d',r')  = evresponse_regime (fpos,fneg,fdiscrete,fregime) (x,y,e,d,r,ext,extev,yrsp)
+                    (*
                     val e' = fixthr(fcond (x,y,e,d,r,ext,extev,enext))
                     val hasevent = posdetect (xev,e,x,e')
+                    *)
                 in
-                    RegimeState (x,y',x,e',d',r',ext,extev,h,ynext,y,errnext,e,hasevent)
+                    RegimeState (x,y',x,e,d',r',ext,extev,h,ynext,y,errnext,e,false)
                 end)
              | false =>  
                let
@@ -622,10 +624,12 @@ fun integral (RegimeStepper fstepper,SOME (RegimeCondition fcond),
            (case root of
                 true => (let
                             val y' = evresponse (fpos,fneg) (x,y,e,ext,extev,yrsp)
+                            (*
                             val e' = fixthr(fcond (x,y',e,ext,extev,enext))
                             val hasevent = posdetect (xev,e,x,e')
+                            *)
                         in
-                            EventState (x,y',x,e',ext,extev,h,ynext,y,errnext,e,hasevent)
+                            EventState (x,y',x,e,ext,extev,h,ynext,y,errnext,e,false)
                         end)
                | false => 
                  let
