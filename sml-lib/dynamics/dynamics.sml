@@ -511,10 +511,14 @@ fun adaptive_regime_solver (stepper,fcond,fdiscrete,fregime)  =
                             if root 
                             then 
                                 (let
+                                    (*
                                     val d'    = (case fdiscrete of 
                                                      SOME f => f (x',ys',ev',d)
                                                    | NONE => d)
                                     val r' = fregime (ev',r)
+                                     *)
+                                    val d' = d
+                                    val r' = r
                                 in
                                     Root (x',ys',x',ev',d',r',ext,extev,ev,h')
                                 end)
