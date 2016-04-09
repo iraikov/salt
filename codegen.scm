@@ -386,6 +386,7 @@
         (defs           (simruntime-definitions sim))
         (discrete-defs  (simruntime-discrete-definitions sim))
         (params         (simruntime-parameters sim))
+        (fields         (simruntime-fields sim))
         (externals      (simruntime-external-definitions sim))
         (externalevs    (simruntime-externalev-definitions sim))
         (eqblock        (simruntime-eqblock sim))
@@ -614,9 +615,13 @@
                            (list (V:C (length params))
                                  (V:Fn '(p_out) (E:Begin (codegen-set-stmts codegen-expr1 params 'p_out))))))
 
+           (fieldfun (V:Op 'make_real_initial
+                           (list (V:C (length fields))
+                                 (V:Fn '(fld_out) (E:Begin (codegen-set-stmts codegen-expr1 fields 'fld_out))))))
+
            (initfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 ode-defs 'y_out)))
-              (V:Fn '(p) 
+              (V:Fn '(p fld) 
                     (E:Ret (V:Fn '(y_out) 
                                  (if (null? asgn-defs)
                                      (E:Begin stmts)
@@ -632,7 +637,7 @@
                   (V:C 'NONE)
                   (V:Op 'SOME
                         (list 
-                         (V:Fn '(p) 
+                         (V:Fn '(p fld) 
                                (E:Ret (V:Fn '(d_out)
                                             (if (null? asgn-defs)
                                                 (E:Begin stmts)
@@ -645,7 +650,7 @@
 
            (initextfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 externals 'ext_out)))
-              (V:Fn '(p) (E:Ret (V:Op 'make_ext (list (V:C (length externals)) 
+              (V:Fn '(p fld) (E:Ret (V:Op 'make_ext (list (V:C (length externals)) 
                                                       (V:Fn '(ext_out) 
                                                             (if (null? asgn-defs)
                                                                 (E:Begin stmts)
@@ -657,7 +662,7 @@
 
            (initextevfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 externalevs 'extev_out)))
-              (V:Fn '(p) (E:Ret (V:Op 'make_ext (list (V:C (length externalevs)) 
+              (V:Fn '(p fld) (E:Ret (V:Op 'make_ext (list (V:C (length externalevs)) 
                                                       (V:Fn '(extev_out) 
                                                             (if (null? asgn-defs)
                                                                 (E:Begin stmts)
@@ -670,11 +675,12 @@
 
            (rhsfun 
             (V:Fn (if (pair? regblocks) 
-                      '((double . t) ((%pointer double) . p) 
+                      '((double . t) ((%pointer double) . p) ((%pointer double) . fld) 
                         ((%pointer double) . d) ((%pointer int) . r) 
                         ((%pointer double) . ext) ((%pointer double) . extev) 
                         ((%pointer double) . y) ((%pointer double) . dy_out))
-                      '((double . t) ((%pointer double) . p) ((%pointer double) . ext) ((%pointer double) . extev) 
+                      '((double . t) ((%pointer double) . p) ((%pointer double) . fld) 
+                        ((%pointer double) . ext) ((%pointer double) . extev) 
                         ((%pointer double) . y) ((%pointer double) . dy_out)))
                   (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
                          (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns asgn-dag ext-defs))
@@ -692,7 +698,7 @@
                    (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns asgn-dag ext-defs))
                    
                    (rhsfun 
-                    (V:Fn (if (pair? regblocks) '(p d r ext extev) '(p ext extev))
+                    (V:Fn (if (pair? regblocks) '(p fld d r ext extev) '(p fld ext extev))
                          (E:Ret
                           (V:Fn '(t y dy_out)
                                 (let ((stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
@@ -708,7 +714,7 @@
                     (list (V:C ode-n) rhsfun))))
 
            (odefun    
-            (V:Fn '(p) 
+            (V:Fn '(p fld) 
                   (E:Ret
                    (cond
                     ((pair? regblocks) 
@@ -718,6 +724,7 @@
                                                       (E:Ret (V:Op 'stepfun 
                                                                    (if adaptive
                                                                        (list (V:Var 'p) 
+                                                                             (V:Var 'fld) 
                                                                              (V:Var 'd) 
                                                                              (V:Var 'r) 
                                                                              (V:Var 'ext) 
@@ -729,6 +736,7 @@
                                                                              (V:Var 'err) 
                                                                              )                                                                       
                                                                        (list (V:Var 'p) 
+                                                                             (V:Var 'fld) 
                                                                              (V:Var 'd) 
                                                                              (V:Var 'r) 
                                                                              (V:Var 'ext) 
@@ -750,6 +758,7 @@
                                                      (E:Ret (V:Op 'stepfun
                                                                   (if adaptive
                                                                       (list (V:Var 'p) 
+                                                                            (V:Var 'fld) 
                                                                             (V:Var 'ext) 
                                                                             (V:Var 'extev) 
                                                                             (V:Var 'h) 
@@ -759,6 +768,7 @@
                                                                             (V:Var 'err) 
                                                                             )
                                                                       (list (V:Var 'p) 
+                                                                            (V:Var 'fld) 
                                                                             (V:Var 'ext) 
                                                                             (V:Var 'extev) 
                                                                             (V:Var 'h) 
@@ -777,6 +787,7 @@
                                                      (E:Ret (V:Op 'stepfun
                                                                   (if adaptive
                                                                       (list (V:Var 'p) 
+                                                                            (V:Var 'fld) 
                                                                             (V:Var 'ext) 
                                                                             (V:Var 'extev) 
                                                                             (V:Var 'h) 
@@ -786,6 +797,7 @@
                                                                             (V:Var 'err) 
                                                                             )
                                                                       (list (V:Var 'p) 
+                                                                            (V:Var 'fld) 
                                                                             (V:Var 'ext) 
                                                                             (V:Var 'extev) 
                                                                             (V:Var 'h) 
@@ -835,10 +847,10 @@
                                                   (E:Begin stmts)))))))
                     (V:Op 'SOME
                           (list 
-                           (V:Fn '(p) 
+                           (V:Fn '(p fld) 
                                  (E:Ret (if (null? regblocks)
-                                            (V:Op 'SCondition (list (V:Op 'make_cond (list (V:Var 'p) fnval))))
-                                            (V:Op 'RegimeCondition  (list (V:Op 'make_regime_cond (list (V:Var 'p) fnval)))))
+                                            (V:Op 'SCondition (list (V:Op 'make_cond (list (V:Var 'p) (V:Var 'fld) fnval))))
+                                            (V:Op 'RegimeCondition  (list (V:Op 'make_regime_cond (list (V:Var 'p) (V:Var 'fld) fnval)))))
                                         ))
                            ))
                     ))
@@ -849,12 +861,12 @@
               (and (not (null? condblock))
                    (V:Fn
                     (if (pair? regblocks) 
-                        '((double . t) ((%pointer double) . p) 
+                        '((double . t) ((%pointer double) . p) ((%pointer double) . fld) 
                           ((%pointer double) . y) ((%pointer double) . c) 
                           ((%pointer double) . d) ((%pointer int) . r) 
                           ((%pointer double) . ext) ((%pointer double) . extev) 
                           ((%pointer double) . c_out))
-                        '((double . t) ((%pointer double) . p) 
+                        '((double . t) ((%pointer double) . p) ((%pointer double) . fld) 
                            ((%pointer double) . y) ((%pointer double) . c) 
                            ((%pointer double) . ext) ((%pointer double) . extev) 
                            ((%pointer double) . c_out)))
@@ -886,9 +898,9 @@
                                                              used-asgns)
                                                         (E:Begin stmts))))))
                               )
-                         (V:Fn '(p) (E:Ret (if (null? regblocks)
-                                               (V:Op 'SResponse (list fnval))
-                                               (V:Op 'RegimeResponse (list fnval))))
+                         (V:Fn '(p fld) (E:Ret (if (null? regblocks)
+                                                   (V:Op 'SResponse (list fnval))
+                                                   (V:Op 'RegimeResponse (list fnval))))
                          ))
                       ))
             ))
@@ -910,9 +922,9 @@
                                                              used-asgns)
                                                         (E:Begin stmts))))))
                               )
-                         (V:Fn '(p) (E:Ret (if (null? regblocks)
-                                               (V:Op 'SResponse (list fnval))
-                                               (V:Op 'RegimeResponse (list fnval)))))
+                         (V:Fn '(p fld) (E:Ret (if (null? regblocks)
+                                                   (V:Op 'SResponse (list fnval))
+                                                   (V:Op 'RegimeResponse (list fnval)))))
 
                          ))
                       ))
@@ -935,7 +947,7 @@
                                                              used-asgns)
                                                         (E:Begin stmts))))))
                               )
-                         (V:Fn '(p) (E:Ret (V:Op 'make_dresponse (list (V:C (length dposblocks)) fnval))))
+                         (V:Fn '(p fld) (E:Ret (V:Op 'make_dresponse (list (V:C (length dposblocks)) fnval))))
                          ))
                       ))
             )
@@ -991,6 +1003,7 @@
         (dsc-n  . ,dsc-n)
         (regime-n . ,regime-n)
         (paramfun . ,paramfun)
+        (fieldfun . ,fieldfun)
         (initfun  . ,initfun)
         (dinitfun . ,dinitfun)
         (rhsfun   . ,rhsfun)
@@ -1418,7 +1431,7 @@ EOF
        ("fun bool_alloc n = Array.array (n, false)" ,nll)
        ("fun summer (a,b,y) = (vmap2 (fn (x,y) => x+y) (a,b,y))" ,nll)
        ("fun scaler (a,lst,y) = vmap (fn (x) => a*x) lst y" ,nll)
-       ("fun make_real_initial (n, f) = let val a = alloc n in fn () => f(a) end" ,nll)
+       ("fun make_real_initial (n, f): unit -> real Array.array = let val a = alloc n in fn () => f(a) end" ,nll)
        ("fun make_ext (n, f) = let val a = alloc n in fn () => f(a) end" ,nll)
        ("fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,alloc n)" ,nll)
        ("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n)" ,nll)
@@ -1427,14 +1440,14 @@ EOF
             ;; adaptive solvers with interpolation
             ((cerkoz cerkdp)
              `(
-               ("fun make_regime_cond (p, f) = f" ,nll)
-               ("fun make_cond (p, f) = f" ,nll)
+               ("fun make_regime_cond (p, fld, f) = f" ,nll)
+               ("fun make_cond (p, fld, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
                ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout,err) " ,nll
+                "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
                 "end" ,nll)
                ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,ext,extev))) h (x,y,yout,err)" ,nll
+                "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
                 "end" ,nll)
                )
              )
@@ -1442,14 +1455,14 @@ EOF
             ((crkbs crkdp)
              `(
                ("val c_regime_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
                ("val c_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array  -> unit;", nll)
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array * real array  -> unit;", nll)
                ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-               ("fun make_regime_cond (p,f) = let val fe = c_regime_cond_eval condcb in "
-                "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
-               ("fun make_cond (p,f) = let val fe = c_cond_eval condcb in "
-                "fn(t,y,c,ext,extev,c_out) => (fe (t,p,y,c,ext,extev,c_out); c_out) end" ,nll)
+               ("fun make_regime_cond (p,fld,f) = let val fe = c_regime_cond_eval condcb in "
+                "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,fld,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
+               ("fun make_cond (p,fld,f) = let val fe = c_cond_eval condcb in "
+                "fn(t,y,c,ext,extev,c_out) => (fe (t,p,fld,y,c,ext,extev,c_out); c_out) end" ,nll)
                ("val odecb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
                ("fun " ,(sprintf "~A_regime" solver) "(n) = make_" ,(sprintf "~A_regime" solver) "(n,odecb)" ,nll)
                ("fun " ,solver "(n) = make_" ,solver "(n,odecb)" ,nll)
@@ -1461,14 +1474,14 @@ EOF
             ;; adaptive solvers with threshold detection on grid points
             ((rkhe rkbs rkf45 rkck rkoz3 rkdp rkf45 rkf78 rkv65)
              `(
-               ("fun make_regime_cond (p, f) = f" ,nll)
-               ("fun make_cond (p, f) = f" ,nll)
+               ("fun make_regime_cond (p, fld, f) = f" ,nll)
+               ("fun make_cond (p, fld, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nll)
                ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout,err) " ,nll
+                "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
                 "end" ,nll)
                ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,ext,extev))) h (x,y,yout,err)" ,nll
+                "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
                 "end" ,nll)
                (,nll)
                )
@@ -1477,14 +1490,14 @@ EOF
             ((crk3)
              `(
                ("val c_regime_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
                ("val c_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array  -> unit;", nll)
+                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array * real array  -> unit;", nll)
                ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-               ("fun make_regime_cond (p,f) = let val fe = c_regime_cond_eval condcb in "
-                "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
-               ("fun make_cond (p,f) = let val fe = c_cond_eval condcb in "
-                "fn(t,y,c,ext,extev,c_out) => (fe (t,p,y,c,ext,extev,c_out); c_out) end" ,nll)
+               ("fun make_regime_cond (p,fld,f) = let val fe = c_regime_cond_eval condcb in "
+                "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,fld,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
+               ("fun make_cond (p,fld,f) = let val fe = c_cond_eval condcb in "
+                "fn(t,y,c,ext,extev,c_out) => (fe (t,p,fld,y,c,ext,extev,c_out); c_out) end" ,nll)
                ("val cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
                ("fun " ,(sprintf "~A_regime" solver) "(n) = make_" ,(sprintf "~A_regime" solver) "(n,cb)" ,nll)
                ("fun " ,solver "(n) = make_" ,solver "(n,cb)" ,nll)
@@ -1495,14 +1508,14 @@ EOF
              )
             (else
              `(
-               ("fun make_regime_cond (p, f) = f" ,nll)
-               ("fun make_cond (p, f) = f" ,nll)
+               ("fun make_regime_cond (p, fld, f) = f" ,nll)
+               ("fun make_cond (p, fld, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nll)
                ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, d, r, ext, extev, h, x, y, yout) => (stepper (deriv (p,d,r,ext,extev))) h (x,y,yout)" ,nll
+                "fn (p, fld, d, r, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout)" ,nll
                 "end" ,nll)
                ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, ext, extev, h, x, y, yout) => (stepper (deriv (p,ext,extev))) h (x,y,yout)" ,nll
+                "fn (p, fld, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout)" ,nll
                 "end" ,nll)
                (,nll)
                ))

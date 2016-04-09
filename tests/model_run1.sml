@@ -98,14 +98,15 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 
 
 val p           = Model.paramfun ()
-val initial     = Model.initfun (p) (Model.alloc Model.n)
+val fld         = Model.fieldfun ()
+val initial     = Model.initfun (p, fld) (Model.alloc Model.n)
 val evinitial   = optApply Model.initcondfun (Model.alloc Model.nev)
-val dinitial    = optApply (optApply Model.dinitfun (p)) (Model.alloc Model.ndsc)
+val dinitial    = optApply (optApply Model.dinitfun (p, fld)) (Model.alloc Model.ndsc)
 val rinitial    = optApply Model.initregfun (Model.bool_alloc Model.nregime)
-val extinitial  = Model.initextfun (p)
-val extevinitial  = Model.initextevfun (p)
-val next        = Model.initfun (p) (Model.alloc Model.n)
-val rsp         = Model.initfun (p) (Model.alloc Model.n)
+val extinitial  = Model.initextfun (p, fld)
+val extevinitial  = Model.initextevfun (p, fld)
+val next        = Model.initfun (p, fld) (Model.alloc Model.n)
+val rsp         = Model.initfun (p, fld) (Model.alloc Model.n)
 val evnext      = optApply Model.initcondfun (Model.alloc Model.nev)
 
 val optStatus = ref NONE
@@ -122,9 +123,9 @@ val _ = if is_help then exitHelp (CommandLine.name()) else ()
 val h     = case is_timestep of SOME dt => dt | NONE => 0.01
 val tstop = case is_time of SOME t => t | NONE => 150.0
 
-val f = D.integral(Model.odefun(p),optApply Model.condfun p,
-                   optApply Model.posfun p,optApply Model.negfun p,
-                   optApply Model.dposfun p,Model.regfun,h)
+val f = D.integral(Model.odefun (p, fld),optApply Model.condfun (p, fld),
+                   optApply Model.posfun (p, fld),optApply Model.negfun (p, fld),
+                   optApply Model.dposfun (p, fld),Model.regfun,h)
 
 val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial(),extevinitial(),next,rsp,evnext,tstop)
 

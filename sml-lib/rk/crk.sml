@@ -10,7 +10,7 @@ fun putStrLn str =
      TextIO.output (TextIO.stdOut, "\n"))
 
 val c_rk3_regime = _import "Runge_Kutta_3_regime" public: 
-                    int * MLton.Pointer.t * real array * real array * bool array * real array * 
+                    int * MLton.Pointer.t * real array * real array * real array * bool array * real array * 
                     real array * real array * real * real * real array * real array * real array * 
                     real array * real array * real array * real array * real array * real array *
                     real array -> int;
@@ -27,14 +27,14 @@ fun make_crk3_regime (n, fp) =
         val k5 = Array.array (n, 0.0) 
         val k6 = Array.array (n, 0.0) 
     in
-        fn (p, d, r, ext, extev, h, tn, yn, yout) => 
-           (c_rk3_regime (n, fp, p, d, r, ext, extev, yn, tn, h, yout, 
+        fn (p, fld, d, r, ext, extev, h, tn, yn, yout) => 
+           (c_rk3_regime (n, fp, p, fld, d, r, ext, extev, yn, tn, h, yout, 
                           t1, t2, t3, k1, k2, k3, k4, k5, k6); yout)
     end
 
 
 val c_rk3 = _import "Runge_Kutta_3" public: 
-             int * MLton.Pointer.t * real array * real array * real array * real array * 
+             int * MLton.Pointer.t * real array * real array * real array * real array * real array * 
              real * real * real array * real array * real array * 
              real array * real array * real array * real array * real array *
              real array * real array -> int;
@@ -51,9 +51,9 @@ fun make_crk3 (n, fp) =
         val k5 = Array.array (n, 0.0) 
         val k6 = Array.array (n, 0.0) 
     in
-        fn (p, ext, extev, h, tn, yn, yout) => 
-           (c_rk3 (n, fp, p, ext, extev, yn, tn, h, yout, 
-                    t1, t2, t3, k1, k2, k3, k4, k5, k6);
+        fn (p, fld, ext, extev, h, tn, yn, yout) => 
+           (c_rk3 (n, fp, p, fld, ext, extev, yn, tn, h, yout, 
+                   t1, t2, t3, k1, k2, k3, k4, k5, k6);
             yout)
     end
 
@@ -62,7 +62,7 @@ fun make_crk3 (n, fp) =
 
 
 val c_rkbs_regime = _import "Bogacki_Shampine_3_2_regime" public: 
-                    int * MLton.Pointer.t * real array * real array * bool array * real array * 
+                    int * MLton.Pointer.t * real array * real array * real array * bool array * real array * 
                     real array * real array * real * real * real array * real array * real array * 
                     real array * real array * real array * real array * real array * real array *
                     real array * real array * real array * real array 
@@ -82,15 +82,15 @@ fun make_crkbs_regime (n, fp) =
         val k6 = Array.array (n, 0.0) 
         val k7 = Array.array (n, 0.0) 
     in
-        fn (p, d, r, ext, extev, h, tn,yn,yout,err) => 
-           (c_rkbs_regime (n, fp, p, d, r, ext, extev, yn, tn, h, yout, err, 
+        fn (p, fld, d, r, ext, extev, h, tn,yn,yout,err) => 
+           (c_rkbs_regime (n, fp, p, fld, d, r, ext, extev, yn, tn, h, yout, err, 
                            t1, t2, t3, t4, k1, k2, k3, k4, k5, k6, k7);
             (yout,err))
     end
 
 
 val c_rkbs = _import "Bogacki_Shampine_3_2" public: 
-             int * MLton.Pointer.t * real array * real array * real array * real array * 
+             int * MLton.Pointer.t * real array * real array * real array * real array * real array * 
              real * real * real array * real array * real array * 
              real array * real array * real array * real array * real array * real array *
              real array * real array * real array * real array
@@ -110,8 +110,8 @@ fun make_crkbs (n, fp) =
         val k6 = Array.array (n, 0.0) 
         val k7 = Array.array (n, 0.0) 
     in
-        fn (p, ext, extev, h, tn,yn,yout,err) => 
-           (c_rkbs (n, fp, p, ext, extev, yn, tn, h, yout, err, 
+        fn (p, fld, ext, extev, h, tn,yn,yout,err) => 
+           (c_rkbs (n, fp, p, fld, ext, extev, yn, tn, h, yout, err, 
                     t1, t2, t3, t4, k1, k2, k3, k4, k5, k6, k7);
             (yout,err))
     end
@@ -119,7 +119,7 @@ fun make_crkbs (n, fp) =
 
 
 val c_rkdp_regime = _import "Dormand_Prince_5_4_regime" public: 
-             int * MLton.Pointer.t * real array * real array * bool array * real array * 
+             int * MLton.Pointer.t * real array * real array * real array * bool array * real array * 
              real array * real array * real * real * real array * real array * real array * 
              real array * real array * real array * real array * real array * real array *
              real array * real array * real array * real array * real array * real array *
@@ -148,8 +148,8 @@ fun make_crkdp_regime (n, fp) =
         val k11 = Array.array (n, 0.0) 
         val k12 = Array.array (n, 0.0) 
     in
-        fn (p, d, r, ext, extev, h, tn,yn,yout,err) => 
-           (c_rkdp_regime (n, fp, p, d, r, ext, extev, yn, tn, h, yout, err, 
+        fn (p, fld, d, r, ext, extev, h, tn,yn,yout,err) => 
+           (c_rkdp_regime (n, fp, p, fld, d, r, ext, extev, yn, tn, h, yout, err, 
                            t1, t2, t3, t4, t5, t6, t7,
                            k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12);
             (yout,err))
@@ -157,7 +157,7 @@ fun make_crkdp_regime (n, fp) =
 
 
 val c_rkdp = _import "Dormand_Prince_5_4" public: 
-             int * MLton.Pointer.t * real array * real array * real array * real array * 
+             int * MLton.Pointer.t * real array * real array * real array * real array * real array * 
              real * real * real array * real array * real array * 
              real array * real array * real array * real array * real array * real array *
              real array * real array * real array * real array * real array * real array *
@@ -186,8 +186,8 @@ fun make_crkdp (n, fp) =
         val k11 = Array.array (n, 0.0) 
         val k12 = Array.array (n, 0.0) 
     in
-        fn (p, ext, extev, h, tn,yn,yout,err) => 
-           (c_rkdp (n, fp, p, ext, extev, yn, tn, h, yout, err, t1, t2, t3, t4, t5, t6, t7,
+        fn (p, fld, ext, extev, h, tn,yn,yout,err) => 
+           (c_rkdp (n, fp, p, fld, ext, extev, yn, tn, h, yout, err, t1, t2, t3, t4, t5, t6, t7,
                     k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12);
             (yout,err))
     end

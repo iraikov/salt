@@ -44,14 +44,14 @@ static void vector_scale (int n, double k, double *x, double *result)
     }
 }
 
-int Bogacki_Shampine_3_2(int, void (*f)(double,double*,double*,double*,double*,double*), 
-                         double *p, double *ext, double *extev, 
+int Bogacki_Shampine_3_2(int, void (*f)(double,double*,double*,double*,double*,double*,double*), 
+                         double *p, double *fld, double *ext, double *extev, 
                          double *y, double x, double h, double *yout, double *err,
                          double *k1, double *k2, double *k3, double *k4, 
                          double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7);
 
-int Bogacki_Shampine_3_2_regime(int, void (*f)(double,double*,double*,int*,double*,double*,double*,double*), 
-                                double *p, double *d, int *r, double *ext, double *extev, 
+int Bogacki_Shampine_3_2_regime(int, void (*f)(double,double*,double*,double*,int*,double*,double*,double*,double*), 
+                                double *p, double *fld, double *d, int *r, double *ext, double *extev, 
                                 double *y, double x, double h, double *yout, double *err,
                                 double *k1, double *k2, double *k3, double *k4, 
                                 double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7);
@@ -83,8 +83,8 @@ int Bogacki_Shampine_3_2_regime(int, void (*f)(double,double*,double*,int*,doubl
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-int Bogacki_Shampine_3_2(int n, void (*f)(double,double *,double *,double *,double *,double *), 
-                         double *p, double *ext, double *extev, 
+int Bogacki_Shampine_3_2(int n, void (*f)(double,double *,double *,double *,double *,double *,double *), 
+                         double *p, double *fld, double *ext, double *extev, 
                          double *y, double x0, double h, double *yout, double *err,
                          double *k1, double *k2, double *k3, double *k4, 
                          double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7)
@@ -101,7 +101,7 @@ int Bogacki_Shampine_3_2(int n, void (*f)(double,double *,double *,double *,doub
 
   //printf("c: h = %g\n", h);
   //printf("c: y[0] = %g\n", y[0]);
-  (*f)(x0, p, ext, extev, y, k1);
+  (*f)(x0, p, fld, ext, extev, y, k1);
   //  printf("c: k1[0] = %g\n", k1[0]);
   
   vector_scale(n, 1.0, k1, t1); 
@@ -111,13 +111,13 @@ int Bogacki_Shampine_3_2(int n, void (*f)(double,double *,double *,double *,doub
   //  printf("c: t2[0] = %g\n", t2[0]);
   //  printf("c: k2 = %p\n", k2);
   //  printf("c: k2[0] = %g\n", k2[0]);
-  (*f)(x0+h2, p, ext, extev, t3, k2);
+  (*f)(x0+h2, p, fld, ext, extev, t3, k2);
   //  printf("c: k2[0] = %g\n", k2[0]);
   // printf("c: k2[0] = %g\n", k2[0]);
   
   vector_scale(n, 3.0, k2, t2); 
   vector_scale(n, h/4.0, t2, t3); vector_sum(n, y, t3, t4); 
-  (*f)(x0+h3, p, ext, extev, t4, k3);
+  (*f)(x0+h3, p, fld, ext, extev, t4, k3);
   //  printf("c: k3[0] = %g\n", k3[0]);
 
   vector_scale(n, 2.0, k1, t1); 
@@ -132,7 +132,7 @@ int Bogacki_Shampine_3_2(int n, void (*f)(double,double *,double *,double *,doub
   //  printf("c: t5[0] = %g\n", t5[0]);
   //  printf("c: t6[0] = %g\n", t6[0]);
   //  printf("c: t7[0] = %g\n", t7[0]);
-  (*f)(x0+h, p, ext, extev, t7, k4);
+  (*f)(x0+h, p, fld, ext, extev, t7, k4);
   //  printf("c: k4 = %p\n", k4);
   //  printf("c: k4[0] = %g\n", k4[0]);
   
@@ -153,8 +153,8 @@ int Bogacki_Shampine_3_2(int n, void (*f)(double,double *,double *,double *,doub
   return 0;
 }
 
-int Bogacki_Shampine_3_2_regime(int n, void (*f)(double,double *,double *,int *,double *,double *,double *,double *), 
-                                double *p, double *d, int *r, double *ext, double *extev, 
+int Bogacki_Shampine_3_2_regime(int n, void (*f)(double,double *,double *,double *,int *,double *,double *,double *,double *), 
+                                double *p, double *fld, double *d, int *r, double *ext, double *extev, 
                                 double *y, double x0, double h, double *yout, double *err,
                                 double *k1, double *k2, double *k3, double *k4, 
                                 double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7)
@@ -171,7 +171,7 @@ int Bogacki_Shampine_3_2_regime(int n, void (*f)(double,double *,double *,int *,
 
   //printf("c: h = %g\n", h);
   //printf("c: y[0] = %g\n", y[0]);
-  (*f)(x0, p, d, r, ext, extev, y, k1);
+  (*f)(x0, p, fld, d, r, ext, extev, y, k1);
   //  printf("c: k1[0] = %g\n", k1[0]);
   
   vector_scale(n, 1.0, k1, t1); 
@@ -181,13 +181,13 @@ int Bogacki_Shampine_3_2_regime(int n, void (*f)(double,double *,double *,int *,
   //  printf("c: t2[0] = %g\n", t2[0]);
   //  printf("c: k2 = %p\n", k2);
   //  printf("c: k2[0] = %g\n", k2[0]);
-  (*f)(x0+h2, p, d, r, ext, extev, t3, k2);
+  (*f)(x0+h2, p, fld, d, r, ext, extev, t3, k2);
   //  printf("c: k2[0] = %g\n", k2[0]);
   // printf("c: k2[0] = %g\n", k2[0]);
   
   vector_scale(n, 3.0, k2, t2); 
   vector_scale(n, h/4.0, t2, t3); vector_sum(n, y, t3, t4); 
-  (*f)(x0+h3, p, d, r, ext, extev, t4, k3);
+  (*f)(x0+h3, p, fld, d, r, ext, extev, t4, k3);
   //  printf("c: k3[0] = %g\n", k3[0]);
 
   vector_scale(n, 2.0, k1, t1); 
@@ -202,7 +202,7 @@ int Bogacki_Shampine_3_2_regime(int n, void (*f)(double,double *,double *,int *,
   //  printf("c: t5[0] = %g\n", t5[0]);
   //  printf("c: t6[0] = %g\n", t6[0]);
   //  printf("c: t7[0] = %g\n", t7[0]);
-  (*f)(x0+h, p, d, r, ext, extev, t7, k4);
+  (*f)(x0+h, p, fld, d, r, ext, extev, t7, k4);
   //  printf("c: k4 = %p\n", k4);
   //  printf("c: k4[0] = %g\n", k4[0]);
   

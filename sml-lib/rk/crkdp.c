@@ -48,15 +48,15 @@ static void vector_scale (int n, double k, double *x, double *result)
     }
 }
 
-int Dormand_Prince_5_4(int, void (*f)(double,double*,double*,double*,double*,double*), 
-                       double *p, double *ext, double *extev, 
+int Dormand_Prince_5_4(int, void (*f)(double,double*,double*,double*,double*,double*,double*), 
+                       double *p, double *fld, double *ext, double *extev, 
                        double *y, double x, double h, double *yout, double *err,
                        double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, double *k7, 
                        double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, 
                        double *t10, double *t11, double *t12);
 
-int Dormand_Prince_5_4_regime(int, void (*f)(double,double*,double*,int*,double*,double*,double*,double*), 
-                              double *p, double *d, int *r, double *ext, double *extev, 
+int Dormand_Prince_5_4_regime(int, void (*f)(double,double*,double*,double*,int*,double*,double*,double*,double*), 
+                              double *p, double *fld, double *d, int *r, double *ext, double *extev, 
                               double *y, double x, double h, double *yout, double *err,
                               double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, double *k7, 
                               double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, 
@@ -89,8 +89,8 @@ int Dormand_Prince_5_4_regime(int, void (*f)(double,double*,double*,int*,double*
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double *,double *), 
-                       double *p, double *ext, double *extev, 
+int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double *,double *,double *), 
+                       double *p, double *fld, double *ext, double *extev, 
                        double *y, double x0, double h, double *yout, double *err,
                        double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, double *k7, 
                        double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, double *t10, 
@@ -110,7 +110,7 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double
 
   //printf("c: h = %g\n", h);
   //printf("c: y[0] = %g\n", y[0]);
-  (*f)(x0, p, ext, extev, y, k1);
+  (*f)(x0, p, fld, ext, extev, y, k1);
   //  printf("c: k1[0] = %g\n", k1[0]);
 
   vector_scale(n, 1.0, k1, t1); 
@@ -120,14 +120,14 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double
   //  printf("c: t2[0] = %g\n", t2[0]);
   //  printf("c: k2 = %p\n", k2);
   //  printf("c: k2[0] = %g\n", k2[0]);
-  (*f)(x0+h2, p, ext, extev, t3, k2);
+  (*f)(x0+h2, p, fld, ext, extev, t3, k2);
   //  printf("c: k2[0] = %g\n", k2[0]);
   // printf("c: k2[0] = %g\n", k2[0]);
   
   vector_scale(n, 3.0, k1, t1); 
   vector_scale(n, 9.0, k2, t2); 
   vector_sum(n, t1, t2, t3); vector_scale(n, h/40.0, t3, t4); vector_sum(n, y, t4, t5); 
-  (*f)(x0+h3, p, ext, extev, t5, k3);
+  (*f)(x0+h3, p, fld, ext, extev, t5, k3);
   //  printf("c: k3[0] = %g\n", k3[0]);
 
   vector_scale(n, 44.0, k1, t1); 
@@ -142,7 +142,7 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double
   //  printf("c: t5[0] = %g\n", t5[0]);
   //  printf("c: t6[0] = %g\n", t6[0]);
   //  printf("c: t7[0] = %g\n", t7[0]);
-  (*f)(x0+h4, p, ext, extev, t7, k4);
+  (*f)(x0+h4, p, fld, ext, extev, t7, k4);
   //  printf("c: k4 = %p\n", k4);
   //  printf("c: k4[0] = %g\n", k4[0]);
   
@@ -155,7 +155,7 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double
   //  printf("c: t8[0] = %g\n", t8[0]);
   vector_sum(n, y, t8, t9); 
   //  printf("c: t9[0] = %g\n", t9[0]);
-  (*f)(x0+h5, p, ext, extev, t9, k5);
+  (*f)(x0+h5, p, fld, ext, extev, t9, k5);
   //  printf("c: k5[0] = %g\n", k5[0]);
 
   vector_scale(n, 477901.0, k1, t1); 
@@ -166,7 +166,7 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double
   vector_sum(n, t1, t2, t6); vector_sum(n, t3, t4, t7); vector_sum(n, t5, t6, t8); vector_sum(n, t7, t8, t9); 
   vector_scale(n, h/167904.0, t9, t10);  
   vector_sum(n, y, t10, t11); 
-  (*f)(x0+h, p, ext, extev, t11, k6 );
+  (*f)(x0+h, p, fld, ext, extev, t11, k6 );
   //  printf("c: k6[0] = %g\n", k6[0]);
 
   vector_scale(n, 12985.0, k1, t1); 
@@ -177,7 +177,7 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double
   vector_sum(n, t1, t3, t7); vector_sum(n, t4, t5, t8); vector_sum(n, t6, t7, t9); vector_sum(n, t8, t9, t10); 
   vector_scale(n, h/142464.0, t10, t11);  
   vector_sum(n, y, t11, t12); 
-  (*f)(x0+h, p, ext, extev, t12, k7 );
+  (*f)(x0+h, p, fld, ext, extev, t12, k7 );
   //  printf("c: k7[0] = %g\n", k7[0]);
 
   vector_sum(n, y, t11, yout); 
@@ -198,8 +198,8 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,double *,double
   return 0;
 }
 
-int Dormand_Prince_5_4_regime(int n, void (*f)(double,double *,double *,int *,double *,double *,double *,double *), 
-                              double *p, double *d, int *r, double *ext, double *extev, 
+int Dormand_Prince_5_4_regime(int n, void (*f)(double,double *,double *,double *,int *,double *,double *,double *,double *), 
+                              double *p, double *fld, double *d, int *r, double *ext, double *extev, 
                               double *y, double x0, double h, double *yout, double *err,
                               double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, double *k7, 
                               double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, double *t10, 
@@ -219,7 +219,7 @@ int Dormand_Prince_5_4_regime(int n, void (*f)(double,double *,double *,int *,do
 
   //printf("c: h = %g\n", h);
   //printf("c: y[0] = %g\n", y[0]);
-  (*f)(x0, p, d, r, ext, extev, y, k1);
+  (*f)(x0, p, fld, d, r, ext, extev, y, k1);
   //  printf("c: k1[0] = %g\n", k1[0]);
   
   vector_scale(n, 1.0, k1, t1); 
@@ -229,14 +229,14 @@ int Dormand_Prince_5_4_regime(int n, void (*f)(double,double *,double *,int *,do
   //  printf("c: t2[0] = %g\n", t2[0]);
   //  printf("c: k2 = %p\n", k2);
   //  printf("c: k2[0] = %g\n", k2[0]);
-  (*f)(x0+h2, p, d, r, ext, extev, t3, k2);
+  (*f)(x0+h2, p, fld, d, r, ext, extev, t3, k2);
   //  printf("c: k2[0] = %g\n", k2[0]);
   // printf("c: k2[0] = %g\n", k2[0]);
   
   vector_scale(n, 3.0, k1, t1); 
   vector_scale(n, 9.0, k2, t2); 
   vector_sum(n, t1, t2, t3); vector_scale(n, h/40.0, t3, t4); vector_sum(n, y, t4, t5); 
-  (*f)(x0+h3, p, d, r, ext, extev, t5, k3);
+  (*f)(x0+h3, p, fld, d, r, ext, extev, t5, k3);
   //  printf("c: k3[0] = %g\n", k3[0]);
 
   vector_scale(n, 44.0, k1, t1); 
@@ -251,7 +251,7 @@ int Dormand_Prince_5_4_regime(int n, void (*f)(double,double *,double *,int *,do
   //  printf("c: t5[0] = %g\n", t5[0]);
   //  printf("c: t6[0] = %g\n", t6[0]);
   //  printf("c: t7[0] = %g\n", t7[0]);
-  (*f)(x0+h4, p, d, r, ext, extev, t7, k4);
+  (*f)(x0+h4, p, fld, d, r, ext, extev, t7, k4);
   //  printf("c: k4 = %p\n", k4);
   //  printf("c: k4[0] = %g\n", k4[0]);
   
@@ -264,7 +264,7 @@ int Dormand_Prince_5_4_regime(int n, void (*f)(double,double *,double *,int *,do
   //  printf("c: t8[0] = %g\n", t8[0]);
   vector_sum(n, y, t8, t9); 
   //  printf("c: t9[0] = %g\n", t9[0]);
-  (*f)(x0+h5, p, d, r, ext, extev, t9, k5);
+  (*f)(x0+h5, p, fld, d, r, ext, extev, t9, k5);
   //  printf("c: k5[0] = %g\n", k5[0]);
 
   vector_scale(n, 477901.0, k1, t1); 
@@ -275,7 +275,7 @@ int Dormand_Prince_5_4_regime(int n, void (*f)(double,double *,double *,int *,do
   vector_sum(n, t1, t2, t6); vector_sum(n, t3, t4, t7); vector_sum(n, t5, t6, t8); vector_sum(n, t7, t8, t9); 
   vector_scale(n, h/167904.0, t9, t10);  
   vector_sum(n, y, t10, t11); 
-  (*f)(x0+h, p, d, r, ext, extev, t11, k6 );
+  (*f)(x0+h, p, fld, d, r, ext, extev, t11, k6 );
   //  printf("c: k6[0] = %g\n", k6[0]);
 
   vector_scale(n, 12985.0, k1, t1); 
@@ -286,7 +286,7 @@ int Dormand_Prince_5_4_regime(int n, void (*f)(double,double *,double *,int *,do
   vector_sum(n, t1, t3, t7); vector_sum(n, t4, t5, t8); vector_sum(n, t6, t7, t9); vector_sum(n, t8, t9, t10); 
   vector_scale(n, h/142464.0, t10, t11);  
   vector_sum(n, y, t11, t12); 
-  (*f)(x0+h, p, d, r, ext, extev, t12, k7 );
+  (*f)(x0+h, p, fld, d, r, ext, extev, t12, k7 );
   //  printf("c: k7[0] = %g\n", k7[0]);
 
   vector_sum(n, y, t11, yout); 

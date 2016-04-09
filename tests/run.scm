@@ -423,10 +423,10 @@
 
 
 (test-model 'vdp vdp solver: 'rk4b compile: #t)
-(test-model 'vdp vdp solver: 'crkdp compile: #t)
+(test-model 'vdp vdp solver: 'rkdp compile: #t)
 
-(test-model 'ml ml solver: 'rk4b compile: #t)
-(test-model 'ml ml solver: 'crkdp compile: #t)
+(test-model 'ml ml solver: 'crk3 compile: #t)
+(test-model 'ml ml solver: 'crkbs compile: #t)
 
 (test-model 'iaf iaf solver: 'rk3 compile: #t)
 (test-model 'iaf iaf solver: 'crkdp compile: #t)

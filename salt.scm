@@ -722,7 +722,7 @@
 ;; runtime representation of a simulation object
 (define-record-type simruntime
   (make-simruntime eqset cindexmap dindexmap evindexmap rindexmap extindexmap extevindexmap
-                   parameters defs discrete-defs external-defs externalev-defs 
+                   parameters fields defs discrete-defs external-defs externalev-defs 
                    eqblock condblock posresp negresp)
   simruntime?
   (eqset simruntime-eqset)
@@ -733,6 +733,7 @@
   (extindexmap simruntime-extindexmap)
   (extevindexmap simruntime-extevindexmap)
   (parameters simruntime-parameters)
+  (fields simruntime-fields)
   (defs simruntime-definitions)
   (discrete-defs simruntime-discrete-definitions)
   (external-defs simruntime-external-definitions)
@@ -753,6 +754,7 @@
           (extindexmap=,(simruntime-extindexmap x))
           (extevindexmap=,(simruntime-extevindexmap x))
           (parameters=,(simruntime-parameters x))
+          (fields=,(simruntime-fields x))
           (defs=,(simruntime-definitions x))
           (external-defs=,(simruntime-external-definitions x))
           (externalev-defs=,(simruntime-externalev-definitions x))
@@ -1816,7 +1818,7 @@
             (trace 'reduce-expr "pindexmap = ~A~%" pindexmap)
             (if (not yindex)
                 (error 'reduce-expr "parameter not in index" name)
-                `(getindex p ,(cdr yindex)))
+                `(getindex fld ,(cdr yindex)))
             ))
 
          (($ external name label initial dim)
@@ -2142,9 +2144,9 @@
           
 
          (pindexmap 
-           (let recur ((nodelst nodelst)
-                       (indexmap  empty-env)
-                       (index     0))
+          (let recur ((nodelst nodelst)
+                      (indexmap  empty-env)
+                      (index     0))
              (if (null? nodelst)
                  indexmap
                  (let ((node (car nodelst)))
@@ -2152,12 +2154,23 @@
                           (recur (cdr nodelst)
                                  (extend-env-with-binding indexmap (gen-binding (car node) index))
                                  (+ 1 index)))
-
-                          ((field? (cdr node))
-                           (recur (cdr nodelst)
-                                  (extend-env-with-binding indexmap (gen-binding (car node) index))
-                                  (+ 1 index)))
-
+                         
+                         (else
+                          (recur (cdr nodelst) indexmap index)))))
+             ))
+          
+         (fldindexmap 
+          (let recur ((nodelst nodelst)
+                      (indexmap  empty-env)
+                      (index     0))
+            (if (null? nodelst)
+                indexmap
+                (let ((node (car nodelst)))
+                  (cond ((field? (cdr node))
+                         (recur (cdr nodelst)
+                                (extend-env-with-binding indexmap (gen-binding (car node) index))
+                                (+ 1 index)))
+                         
                          (else
                           (recur (cdr nodelst) indexmap index)))))
              ))
@@ -2208,6 +2221,7 @@
 
          (indexmaps `((cindexmap  . ,cindexmap)
                       (pindexmap  . ,pindexmap)
+                      (fldindexmap  . ,fldindexmap)
                       (dindexmap  . ,dindexmap)
                       (rindexmap  . ,regimemap)
                       (evindexmap . ,evindexmap)
@@ -2217,8 +2231,11 @@
          
          (param-block 
           (map (lambda (x) (reduce-constant-expr (cdr x) indexmaps))
-               (append (equation-set-parameters eqset)
-                       (equation-set-fields eqset))))
+               (equation-set-parameters eqset)))
+
+         (field-block 
+          (map (lambda (x) (reduce-constant-expr (cdr x) indexmaps))
+               (equation-set-fields eqset)))
 
          (init-block 
           (map (lambda (x) (reduce-expr (cdr x) indexmaps))
@@ -2260,6 +2277,7 @@
      evindexmap regimemap
      extindexmap extevindexmap
      param-block
+     field-block
      init-block
      discrete-init-block
      external-init-block

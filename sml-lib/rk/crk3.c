@@ -41,14 +41,14 @@ static void vector_scale (int n, double k, double *x, double *result)
     }
 }
 
-int Runge_Kutta_3(int, void (*f)(double,double*,double*,double*,double*,double *), 
-                  double *p, double *ext, double *extev, 
+int Runge_Kutta_3(int, void (*f)(double,double*,double*,double*,double*,double*,double *), 
+                  double *p, double *fld, double *ext, double *extev, 
                   double *y, double x, double h, double *yout, 
                   double *k1, double *k2, double *k3, 
                   double *t1, double *t2, double *t3, double *t4, double *t5, double *t6);
 
-int Runge_Kutta_3_regime(int, void (*f)(double,double*,double*,int*,double*,double*,double*,double *), 
-                         double *p, double *d, int *r, double *ext, double *extev, 
+int Runge_Kutta_3_regime(int, void (*f)(double,double*,double*,double*,int*,double*,double*,double*,double *), 
+                         double *p, double *fld, double *d, int *r, double *ext, double *extev, 
                          double *y, double x, double h, double *yout,
                          double *k1, double *k2, double *k3, 
                          double *t1, double *t2, double *t3, double *t4, double *t5, double *t6);
@@ -77,8 +77,8 @@ int Runge_Kutta_3_regime(int, void (*f)(double,double*,double*,int*,double*,doub
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-int Runge_Kutta_3(int n, void (*f)(double,double *,double *,double *,double *,double *), 
-                  double *p, double *ext, double *extev, 
+int Runge_Kutta_3(int n, void (*f)(double,double *,double *,double *,double *,double *,double *), 
+                  double *p, double *fld, double *ext, double *extev, 
                   double *y, double x0, double h, double *yout, 
                   double *k1, double *k2, double *k3, 
                   double *t1, double *t2, double *t3, double *t4, double *t5, double *t6)
@@ -92,19 +92,19 @@ int Runge_Kutta_3(int n, void (*f)(double,double *,double *,double *,double *,do
 
   h2 = 0.5 * h;
 
-  (*f)(x0, p, ext, extev, y, k1);
+  (*f)(x0, p, fld, ext, extev, y, k1);
   // printf("c: k1[0] = %g\n", k1[0]);
   
   vector_scale(n, 1.0, k1, t1); 
   vector_scale(n, h/2.0, t1, t2); 
   vector_sum(n, y, t2, t3);
-  (*f)(x0+h2, p, ext, extev, t3, k2);
+  (*f)(x0+h2, p, fld, ext, extev, t3, k2);
   // printf("c: k2[0] = %g\n", k2[0]);
   
   vector_scale(n, -1.0, k1, t1); vector_scale(n, 2.0, k2, t2); 
   vector_sum(n, t1, t2, t3); 
   vector_scale(n, h, t3, t4); vector_sum(n, y, t4, t5); 
-  (*f)(x0+h, p, ext, extev, t5, k3);
+  (*f)(x0+h, p, fld, ext, extev, t5, k3);
   // printf("c: k3[0] = %g\n", k3[0]);
 
   vector_scale(n, 1.0, k1, t1); 
@@ -118,8 +118,8 @@ int Runge_Kutta_3(int n, void (*f)(double,double *,double *,double *,double *,do
   return 0;
 }
 
-int Runge_Kutta_3_regime(int n, void (*f)(double,double *,double *,int *,double *,double *,double *,double *), 
-                         double *p, double *d, int *r, double *ext, double *extev, 
+int Runge_Kutta_3_regime(int n, void (*f)(double,double *,double *,double *,int *,double *,double *,double *,double *), 
+                         double *p, double *fld, double *d, int *r, double *ext, double *extev, 
                          double *y, double x0, double h, double *yout, 
                          double *k1, double *k2, double *k3, 
                          double *t1, double *t2, double *t3, double *t4, double *t5, double *t6)
@@ -133,17 +133,17 @@ int Runge_Kutta_3_regime(int n, void (*f)(double,double *,double *,int *,double 
 
   h2 = 0.5 * h;
 
-  (*f)(x0, p, d, r, ext, extev, y, k1);
+  (*f)(x0, p, fld, d, r, ext, extev, y, k1);
   
   vector_scale(n, 1.0, k1, t1); 
   vector_scale(n, h/2.0, t1, t2); 
   vector_sum(n, y, t2, t3);
-  (*f)(x0+h2, p, d, r, ext, extev, t3, k2);
+  (*f)(x0+h2, p, fld, d, r, ext, extev, t3, k2);
   
   vector_scale(n, -1.0, k1, t1); vector_scale(n, 2.0, k2, t2); 
   vector_sum(n, t1, t2, t3); 
   vector_scale(n, h, t3, t4); vector_sum(n, y, t4, t5); 
-  (*f)(x0+h, p, d, r, ext, extev, t5, k3);
+  (*f)(x0+h, p, fld, d, r, ext, extev, t5, k3);
 
   vector_scale(n, 1.0, k1, t1); 
   vector_scale(n, 4.0, k2, t2); 
