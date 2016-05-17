@@ -18,6 +18,10 @@
 ;;   2010.
 ;;   http://www.bromans.com/david/publ/thesis-2010-david-broman.pdf
 ;;
+;; The type elaboration and environment management routines are based
+;; on ideas and code from the Scheme dynamic type inferencer by Andrew
+;; Wright.
+;;
 ;; This program is free software: you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
 ;; published by the Free Software Foundation, either version 3 of the
@@ -1798,7 +1802,7 @@
                 `(getindex d ,(cdr dindex)))
             ))
 
-         (($ regime-variable name label value)
+         (($ regime-variable name)
           (let ((rindex (env-lookup name rindexmap)))
             (if (not rindex)
                 (error 'reduce-expr "regime variable not in index" name)

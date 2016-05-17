@@ -165,6 +165,7 @@
 
 (define (codegen-ODE sim #!key (adaptive #f))
 
+
   (define (update-bucket k v alst)
     (let recur ((alst alst)
                 (res  '()))
@@ -391,6 +392,7 @@
         (externalevs    (simruntime-externalev-definitions sim))
         (eqblock        (simruntime-eqblock sim))
 
+
         (trstmt (trace 'codegen-ODE "eqblock: ~A~%" eqblock))
 
         (ode-inds 
@@ -486,6 +488,10 @@
 
         (regime-n (length regblocks))
 
+        (has-conds?     (> cond-n 0))
+        (has-regimes?   (> regime-n 0))
+        (has-fields?    (> (length fields) 0))
+        (has-params?    (> (length params) 0))
         )
 
     (let* (
@@ -611,17 +617,21 @@
                 ('setindex vect2 index2 val2)) 
                (< index1 index2)])))
 
-           (paramfun (V:Op 'make_real_initial
-                           (list (V:C (length params))
-                                 (V:Fn '(p_out) (E:Begin (codegen-set-stmts codegen-expr1 params 'p_out))))))
+           (paramfun (if has-params?
+                         (V:Op 'make_real_initial
+                               (list (V:C (length params))
+                                     (V:Fn '(p_out) (E:Begin (codegen-set-stmts codegen-expr1 params 'p_out)))))
+                         (V:Fn '(p_out) (E:Ret (V:C 'empty_real_initial)))))
 
-           (fieldfun (V:Op 'make_real_initial
-                           (list (V:C (length fields))
-                                 (V:Fn '(fld_out) (E:Begin (codegen-set-stmts codegen-expr1 fields 'fld_out))))))
+           (fieldfun (if has-fields?
+                         (V:Op 'make_real_initial
+                               (list (V:C (length fields))
+                                     (V:Fn '(fld_out) (E:Begin (codegen-set-stmts codegen-expr1 fields 'fld_out)))))
+                         (V:Fn '(fld_out) (E:Ret (V:C 'empty_real_initial)))))
 
            (initfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 ode-defs 'y_out)))
-              (V:Fn '(p fld) 
+              (V:Fn '(p fld)
                     (E:Ret (V:Fn '(y_out) 
                                  (if (null? asgn-defs)
                                      (E:Begin stmts)
@@ -637,7 +647,7 @@
                   (V:C 'NONE)
                   (V:Op 'SOME
                         (list 
-                         (V:Fn '(p fld) 
+                         (V:Fn '(p fld)
                                (E:Ret (V:Fn '(d_out)
                                             (if (null? asgn-defs)
                                                 (E:Begin stmts)
@@ -650,31 +660,33 @@
 
            (initextfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 externals 'ext_out)))
-              (V:Fn '(p fld) (E:Ret (V:Op 'make_ext (list (V:C (length externals)) 
-                                                      (V:Fn '(ext_out) 
-                                                            (if (null? asgn-defs)
-                                                                (E:Begin stmts)
-                                                                (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
-                                                                            asgn-defs)
-                                                                       (E:Begin stmts))))))
-                                                                ))
+              (V:Fn '(p fld)
+                    (E:Ret (V:Op 'make_ext (list (V:C (length externals)) 
+                                                 (V:Fn '(ext_out) 
+                                                       (if (null? asgn-defs)
+                                                           (E:Begin stmts)
+                                                           (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                                       asgn-defs)
+                                                                  (E:Begin stmts))))))
+                           ))
               ))
 
            (initextevfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 externalevs 'extev_out)))
-              (V:Fn '(p fld) (E:Ret (V:Op 'make_ext (list (V:C (length externalevs)) 
-                                                      (V:Fn '(extev_out) 
-                                                            (if (null? asgn-defs)
-                                                                (E:Begin stmts)
-                                                                (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
-                                                                            asgn-defs)
-                                                                       (E:Begin stmts))))))
-                                ))
+              (V:Fn '(p fld)
+                    (E:Ret (V:Op 'make_ext (list (V:C (length externalevs)) 
+                                                 (V:Fn '(extev_out) 
+                                                       (if (null? asgn-defs)
+                                                           (E:Begin stmts)
+                                                           (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                                       asgn-defs)
+                                                                  (E:Begin stmts))))))
+                           ))
               ))
 
 
            (rhsfun 
-            (V:Fn (if (pair? regblocks) 
+            (V:Fn (if has-regimes? 
                       '((double . t) ((%pointer double) . p) ((%pointer double) . fld) 
                         ((%pointer double) . d) ((%pointer int) . r) 
                         ((%pointer double) . ext) ((%pointer double) . extev) 
@@ -698,7 +710,7 @@
                    (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns asgn-dag ext-defs))
                    
                    (rhsfun 
-                    (V:Fn (if (pair? regblocks) '(p fld d r ext extev) '(p fld ext extev))
+                    (V:Fn (if has-regimes? '(p fld d r ext extev) '(p fld ext extev))
                          (E:Ret
                           (V:Fn '(t y dy_out)
                                 (let ((stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
@@ -710,14 +722,14 @@
                                 ))
                          ))
                    )
-              (V:Op (if (pair? regblocks) 'make_regime_stepper 'make_stepper)
+              (V:Op (if has-regimes? 'make_regime_stepper 'make_stepper)
                     (list (V:C ode-n) rhsfun))))
 
            (odefun    
-            (V:Fn '(p fld) 
+            (V:Fn '(p fld)
                   (E:Ret
                    (cond
-                    ((pair? regblocks) 
+                    (has-regimes?
                      (V:Op 'RegimeStepper (list (V:Fn (if adaptive
                                                           '(d r ext extev h x y yout err) 
                                                           '(d r ext extev h x y yout))
@@ -751,7 +763,7 @@
                                                 ))
                      )
                     
-                    ((pair? condblock)
+                    (has-conds?
                      (V:Op 'EventStepper (list (V:Fn (if adaptive
                                                          '(ext extev h x y yout err) 
                                                          '(ext extev h x y yout))
@@ -822,7 +834,7 @@
                              (E:Begin 
                               (append 
                                (list-tabulate
-                                (length condblock)
+                                cond-n
                                 (lambda (i) (E:Set (V:Var 'c_out) i (V:C 'negInf))))
                                (list (E:Ret (V:Var 'c_out)))
                                )
@@ -836,7 +848,7 @@
               
               (if (null? condblock)
                   (V:C 'NONE)
-                  (let ((fnval (V:Fn  (if (pair? regblocks) 
+                  (let ((fnval (V:Fn  (if has-regimes?
                                          '(t y c d r ext extev c_out)
                                          '(t y c ext extev c_out))
                                      (let ((stmts (codegen-set-stmts codegen-expr1 condblock 'c_out)))
@@ -848,9 +860,10 @@
                     (V:Op 'SOME
                           (list 
                            (V:Fn '(p fld) 
-                                 (E:Ret (if (null? regblocks)
+                                 (E:Ret (if has-regimes?
+                                            (V:Op 'RegimeCondition  (list (V:Op 'make_regime_cond (list (V:Var 'p) (V:Var 'fld) fnval))))
                                             (V:Op 'SCondition (list (V:Op 'make_cond (list (V:Var 'p) (V:Var 'fld) fnval))))
-                                            (V:Op 'RegimeCondition  (list (V:Op 'make_regime_cond (list (V:Var 'p) (V:Var 'fld) fnval)))))
+                                            )
                                         ))
                            ))
                     ))
@@ -860,7 +873,7 @@
             (let ((used-asgns (fold-used-asgns condblock asgn-idxs asgn-defs asgns asgn-dag ext-defs)))
               (and (not (null? condblock))
                    (V:Fn
-                    (if (pair? regblocks) 
+                    (if has-regimes?
                         '((double . t) ((%pointer double) . p) ((%pointer double) . fld) 
                           ((%pointer double) . y) ((%pointer double) . c) 
                           ((%pointer double) . d) ((%pointer int) . r) 
@@ -898,9 +911,11 @@
                                                              used-asgns)
                                                         (E:Begin stmts))))))
                               )
-                         (V:Fn '(p fld) (E:Ret (if (null? regblocks)
-                                                   (V:Op 'SResponse (list fnval))
-                                                   (V:Op 'RegimeResponse (list fnval))))
+                         (V:Fn '(p fld) 
+                               (E:Ret (if has-regimes?
+                                          (V:Op 'RegimeResponse (list fnval))
+                                          (V:Op 'SResponse (list fnval))
+                                          ))
                          ))
                       ))
             ))
@@ -922,9 +937,11 @@
                                                              used-asgns)
                                                         (E:Begin stmts))))))
                               )
-                         (V:Fn '(p fld) (E:Ret (if (null? regblocks)
-                                                   (V:Op 'SResponse (list fnval))
-                                                   (V:Op 'RegimeResponse (list fnval)))))
+                         (V:Fn '(p fld)
+                               (E:Ret (if has-regimes?
+                                          (V:Op 'RegimeResponse (list fnval))
+                                          (V:Op 'SResponse (list fnval))
+                                          )))
 
                          ))
                       ))
@@ -947,7 +964,8 @@
                                                              used-asgns)
                                                         (E:Begin stmts))))))
                               )
-                         (V:Fn '(p fld) (E:Ret (V:Op 'make_dresponse (list (V:C (length dposblocks)) fnval))))
+                         (V:Fn '(p fld)
+                               (E:Ret (V:Op 'make_dresponse (list (V:C (length dposblocks)) fnval))))
                          ))
                       ))
             )
@@ -1432,6 +1450,7 @@ EOF
        ("fun summer (a,b,y) = (vmap2 (fn (x,y) => x+y) (a,b,y))" ,nll)
        ("fun scaler (a,lst,y) = vmap (fn (x) => a*x) lst y" ,nll)
        ("fun make_real_initial (n, f): unit -> real Array.array = let val a = alloc n in fn () => f(a) end" ,nll)
+       ("val empty_real_initial: real Array.array = alloc 0" ,nll)
        ("fun make_ext (n, f) = let val a = alloc n in fn () => f(a) end" ,nll)
        ("fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,alloc n)" ,nll)
        ("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n)" ,nll)

@@ -97,8 +97,8 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 |  start _ = raise Domain
 
 
-val p           = Model.paramfun ()
-val fld         = Model.fieldfun ()
+val p: real array   = Model.paramfun ()
+val fld: real array = Model.fieldfun ()
 val initial     = Model.initfun (p, fld) (Model.alloc Model.n)
 val evinitial   = optApply Model.initcondfun (Model.alloc Model.nev)
 val dinitial    = optApply (optApply Model.dinitfun (p, fld)) (Model.alloc Model.ndsc)
