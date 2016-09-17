@@ -3,7 +3,7 @@
 (define (dynld-name fn)		
   (make-pathname #f fn ##sys#load-dynamic-extension))	
 
-(define version 0.13)
+(define version 0.14)
 
 (use make)
 
@@ -12,7 +12,7 @@
 	(run (csi -s expr.grm)))
 
        ((dynld-name "salt") ("salt.scm" "env.scm" "parser.scm" "expr.grm.scm" "codegen.scm" )
-	(compile -O -d2 -S -s salt.scm -j salt))
+	(compile -O -d2 -S -s -I ,(repository-path) salt.scm -j salt))
 
        ((dynld-name "salt.import") ("salt.import.scm")
 	(compile -O -d2 -S -s salt.import.scm))
