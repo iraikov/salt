@@ -55,10 +55,13 @@
               -default-ann "'allowFFI true'"
               -mlb-path-var ,(sprintf "'SALT_LIB ~A/sml-lib'" SALT-DIR)
               -mlb-path-var ,(sprintf "'RK_LIB $(SALT_LIB)/rk'")
+              -mlb-path-var ,(sprintf "'STATE_LIB $(SALT_LIB)/state'")
               -mlb-path-var ,(sprintf "'DYNAMICS_LIB $(SALT_LIB)/dynamics'")
               ,mlb-path
               ,@(case solver 
                  ((crk3) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crk3.c")))
+                 ((crk4a) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crk4a.c")))
+                 ((crk4b) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crk4b.c")))
                  ((crkbs) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crkbs.c")))
                  ((crkdp) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crkdp.c")))
                  (else '()))
@@ -425,6 +428,7 @@
 (test-model 'vdp vdp solver: 'rk4b compile: #t)
 (test-model 'vdp vdp solver: 'rkdp compile: #t)
 
+
 (test-model 'ml ml solver: 'crk3 compile: #t)
 (test-model 'ml ml solver: 'crkbs compile: #t)
 
@@ -447,6 +451,7 @@
 (test-model 'wb wb solver: 'crkdp  compile: #t)
 
 ;(test-model 'iafsyn iafsyn)
+
 
 
 

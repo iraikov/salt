@@ -57,6 +57,115 @@ fun make_crk3 (n, fp) =
             yout)
     end
 
+val c_rk4a_regime = _import "Runge_Kutta_4a_regime" public: 
+                    int * MLton.Pointer.t * real array * real array * real array * bool array * real array * 
+                    real array * real array * real * real * real array * real array * real array * 
+                    real array * real array * real array * real array * real array * real array *
+                    real array * real array * real array * real array -> int;
+
+fun make_crk4a_regime (n, fp) =
+    let
+        val t1 = Array.array (n, 0.0) 
+        val t2 = Array.array (n, 0.0) 
+        val t3 = Array.array (n, 0.0) 
+        val k1 = Array.array (n, 0.0) 
+        val k2 = Array.array (n, 0.0) 
+        val k3 = Array.array (n, 0.0) 
+        val k4 = Array.array (n, 0.0) 
+        val k5 = Array.array (n, 0.0) 
+        val k6 = Array.array (n, 0.0) 
+        val k7 = Array.array (n, 0.0) 
+        val k8 = Array.array (n, 0.0) 
+        val k9 = Array.array (n, 0.0) 
+    in
+        fn (p, fld, d, r, ext, extev, h, tn, yn, yout) => 
+           (c_rk4a_regime (n, fp, p, fld, d, r, ext, extev, yn, tn, h, yout, 
+                           t1, t2, t3, k1, k2, k3, k4, k5, k6, k7, k8, k9); yout)
+    end
+
+
+val c_rk4a = _import "Runge_Kutta_4a" public: 
+             int * MLton.Pointer.t * real array * real array * real array * real array * real array * 
+             real * real * real array * real array * real array * 
+             real array * real array * real array * real array * real array *
+             real array * real array * real array * real array * real array -> int;
+
+fun make_crk4a (n, fp) =
+    let
+        val t1 = Array.array (n, 0.0) 
+        val t2 = Array.array (n, 0.0) 
+        val t3 = Array.array (n, 0.0) 
+        val k1 = Array.array (n, 0.0) 
+        val k2 = Array.array (n, 0.0) 
+        val k3 = Array.array (n, 0.0) 
+        val k4 = Array.array (n, 0.0) 
+        val k5 = Array.array (n, 0.0) 
+        val k6 = Array.array (n, 0.0) 
+        val k7 = Array.array (n, 0.0) 
+        val k8 = Array.array (n, 0.0) 
+        val k9 = Array.array (n, 0.0) 
+    in
+        fn (p, fld, ext, extev, h, tn, yn, yout) => 
+           (c_rk4a (n, fp, p, fld, ext, extev, yn, tn, h, yout, 
+                    t1, t2, t3, k1, k2, k3, k4, k5, k6, k7, k8, k9);
+            yout)
+    end
+
+
+val c_rk4b_regime = _import "Runge_Kutta_4b_regime" public: 
+                    int * MLton.Pointer.t * real array * real array * real array * bool array * real array * 
+                    real array * real array * real * real * real array * real array * real array * 
+                    real array * real array * real array * real array * real array * real array *
+                    real array * real array * real array * real array -> int;
+
+fun make_crk4b_regime (n, fp) =
+    let
+        val t1 = Array.array (n, 0.0) 
+        val t2 = Array.array (n, 0.0) 
+        val t3 = Array.array (n, 0.0) 
+        val k1 = Array.array (n, 0.0) 
+        val k2 = Array.array (n, 0.0) 
+        val k3 = Array.array (n, 0.0) 
+        val k4 = Array.array (n, 0.0) 
+        val k5 = Array.array (n, 0.0) 
+        val k6 = Array.array (n, 0.0) 
+        val k7 = Array.array (n, 0.0) 
+        val k8 = Array.array (n, 0.0) 
+        val k9 = Array.array (n, 0.0) 
+    in
+        fn (p, fld, d, r, ext, extev, h, tn, yn, yout) => 
+           (c_rk4b_regime (n, fp, p, fld, d, r, ext, extev, yn, tn, h, yout, 
+                           t1, t2, t3, k1, k2, k3, k4, k5, k6, k7, k8, k9); yout)
+    end
+
+
+val c_rk4b = _import "Runge_Kutta_4b" public: 
+             int * MLton.Pointer.t * real array * real array * real array * real array * real array * 
+             real * real * real array * real array * real array * 
+             real array * real array * real array * real array * real array *
+             real array * real array * real array * real array * real array -> int;
+
+fun make_crk4b (n, fp) =
+    let
+        val t1 = Array.array (n, 0.0) 
+        val t2 = Array.array (n, 0.0) 
+        val t3 = Array.array (n, 0.0) 
+        val k1 = Array.array (n, 0.0) 
+        val k2 = Array.array (n, 0.0) 
+        val k3 = Array.array (n, 0.0) 
+        val k4 = Array.array (n, 0.0) 
+        val k5 = Array.array (n, 0.0) 
+        val k6 = Array.array (n, 0.0) 
+        val k7 = Array.array (n, 0.0) 
+        val k8 = Array.array (n, 0.0) 
+        val k9 = Array.array (n, 0.0) 
+    in
+        fn (p, fld, ext, extev, h, tn, yn, yout) => 
+           (c_rk4b (n, fp, p, fld, ext, extev, yn, tn, h, yout, 
+                    t1, t2, t3, k1, k2, k3, k4, k5, k6, k7, k8, k9);
+            yout)
+    end
+
 
 
 

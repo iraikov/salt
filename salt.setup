@@ -3,7 +3,7 @@
 (define (dynld-name fn)		
   (make-pathname #f fn ##sys#load-dynamic-extension))	
 
-(define version 0.14)
+(define version 0.15)
 
 (use make)
 
@@ -60,6 +60,8 @@
 (copy-file-to-salt-dir "sml-lib/rk/crk.sml")
 (copy-file-to-salt-dir "sml-lib/rk/crk.mlb")
 (copy-file-to-salt-dir "sml-lib/rk/crk3.c")
+(copy-file-to-salt-dir "sml-lib/rk/crk4a.c")
+(copy-file-to-salt-dir "sml-lib/rk/crk4b.c")
 (copy-file-to-salt-dir "sml-lib/rk/crkbs.c")
 (copy-file-to-salt-dir "sml-lib/rk/crkdp.c")
 

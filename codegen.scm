@@ -76,7 +76,7 @@
 		  (E:Noop ()         (sprintf "E:Noop"))
 		  )))
 
-(define solvers '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz3 rkdp rkf45 rkf78 rkv65 crk3 crkbs crkdp))
+(define solvers '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz3 rkdp rkf45 rkf78 rkv65 crk3 crk4a crk4b crkbs crkdp))
 (define adaptive-solvers '(rkhe rkbs rkck rkoz3 rkdp rkf45 rkf78 rkv65 crkbs crkdp))
 
 (define (filter-assoc key alst)
@@ -1395,7 +1395,7 @@ open RungeKutta
 
 EOF
 
-,(if (member solver '(crk3 crkdp crkbs))
+,(if (member solver '(crk3 crk4a crk4b crkdp crkbs))
 
 #<<EOF
 open CRungeKutta
@@ -1506,7 +1506,7 @@ EOF
                )
              )
             ;; fixed-step solvers implemented in C
-            ((crk3)
+            ((crk3 crk4a crk4b)
              `(
                ("val c_regime_cond_eval = _import * : "
                 "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)

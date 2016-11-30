@@ -98,26 +98,47 @@ fun run2 (integrator) =
 
 val _ = let val stepper = make_crk3(1,cb)  
             val p = Array.fromList [con]
+            val fld = Array.fromList []
             val ext = Array.fromList []
             val extev = Array.fromList []
         in 
-            run1  (fn(h,t,y,yout) => stepper (p,ext,extev,h,t,y,yout))
+            run1  (fn(h,t,y,yout) => stepper (p,fld,ext,extev,h,t,y,yout))
         end
 
-val _ = let val stepper = make_crkdp(1,cb)  
+val _ = let val stepper = make_crk4a(1,cb)  
             val p = Array.fromList [con]
+            val fld = Array.fromList []
             val ext = Array.fromList []
             val extev = Array.fromList []
         in 
-            run2  (fn(h,t,y,yout,err) => stepper (p,ext,extev,h,t,y,yout,err))
+            run1  (fn(h,t,y,yout) => stepper (p,fld,ext,extev,h,t,y,yout))
+        end
+
+val _ = let val stepper = make_crk4b(1,cb)  
+            val p = Array.fromList [con]
+            val fld = Array.fromList []
+            val ext = Array.fromList []
+            val extev = Array.fromList []
+        in 
+            run1  (fn(h,t,y,yout) => stepper (p,fld,ext,extev,h,t,y,yout))
         end
 
 val _ = let val stepper = make_crkbs(1,cb)  
             val p = Array.fromList [con]
+            val fld = Array.fromList []
             val ext = Array.fromList []
             val extev = Array.fromList []
         in 
-            run2  (fn(h,t,y,yout,err) => stepper (p,ext,extev,h,t,y,yout,err))
+            run2  (fn(h,t,y,yout,err) => stepper (p,fld,ext,extev,h,t,y,yout,err))
+        end
+
+val _ = let val stepper = make_crkdp(1,cb)  
+            val p = Array.fromList [con]
+            val fld = Array.fromList []
+            val ext = Array.fromList []
+            val extev = Array.fromList []
+        in 
+            run2  (fn(h,t,y,yout,err) => stepper (p,fld,ext,extev,h,t,y,yout,err))
         end
 
 
