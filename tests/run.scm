@@ -40,9 +40,10 @@
          (c-path (make-pathname dir (string-append (->string name) ".c")))
          (c-port (open-output-file c-path))
          (sml-path (make-pathname dir (string-append (->string name) ".sml")))
-         (mlb-path (if (member solver adaptive-solvers)
-                     (make-pathname dir (string-append (->string name) "_run2.mlb"))
-                     (make-pathname dir (string-append (->string name) "_run1.mlb"))))
+         (mlb-path (case solver
+                     ((crkbs crkdp rkhe rkbs rkck rkoz3 rkdp rkf45 rkf78 rkv65)
+                      (make-pathname dir (string-append (->string name) "_run2.mlb")))
+                     (else (make-pathname dir (string-append (->string name) "_run1.mlb")))))
          (sml-port (open-output-file sml-path))
          )
     (codegen-ODE/C name sim out: c-port solver: solver libs: '(interp))
@@ -425,7 +426,7 @@
   )
 
 
-(test-model 'vdp vdp solver: 'rk4b compile: #t)
+(test-model 'vdp vdp solver: 'rk3 compile: #t)
 (test-model 'vdp vdp solver: 'rkdp compile: #t)
 
 
