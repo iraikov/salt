@@ -163,7 +163,7 @@
       ))
 
 
-(define (codegen-ODE sim #!key (adaptive #f))
+(define (codegen-ODE sim #!key (adaptive #f) (libs '()))
 
 
   (define (update-bucket k v alst)
@@ -376,6 +376,22 @@
         (member index ode-inds))
       ))
 
+  (define (random-decls body libs)
+    (if (member 'random libs)
+        (E:Let `(,(B:Val 'random_uniform (V:Op 'mk_random_uniform (list (V:Var 'rs))))
+                 ,(B:Val 'random_unifrange (V:Op 'mk_random_unifrange (list (V:Var 'rs))))
+                 ,(B:Val 'random_normal (V:Op 'mk_random_normal (list (V:Var 'rs) (V:Var 'rszt))))
+                 ,(B:Val 'random_exponential (V:Op 'mk_random_exponential (list (V:Var 'rs) (V:Var 'rszt))))
+                 ,(B:Val 'random_poisson (V:Op 'mk_random_poisson (list (V:Var 'rs) (V:Var 'rszt)))))
+               body)
+        body))
+
+  (define (random-args arg-list libs)
+    (if (member 'random libs) (append arg-list '(rs rszt)) arg-list))
+  
+  (define (random-vargs arg-list libs)
+    (if (member 'random libs) (append arg-list `(,(V:Var 'rs) ,(V:Var 'rszt))) arg-list))
+  
 
   (let* (
         (cindexmap      (simruntime-cindexmap sim))
@@ -708,57 +724,63 @@
             (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
 
                    (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns asgn-dag ext-defs))
+
+                   (rhs-args (let ((args0 (if has-regimes? '(p fld d r ext extev) '(p fld ext extev))))
+                               (random-args args0 libs)))
                    
                    (rhsfun 
-                    (V:Fn (if has-regimes? '(p fld d r ext extev) '(p fld ext extev))
-                         (E:Ret
-                          (V:Fn '(t y dy_out)
-                                (let ((stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
-                                  (if (null? used-asgns)
-                                      (E:Begin stmts)
-                                      (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) used-asgns)
-                                             (E:Begin stmts))
-                                      ))
-                                ))
-                         ))
+                    (V:Fn rhs-args
+                          (random-decls
+                           (E:Ret 
+                            (V:Fn '(t y dy_out)
+                                  (let ((stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
+                                    (if (null? used-asgns)
+                                        (E:Begin stmts)
+                                        (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) used-asgns)
+                                               (E:Begin stmts))
+                                        ))
+                                  ))
+                           libs)
+                          ))
                    )
               (V:Op (if has-regimes? 'make_regime_stepper 'make_stepper)
                     (list (V:C ode-n) rhsfun))))
 
            (odefun    
-            (V:Fn '(p fld)
+            (V:Fn (random-args '(p fld) libs)
                   (E:Ret
                    (cond
                     (has-regimes?
                      (V:Op 'RegimeStepper (list (V:Fn (if adaptive
                                                           '(d r ext extev h x y yout err) 
                                                           '(d r ext extev h x y yout))
-                                                      (E:Ret (V:Op 'stepfun 
-                                                                   (if adaptive
-                                                                       (list (V:Var 'p) 
-                                                                             (V:Var 'fld) 
-                                                                             (V:Var 'd) 
-                                                                             (V:Var 'r) 
-                                                                             (V:Var 'ext) 
-                                                                             (V:Var 'extev) 
-                                                                             (V:Var 'h) 
-                                                                             (V:Var 'x) 
-                                                                             (V:Var 'y) 
+                                                      (E:Ret (V:Op 'stepfun
+                                                                   (random-vargs
+                                                                    (if adaptive
+                                                                        (list (V:Var 'p) 
+                                                                              (V:Var 'fld) 
+                                                                              (V:Var 'd) 
+                                                                              (V:Var 'r) 
+                                                                              (V:Var 'ext) 
+                                                                              (V:Var 'extev) 
+                                                                              (V:Var 'h) 
+                                                                              (V:Var 'x) 
+                                                                              (V:Var 'y) 
+                                                                              (V:Var 'yout) 
+                                                                              (V:Var 'err) 
+                                                                              )                                                                       
+                                                                        (list (V:Var 'p) 
+                                                                              (V:Var 'fld) 
+                                                                              (V:Var 'd) 
+                                                                              (V:Var 'r) 
+                                                                              (V:Var 'ext) 
+                                                                              (V:Var 'extev) 
+                                                                              (V:Var 'h) 
+                                                                              (V:Var 'x) 
+                                                                              (V:Var 'y) 
                                                                              (V:Var 'yout) 
-                                                                             (V:Var 'err) 
-                                                                             )                                                                       
-                                                                       (list (V:Var 'p) 
-                                                                             (V:Var 'fld) 
-                                                                             (V:Var 'd) 
-                                                                             (V:Var 'r) 
-                                                                             (V:Var 'ext) 
-                                                                             (V:Var 'extev) 
-                                                                             (V:Var 'h) 
-                                                                             (V:Var 'x) 
-                                                                             (V:Var 'y) 
-                                                                             (V:Var 'yout) 
-                                                                             )
-                                                                       ))
+                                                                             ))
+                                                                    libs))
                                                              ))
                                                 ))
                      )
@@ -768,62 +790,66 @@
                                                          '(ext extev h x y yout err) 
                                                          '(ext extev h x y yout))
                                                      (E:Ret (V:Op 'stepfun
-                                                                  (if adaptive
-                                                                      (list (V:Var 'p) 
-                                                                            (V:Var 'fld) 
-                                                                            (V:Var 'ext) 
-                                                                            (V:Var 'extev) 
-                                                                            (V:Var 'h) 
-                                                                            (V:Var 'x) 
-                                                                            (V:Var 'y) 
-                                                                            (V:Var 'yout) 
-                                                                            (V:Var 'err) 
-                                                                            )
-                                                                      (list (V:Var 'p) 
-                                                                            (V:Var 'fld) 
-                                                                            (V:Var 'ext) 
-                                                                            (V:Var 'extev) 
-                                                                            (V:Var 'h) 
-                                                                            (V:Var 'x) 
-                                                                            (V:Var 'y) 
-                                                                            (V:Var 'yout) 
-                                                                            ))
+                                                                  (random-vargs
+                                                                   (if adaptive
+                                                                       (list (V:Var 'p) 
+                                                                             (V:Var 'fld) 
+                                                                             (V:Var 'ext) 
+                                                                             (V:Var 'extev) 
+                                                                             (V:Var 'h) 
+                                                                             (V:Var 'x) 
+                                                                             (V:Var 'y) 
+                                                                             (V:Var 'yout) 
+                                                                             (V:Var 'err) 
+                                                                             )
+                                                                       (list (V:Var 'p) 
+                                                                             (V:Var 'fld) 
+                                                                             (V:Var 'ext) 
+                                                                             (V:Var 'extev) 
+                                                                             (V:Var 'h) 
+                                                                             (V:Var 'x) 
+                                                                             (V:Var 'y) 
+                                                                             (V:Var 'yout) 
+                                                                             ))
+                                                                   libs)
                                                                   ))
                                                      ))
-                           ))
+                           )
+                     )
                     
                     (else
                      (V:Op 'ContStepper (list  (V:Fn (if adaptive
                                                          '(ext extev h x y yout err) 
                                                          '(ext extev h x y yout))
                                                      (E:Ret (V:Op 'stepfun
-                                                                  (if adaptive
-                                                                      (list (V:Var 'p) 
-                                                                            (V:Var 'fld) 
-                                                                            (V:Var 'ext) 
-                                                                            (V:Var 'extev) 
-                                                                            (V:Var 'h) 
-                                                                            (V:Var 'x) 
-                                                                            (V:Var 'y) 
-                                                                            (V:Var 'yout) 
-                                                                            (V:Var 'err) 
-                                                                            )
-                                                                      (list (V:Var 'p) 
-                                                                            (V:Var 'fld) 
-                                                                            (V:Var 'ext) 
-                                                                            (V:Var 'extev) 
-                                                                            (V:Var 'h) 
-                                                                            (V:Var 'x) 
-                                                                            (V:Var 'y) 
-                                                                            (V:Var 'yout) 
-                                                                            )
-                                                                      ))
-                                                     ))
-                           ))
-                    ))
-                  ))
-            )
-
+                                                                  (random-vargs
+                                                                   (if adaptive
+                                                                       (list (V:Var 'p) 
+                                                                             (V:Var 'fld) 
+                                                                             (V:Var 'ext) 
+                                                                             (V:Var 'extev) 
+                                                                             (V:Var 'h) 
+                                                                             (V:Var 'x) 
+                                                                             (V:Var 'y) 
+                                                                             (V:Var 'yout) 
+                                                                             (V:Var 'err) 
+                                                                             )
+                                                                       (list (V:Var 'p) 
+                                                                             (V:Var 'fld) 
+                                                                             (V:Var 'ext) 
+                                                                             (V:Var 'extev) 
+                                                                             (V:Var 'h) 
+                                                                             (V:Var 'x) 
+                                                                             (V:Var 'y) 
+                                                                             (V:Var 'yout) 
+                                                                             )
+                                                                       )
+                                                                   libs))
+                                                            ))
+                                               ))
+                     ))
+                   )
+            ))
                                     
            (initcondfun 
             (if (null? condblock)
@@ -902,23 +928,28 @@
                        (let* (
                               (blocks (fold-reinit-blocks ode-inds posblocks))
                               (used-asgns (fold-used-asgns (map cdr blocks) asgn-idxs asgn-defs asgns asgn-dag ext-defs))
+                              (rhs-args (if has-regimes? '(t y c d ext extev y_out) '(t y c ext extev y_out)))
                               
-                              (fnval (V:Fn (if (null? regblocks) '(t y c ext extev y_out) '(t y c d ext extev y_out))
+                              (fnval (V:Fn rhs-args
                                            (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'y_out)))
                                              (if (null? used-asgns)
                                                  (E:Begin stmts)
                                                  (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
                                                              used-asgns)
-                                                        (E:Begin stmts))))))
+                                                        (E:Begin stmts)))
+                                             )))
                               )
-                         (V:Fn '(p fld) 
-                               (E:Ret (if has-regimes?
-                                          (V:Op 'RegimeResponse (list fnval))
-                                          (V:Op 'SResponse (list fnval))
-                                          ))
+                         (V:Fn (random-args '(p fld) libs)
+                               (random-decls
+                                (E:Ret (if has-regimes?
+                                           (V:Op 'RegimeResponse (list fnval))
+                                           (V:Op 'SResponse (list fnval))
+                                           ))
+                                libs))
                          ))
                       ))
-            ))
+            )
+
 
            (negfun      
             (if (null? negblocks)
@@ -928,8 +959,9 @@
                        (let* (
                               (blocks (fold-reinit-blocks ode-inds negblocks))
                               (used-asgns (fold-used-asgns (map cdr blocks) asgn-idxs asgn-defs asgns asgn-dag ext-defs))
+                              (rhs-args (if has-regimes? '(t y c d ext extev y_out) '(t y c ext extev y_out)))
 
-                              (fnval (V:Fn (if (null? regblocks) '(t y c ext extev y_out) '(t y c d ext extev y_out))
+                              (fnval (V:Fn rhs-args
                                            (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'y_out)))
                                              (if (null? used-asgns)
                                                  (E:Begin stmts)
@@ -937,11 +969,13 @@
                                                              used-asgns)
                                                         (E:Begin stmts))))))
                               )
-                         (V:Fn '(p fld)
-                               (E:Ret (if has-regimes?
-                                          (V:Op 'RegimeResponse (list fnval))
-                                          (V:Op 'SResponse (list fnval))
-                                          )))
+                         (V:Fn (random-args '(p fld) libs)
+                               (random-decls
+                                (E:Ret (if has-regimes?
+                                           (V:Op 'RegimeResponse (list fnval))
+                                           (V:Op 'SResponse (list fnval))
+                                           ))
+                                libs))
 
                          ))
                       ))
@@ -964,8 +998,10 @@
                                                              used-asgns)
                                                         (E:Begin stmts))))))
                               )
-                         (V:Fn '(p fld)
-                               (E:Ret (V:Op 'make_dresponse (list (V:C (length dposblocks)) fnval))))
+                         (V:Fn (random-args '(p fld) libs)
+                               (random-decls
+                                (E:Ret (V:Op 'make_dresponse (list (V:C (length dposblocks)) fnval)))
+                                libs))
                          ))
                       ))
             )
@@ -1350,7 +1386,7 @@
     (if (and solver (not (member solver solvers)))
         (error 'codegen-ODE/ML "unknown solver" solver))
 
-    (let ((sysdefs (codegen-ODE sim adaptive: (member solver adaptive-solvers))))
+    (let ((sysdefs (codegen-ODE sim adaptive: (member solver adaptive-solvers) libs: libs)))
       
       (if mod (print-fragments (prelude/ML csysname: name solver: solver libs: libs) out))
 
@@ -1424,16 +1460,16 @@ EOF
 ,(if (member 'random libs)
 #<<EOF
 
-fun RandomInit () = RandomMTZig.fromEntropy()
+fun RandomState () = RandomMTZig.fromEntropy()
+fun RandomStateFromInt i = RandomMTZig.fromInt(i)
 
-val RandomState = RandomInit ()
-val RandomZT = RandomMTZig.ztnew()
+val RandomZT = RandomMTZig.ztnew
 
-fun random_uniform () = RandomMTZig.randUniform RandomState
-fun random_unifrange (a, b) = a + (RandomMTZig.randUniform RandomState) * (b-a)
-fun random_normal () = RandomMTZig.randNormal (RandomState, RandomZT)
-fun random_exponential (mu) = mu * RandomMTZig.randExp (RandomState, RandomZT)
-fun random_poisson (lam) = RandomMTZig.randPoisson (lam, RandomState, RandomZT)
+fun mk_random_uniform RandomState () = RandomMTZig.randUniform RandomState
+fun mk_random_unifrange RandomState (a, b) = a + (RandomMTZig.randUniform RandomState) * (b-a)
+fun mk_random_normal (RandomState, RandomZT) () = RandomMTZig.randNormal (RandomState, RandomZT)
+fun mk_random_exponential (RandomState, RandomZT) (mu) = mu * RandomMTZig.randExp (RandomState, RandomZT)
+fun mk_random_poisson (RandomState, RandomZT) (lam) = RandomMTZig.randPoisson (lam, RandomState, RandomZT)
 
 
 EOF
@@ -1462,12 +1498,20 @@ EOF
                ("fun make_regime_cond (p, fld, f) = f" ,nll)
                ("fun make_cond (p, fld, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
-               ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
-                "end" ,nll)
-               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
-                "end" ,nll)
+               ,(if (member 'random libs)
+                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, d, r, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,d,r,ext,extev,rs,rszt))) h (x,y,yout,err) " ,nll
+                      "end" ,nll)
+                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
+                      "end" ,nll))
+               ,(if (member 'random libs)
+                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout,err)" ,nll
+                      "end" ,nll)
+                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
+                      "end" ,nll))
                )
              )
             ;; adaptive solvers implemented in C
@@ -1496,12 +1540,20 @@ EOF
                ("fun make_regime_cond (p, fld, f) = f" ,nll)
                ("fun make_cond (p, fld, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nll)
-               ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
-                "end" ,nll)
-               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
-                "end" ,nll)
+               ,(if (member 'random libs)
+                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, d, r, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,d,r,ext,extev,rs,rszt))) h (x,y,yout,err) " ,nll
+                      "end" ,nll)
+                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
+                      "end" ,nll))
+               ,(if (member 'random libs)
+                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout,err)" ,nll
+                      "end" ,nll)
+                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
+                      "end" ,nll))
                (,nll)
                )
              )
@@ -1530,12 +1582,20 @@ EOF
                ("fun make_regime_cond (p, fld, f) = f" ,nll)
                ("fun make_cond (p, fld, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nll)
-               ("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, fld, d, r, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout)" ,nll
-                "end" ,nll)
-               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, fld, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout)" ,nll
-                "end" ,nll)
+               ,(if (member 'random libs)
+                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, d, r, ext, extev, h, x, y, yout, rs, rszt) => (stepper (deriv (p,fld,d,r,ext,extev,rs,rszt))) h (x,y,yout)" ,nll
+                      "end" ,nll)
+                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, d, r, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout)" ,nll
+                      "end" ,nll))
+               ,(if (member 'random libs)
+                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, ext, extev, h, x, y, yout, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout)" ,nll
+                      "end" ,nll)
+                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout)" ,nll
+                      "end" ,nll))
                (,nll)
                ))
             ))
@@ -1554,7 +1614,7 @@ EOF
 
 (define (codegen-ODE/C name sim #!key (out (current-output-port)) (libs '()))
 
-    (let ((sysdefs (codegen-ODE sim)))
+    (let ((sysdefs (codegen-ODE sim libs: libs)))
       
       (print-fragments (prelude/C libs: libs) out)
       
