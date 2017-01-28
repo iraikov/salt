@@ -1361,7 +1361,10 @@
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions parameters fields externals externalevs
                                (fold (lambda (eq ax) (merge-regime-eq name eq ax env-stack)) equations regime) initial
-                               (cons (make-evcondition event (resolve condition env-stack)) conditions)
+                               ;;(cons (make-evcondition event (resolve condition env-stack)) conditions)
+                               (let ((cond-eq `(signal.if ,(make-regime-variable name) 
+                                                          ,(resolve condition env-stack) ,(constant 'number -1.0 'unitbottom))))
+                                 (cons (make-evcondition event cond-eq) conditions))
                                (append (cons
                                         (make-evresponse event (resolve-reinit event `(reinit ,(make-regime-variable name) #f)))
                                          (cons
