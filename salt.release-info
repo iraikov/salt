@@ -3,6 +3,7 @@
 (uri targz "https://github.com/iraikov/{egg-name}/tarball/{egg-release}")
 (uri files-list "http://code.call-cc.org/files-list?egg={egg-name};release={egg-release}" old-uri)
 
+(release "0.17")
 (release "0.16")
 (release "0.15")
 (release "0.14")
