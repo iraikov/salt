@@ -27,7 +27,7 @@ fun make_crk3_regime (n, fp) =
         val k5 = Array.array (n, 0.0) 
         val k6 = Array.array (n, 0.0) 
     in
-        fn (p, fld, d, r, ext, extev, h, tn, yn, yout) => 
+        fn (p, fld, d, r, ext, extev, h, tn, yn, yout, rs, rszt) => 
            (c_rk3_regime (n, fp, p, fld, d, r, ext, extev, yn, tn, h, yout, 
                           t1, t2, t3, k1, k2, k3, k4, k5, k6); yout)
     end
@@ -51,7 +51,7 @@ fun make_crk3 (n, fp) =
         val k5 = Array.array (n, 0.0) 
         val k6 = Array.array (n, 0.0) 
     in
-        fn (p, fld, ext, extev, h, tn, yn, yout) => 
+        fn (p, fld, ext, extev, h, tn, yn, yout, rs, rszt) => 
            (c_rk3 (n, fp, p, fld, ext, extev, yn, tn, h, yout, 
                    t1, t2, t3, k1, k2, k3, k4, k5, k6);
             yout)
@@ -78,7 +78,7 @@ fun make_crk4a_regime (n, fp) =
         val k8 = Array.array (n, 0.0) 
         val k9 = Array.array (n, 0.0) 
     in
-        fn (p, fld, d, r, ext, extev, h, tn, yn, yout) => 
+        fn (p, fld, d, r, ext, extev, h, tn, yn, yout, rs, rszt) => 
            (c_rk4a_regime (n, fp, p, fld, d, r, ext, extev, yn, tn, h, yout, 
                            t1, t2, t3, k1, k2, k3, k4, k5, k6, k7, k8, k9); yout)
     end
@@ -105,7 +105,7 @@ fun make_crk4a (n, fp) =
         val k8 = Array.array (n, 0.0) 
         val k9 = Array.array (n, 0.0) 
     in
-        fn (p, fld, ext, extev, h, tn, yn, yout) => 
+        fn (p, fld, ext, extev, h, tn, yn, yout, rs, rszt) => 
            (c_rk4a (n, fp, p, fld, ext, extev, yn, tn, h, yout, 
                     t1, t2, t3, k1, k2, k3, k4, k5, k6, k7, k8, k9);
             yout)
@@ -133,7 +133,7 @@ fun make_crk4b_regime (n, fp) =
         val k8 = Array.array (n, 0.0) 
         val k9 = Array.array (n, 0.0) 
     in
-        fn (p, fld, d, r, ext, extev, h, tn, yn, yout) => 
+        fn (p, fld, d, r, ext, extev, h, tn, yn, yout, rs, rszt) => 
            (c_rk4b_regime (n, fp, p, fld, d, r, ext, extev, yn, tn, h, yout, 
                            t1, t2, t3, k1, k2, k3, k4, k5, k6, k7, k8, k9); yout)
     end
@@ -160,7 +160,7 @@ fun make_crk4b (n, fp) =
         val k8 = Array.array (n, 0.0) 
         val k9 = Array.array (n, 0.0) 
     in
-        fn (p, fld, ext, extev, h, tn, yn, yout) => 
+        fn (p, fld, ext, extev, h, tn, yn, yout, rs, rszt) => 
            (c_rk4b (n, fp, p, fld, ext, extev, yn, tn, h, yout, 
                     t1, t2, t3, k1, k2, k3, k4, k5, k6, k7, k8, k9);
             yout)
