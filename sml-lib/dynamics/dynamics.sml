@@ -192,7 +192,7 @@ fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
                        | _ => (putStrLn "FunctionalHybridDynamics1: RegimeState integral response"; 
                                raise Domain)
            val d'  =  (case fdiscrete of 
-                           SOME f => f (x,y'',e,d)
+                           SOME f => f (x,y,e,d)
                          | NONE => d)
            val r'  = fregime (e,r)
        in
@@ -226,7 +226,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
              (let
                  val (y',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
                                                     (x,y,e,d,r,ext,extev,yrsp)
-                 val e' = fixthr (fcond  (x,y',e,d',r,ext,extev,enext))
+                 val e' = fixthr (fcond  (x,y',e,d',r',ext,extev,enext))
                  val hasevent = posdetect (xe,e,x,e')
              in
                  RegimeState(x,cx,y',x,e',d',r',ext,extev,ynext,y,e,hasevent)
@@ -473,7 +473,7 @@ fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
                        | _ => (putStrLn "FunctionalHybridDynamics1: RegimeState integral response"; 
                                raise Domain)
            val d'  =  (case fdiscrete of 
-                           SOME f => f (x,y'',e,d)
+                           SOME f => f (x,y,e,d)
                          | NONE => d)
            val r'  = fregime (e,r)
        in
