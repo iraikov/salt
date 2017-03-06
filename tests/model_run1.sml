@@ -51,9 +51,9 @@ fun printState (t,input) =
 
 fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extevinitial,next,rsp,SOME enext,tmax) =
     let
-	fun run (rs as D.RegimeState (x, cx, input, xev, ev, d, regime, _, _, _, _, _, _)) =
+	fun run (rs as D.RegimeState (x, cx, input, ev, d, regime, _, _, _, _, _, _)) =
             (case f rs of
-	         rs' as D.RegimeState (x',cx',nstate,tev',ev',d',regime',_,_,_,_,_,_) =>
+	         rs' as D.RegimeState (x',cx',nstate,ev',d',regime',_,_,_,_,_,_) =>
                  (printState (x',nstate); 
 	          if (x'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -62,13 +62,13 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.RegimeState (0.0, 0.0, initial, 0.0, evinitial, dinitial, rinitial, extinitial, extevinitial, next, rsp, enext, false))
+	run (D.RegimeState (0.0, 0.0, initial, evinitial, dinitial, rinitial, extinitial, extevinitial, next, rsp, enext, D.RootBegin))
     end
 |  start (f,initial,SOME evinitial,NONE,NONE,extinitial,extevinitial,next,rsp,SOME enext,tmax) =
     let
-	fun run (es as D.EventState (x, cx, input, tev, ev, _, _, _, _, _, _)) =
+	fun run (es as D.EventState (x, cx, input, ev, _, _, _, _, _, _)) =
             (case f es of
-	         es' as D.EventState (x',cx',nstate,tev',ev',_,_,_,_,_,_) =>
+	         es' as D.EventState (x',cx',nstate,ev',_,_,_,_,_,_) =>
                  (printState (x',nstate); 
 	          if (x'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
@@ -77,7 +77,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.EventState (0.0, 0.0, initial, 0.0, evinitial, extinitial, extevinitial, next, rsp, enext, false))
+	run (D.EventState (0.0, 0.0, initial, evinitial, extinitial, extevinitial, next, rsp, enext, D.RootBegin))
     end
 |  start (f,initial,NONE,NONE,NONE,extinitial,extevinitial,next,rsp,NONE,tmax) =
     let

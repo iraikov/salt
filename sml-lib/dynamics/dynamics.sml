@@ -68,11 +68,13 @@ type error_state   = real array
 type external_state = real array
 type externalev_state = real array
 
+datatype model_root = RootBegin | RootFound of real | RootStep of real
+                             
 datatype model_state = 
-         RegimeState of real * real * cont_state * real * event_state * dsc_state * regime_state * external_state * externalev_state * 
-                        cont_state * cont_state * event_state * bool
-         | EventState of real * real * cont_state * real * event_state * external_state * externalev_state * 
-                         cont_state * cont_state * event_state * bool
+         RegimeState of real * real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * 
+                        cont_state * cont_state * event_state * model_root
+         | EventState of real * real * cont_state * event_state * external_state * externalev_state * 
+                         cont_state * cont_state * event_state * model_root
          | ContState  of real * real * cont_state * external_state * externalev_state * cont_state * cont_state
 
 
@@ -94,6 +96,7 @@ val getindex = Unsafe.Array.sub
 val update = Unsafe.Array.update
 
 val vfind = Array.find
+val vfindi = Array.findi
 
 fun vmap f v u = 
     let
@@ -115,6 +118,17 @@ fun vfind2 f (v1,v2) =
         fun recur i = 
             (if Int.<(i, n)
              then (if f (getindex (v1,i), getindex (v2,i)) then SOME(i) else recur (Int.+(i,1)))
+             else NONE)
+    in
+        recur 0
+    end 
+
+fun vfindi2 f (v1,v2) = 
+    let 
+        val n = Array.length v1
+        fun recur i = 
+            (if Int.<(i, n)
+             then (if f (getindex (v1,i), getindex (v2,i)) then SOME(i,getindex(v2,i)) else recur (Int.+(i,1)))
              else NONE)
     in
         recur 0
@@ -155,24 +169,44 @@ fun thr (v1) =
           | _ => false
     end
 
+fun thr2 (v1,v2) = 
+    let
+        val s1 = Real.sign v1
+        val s2 = Real.sign v2
+    in
+        case (s1,s2) of
+           (~1,1) => true
+         | (0,1) => true
+         | _ => false
+    end
+
 fun fixthr (v) =
     (Array.modify (fn(x) => if Real.>(Real.abs(x), 1e~6) then x else 0.0) v; v)
 
-fun posdetect (x, e, x', e') =
-    (x' > x) andalso (case vfind thr e' of (SOME _) => true | NONE => false)
+fun posdetect1 (x, e) =
+  (case vfind thr e of (SOME _) => true | NONE => false)
+                       
+
+fun posdetect2 (x, e, x', e') =
+  if (x' > x)
+  then 
+      (case vfindi2 thr2 (e,e') of
+           SOME (i,ev) => SOME (Vector.fromList [(x, getindex (e,i)), (x', ev)])
+         | NONE => NONE)
+  else NONE
 
 fun condApply (SOME (RegimeCondition fcond)) =
-    (fn(RegimeState (x,cx,y,xe,e,d,r,ext,extev,ynext,yrsp,enext,root)) => 
+    (fn(RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,root)) => 
         let val e' = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
         in
-            RegimeState (x,cx,y,x,e',d,r,ext,extev,ynext,yrsp,e,root)
+            RegimeState (x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,root)
         end
     | _ => raise Domain)
   | condApply (SOME (SCondition fcond)) =
-    (fn(EventState(x,cx,y,xe,e,ext,extev,ynext,yrsp,enext,root)) =>     
+    (fn(EventState(x,cx,y,e,ext,extev,ynext,yrsp,enext,root)) =>     
         let val e' = fixthr (fcond (x,y,e,ext,extev,enext))
         in
-            EventState(x,cx,y,x,e',ext,extev,ynext,yrsp,e,root)
+            EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,root)
         end
     | _ => raise Domain)
   | condApply (NONE) = raise Domain
@@ -217,69 +251,108 @@ fun evresponse (fpos,fneg) =
               raise Domain)
         
 
-
 fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),                          
               fpos,fneg,fdiscrete,SOME fregime,h) =
-    (fn(RegimeState (x,cx,y,xe,e,d,r,ext,extev,ynext,yrsp,enext,root)) => 
-        (case root of 
-             true => 
-             (let
+  let
+      fun integral' (RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,root)) =
+        (case root of
+             RootBegin =>
+             let
+                 val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
+                 val rootp = posdetect1(x,e')
+             in
+                 if rootp
+                 then (let val (y',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
+                                                              (x,y,e',d,r,ext,extev,yrsp)
+                           val e'    = fixthr (fcond (x,y',e,d',r',ext,extev,e))
+                       in
+                           RegimeState(x,cx,y',e',d',r',ext,extev,ynext,y,e,RootStep h)
+                       end)
+                 else integral'(RegimeState(x,cx,y,e',d,r,ext,extev,y,yrsp,e,RootStep h))
+             end
+           | RootStep hs =>
+             let
+                 val (x',cx')  = csum (x,cx,hs)
+                 val y'  = stepper (d,r,ext,extev,hs,x,y,ynext)
+                 val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
+                 val (rootp, xe) = case posdetect2 (x,e,x',e') of
+                                       SOME tbl => (true, LinearInterpolation.interpolate1 tbl 0.0)
+                                    |  NONE => (false, x')
+             in
+                 if rootp
+                 then (let
+                          val h' = xe-x
+                          val y' = stepper (d,r,ext,extev,h',x,y,ynext)
+                          val (x',cx')  = csum (x,cx,h')
+                      in
+                          RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,RootFound (x' - xe))
+                      end)
+                 else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,RootBegin)
+             end
+           | RootFound he =>
+             let
                  val (y',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
                                                     (x,y,e,d,r,ext,extev,yrsp)
-                 val e' = fixthr (fcond  (x,y',e,d',r',ext,extev,enext))
-                 val hasevent = posdetect (xe,e,x,e')
+                 val e'  = fixthr (fcond (x,y',e,d',r',ext,extev,enext))
              in
-                 RegimeState(x,cx,y',x,e',d',r',ext,extev,ynext,y,e,hasevent)
+                 RegimeState(x,cx,y',e',d',r',ext,extev,y,ynext,e,RootStep he)
              end)
-           | false =>
-             (let 
-                 val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
-                 val hasevent = posdetect (xe,e,x,e')
-             in
-                 if hasevent 
-                 then RegimeState(x,cx,y,x,e',d,r,ext,extev,ynext,yrsp,enext,true)
-                 else (let
-                          val (x',cx')  = csum (x,cx,h)
-                          val y'  = stepper (d,r,ext,extev,h,x,y,ynext)
-                          val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
-                          val root' = posdetect (xe,e,x',e')
-                      in
-                          RegimeState(x',cx',y',x',e',d,r,ext,extev,y,yrsp,e,root')
-                      end)
-             end))
-    | _ => (putStrLn "FunctionalHybridDynamics1: invalid RegimeState"; raise Domain))
+            
+        | integral' _ = (putStrLn "FunctionalHybridDynamics1: invalid RegimeState"; raise Domain)
+  in
+      integral'
+  end
                
-| integral (EventStepper stepper,SOME (SCondition fcond),fpos,fneg,NONE,NONE,h) =
-  (fn(EventState(x,cx,y,xe,e,ext,extev,ynext,yrsp,enext,root)) => 
-      (case root of 
-           true => 
-           (let
-               val y' = evresponse (fpos,fneg) (x,y,e,ext,extev,yrsp) 
-               val e'  = fixthr (fcond (x,y',e,ext,extev,enext))
-               val hasevent = posdetect (xe,e,x,e')
-           in
-               EventState(x,cx,y',x,e',ext,extev,ynext,y,e,hasevent)
-           end)
-           | false =>
-             (let 
-                 val e'  = fixthr (fcond (x,y,e,ext,extev,enext))
-                 val hasevent = posdetect (xe,e,x,e')
-             in
-                 if hasevent
-                 then EventState(x,cx,y,x,e',ext,extev,ynext,yrsp,e,true)
-                 else 
-                     (let 
-                         val (x',cx') = csum(x,cx,h)
-                         val y'    = stepper (ext,extev,h,x,y,ynext)
-                         val e'    = fixthr (fcond (x',y',e,ext,extev,enext))
-                         val root' = posdetect (xe,e,x',e')
-                     in
-                         EventState(x',cx',y',x',e',ext,extev,y,yrsp,e,root')
-                     end)
-             end))
-  | _ => (putStrLn "FunctionalHybridDynamics1: invalid EventState"; 
-          raise Domain))
-
+  | integral (EventStepper stepper,SOME (SCondition fcond),fpos,fneg,NONE,NONE,h) =
+    let
+        fun integral' (EventState(x,cx,y,e,ext,extev,ynext,yrsp,enext,root)) =
+          (case root of
+               RootBegin =>
+               let
+                   val e'  = fixthr (fcond (x,y,e,ext,extev,enext))
+                   val rootp = posdetect1(x,e')
+               in
+                   if rootp
+                   then (let val y' = evresponse (fpos,fneg) (x,y,e',ext,extev,yrsp)
+                             val e' = fixthr (fcond (x,y',e,ext,extev,e))
+                         in
+                             EventState(x,cx,y',e',ext,extev,ynext,y,e,RootStep h)
+                         end)
+                   else integral'(EventState(x,cx,y,e',ext,extev,y,yrsp,e,RootStep h))
+               end
+             | RootStep hs =>
+               let
+                   val (x',cx')  = csum (x,cx,hs)
+                   val y'  = stepper (ext,extev,hs,x,y,ynext)
+                   val e'  = fixthr (fcond (x',y',e,ext,extev,enext))
+                   val (rootp, xe) = case posdetect2 (x,e,x',e') of
+                                         SOME tbl => (true, LinearInterpolation.interpolate1 tbl 0.0)
+                                      |  NONE => (false, x')
+               in
+                   if rootp
+                   then (let
+                            val h' = xe-x
+                            val y' = stepper (ext,extev,h',x,y,ynext)
+                            val (x',cx')  = csum (x,cx,h')
+                        in
+                            EventState(x',cx',y',e',ext,extev,y,yrsp,e,RootFound (x' - xe))
+                        end)
+                   else EventState(x',cx',y',e',ext,extev,y,yrsp,e,RootBegin)
+               end
+             | RootFound he =>
+               let
+                   val y' = evresponse (fpos,fneg) (x,y,e,ext,extev,yrsp)
+                   val e'  = fixthr (fcond (x,y',e,ext,extev,enext))
+               in
+                   EventState(x,cx,y',e',ext,extev,y,ynext,e,RootStep he)
+               end)
+          | integral' _ =
+            (putStrLn "FunctionalHybridDynamics1: invalid EventState"; 
+             raise Domain)
+    in
+        integral'
+    end
+        
 | integral (ContStepper stepper,NONE,fpos,fneg,NONE,NONE,h) =
   (fn(ContState(x,cx,y,ext,extev,ynext,yrsp)) => 
       let val (x',cx')  = csum(x,cx,h)
@@ -445,14 +518,14 @@ fun condApply (SOME (RegimeCondition fcond)) =
     (fn(RegimeState (x,cx,y,xe,e,d,r,ext,extev,h,ynext,yrsp,errnext,enext,root)) => 
         let val e' = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
         in
-            RegimeState (x,cx,y,x,e',d,r,ext,extev,h,ynext,yrsp,errnext,e,root)
+            RegimeState (x,cx,y,xe,e',d,r,ext,extev,h,ynext,yrsp,errnext,e,root)
         end
     | _ => raise Domain)
   | condApply (SOME (SCondition fcond)) =
     (fn(EventState(x,cx,y,xe,e,ext,extev,h,ynext,yrsp,errnext,enext,root)) =>     
         let val e' = fixthr (fcond (x,y,e,ext,extev,enext))
         in
-            EventState(x,cx,y,x,e',ext,extev,h,ynext,yrsp,errnext,e,root)
+            EventState(x,cx,y,xe,e',ext,extev,h,ynext,yrsp,errnext,e,root)
         end
     | _ => raise Domain)
   | condApply (NONE) = raise Domain

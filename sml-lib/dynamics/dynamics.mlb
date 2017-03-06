@@ -2,6 +2,7 @@
 
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/unsafe.mlb
+$(INTERP_LIB)/lininterp.mlb
 
 local
 	dynamics.sml

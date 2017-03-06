@@ -1,6 +1,7 @@
 (* import libraries *)
 
 $(SML_LIB)/basis/basis.mlb
+$(SML_LIB)/basis/unsafe.mlb
 
 local
 	lininterp.sml

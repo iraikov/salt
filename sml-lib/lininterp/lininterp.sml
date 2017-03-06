@@ -66,7 +66,6 @@ fun pulse up lo w v a b: table =
     end
 end
 
-end
 
 (*
 val t = LinearInterpolation.table Real.Math.sin 0.0 180.0 20
