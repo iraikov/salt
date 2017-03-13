@@ -272,7 +272,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                        in
                            RegimeState(x,cx,y',e',d',r',ext,extev,ynext,y,e,RootStep [h])
                        end)
-                 else integral'(RegimeState(x,cx,y,e',d,r,ext,extev,y,yrsp,e,RootStep [h]))
+                 else integral'(RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,RootStep [h]))
              end
           | RootCheck hs =>
              let
@@ -286,7 +286,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                        in
                            RegimeState(x,cx,y',e',d',r',ext,extev,ynext,y,e,RootCheck hs)
                        end)
-                 else integral'(RegimeState(x,cx,y,e',d,r,ext,extev,y,yrsp,e,RootStep hs))
+                 else integral'(RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,RootStep hs))
              end
            | RootStep (h::hs) =>
              let
@@ -315,7 +315,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                                                     (x,y,e,d,r,ext,extev,yrsp)
                  val e'  = fixthr (fcond (x,y',e,d',r',ext,extev,enext))
              in
-                 RegimeState(x,cx,y',e',d',r',ext,extev,y,ynext,e,RootStep hs)
+                 RegimeState(x,cx,y',e',d',r',ext,extev,ynext,y,e,RootStep hs)
              end
            | _ => raise Domain)
             
@@ -339,7 +339,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                          in
                              EventState(x,cx,y',e',ext,extev,ynext,y,e,RootStep [h])
                          end)
-                   else integral'(EventState(x,cx,y,e',ext,extev,y,yrsp,e,RootStep [h]))
+                   else integral'(EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,RootStep [h]))
                end
              | RootCheck hs =>
                let
@@ -352,7 +352,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                          in
                              EventState(x,cx,y',e',ext,extev,ynext,y,e,RootCheck hs)
                          end)
-                   else integral'(EventState(x,cx,y,e',ext,extev,y,yrsp,e,RootStep hs))
+                   else integral'(EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,RootStep hs))
                end
              | RootStep (h::hs) =>
                let
@@ -381,7 +381,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                    val y' = evresponse (fpos,fneg) (x,y,e,ext,extev,yrsp)
                    val e'  = fixthr (fcond (x,y',e,ext,extev,enext))
                in
-                   EventState(x,cx,y',e',ext,extev,y,ynext,e,RootStep hs)
+                   EventState(x,cx,y',e',ext,extev,ynext,y,e,RootStep hs)
                end
              |  _ => raise Domain)
           | integral' _ =
