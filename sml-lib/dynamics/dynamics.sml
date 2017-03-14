@@ -177,6 +177,7 @@ fun thr2 (v1,v2) =
         case (s1,s2) of
            (~1,1) => true
          | (~1,0) => true
+         | (0,1) => true
          | _ => false
     end
 
@@ -188,16 +189,22 @@ fun posdetect1 (x, e) =
                        
 
 fun posdetect2 (x, e, x', e') =
-  if (x' > x)
-  then 
-      (case vfindi2 thr2 (e,e') of
-           SOME (i,ev) => ((*putStrLn("posdetect2: x = " ^ (showReal (x)) ^
-                                    " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e,i))) ^
-                                    " x' = " ^ (showReal (x')) ^
-                                    " ev = " ^ (showReal ev));*)
-                           SOME (Vector.fromList [(x, getindex (e,i)), (x', ev)]))
-         | NONE => NONE)
-  else NONE
+  (putStrLn("posdetect2: x = " ^ (showReal (x)) ^ " x' = " ^ (showReal (x')));
+   List.app (fn(i) =>
+                putStrLn (" e[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e,i))) ^
+                          " e'[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e',i)))))
+            (List.tabulate (Array.length e, fn x => x));
+            
+   if (x' > x)
+   then 
+       (case vfindi2 thr2 (e,e') of
+            SOME (i,ev) => (putStrLn("posdetect2: x = " ^ (showReal (x)) ^
+                                     " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e,i))) ^
+                                     " x' = " ^ (showReal (x')) ^
+                                     " ev = " ^ (showReal ev));
+                            SOME (Vector.fromList [(x, getindex (e,i)), (x', ev)]))
+          | NONE => NONE)
+   else NONE)
 
 fun condApply (SOME (RegimeCondition fcond)) =
     (fn(RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,root)) => 
@@ -296,6 +303,8 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                  val (rootp, xe) = case posdetect2 (x,e,x',e') of
                                        SOME tbl => (true, LinearInterpolation.interpolate1 tbl 0.0)
                                     |  NONE => (false, x')
+                 val _ = putStrLn ("RootStep: x = " ^ (showReal x) ^ " x' = " ^ (showReal x') ^
+                                   " rootp = " ^ (Bool.toString rootp))
              in
                  if rootp
                  then (let
