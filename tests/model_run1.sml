@@ -62,7 +62,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.RegimeState (0.0, 0.0, initial, evinitial, dinitial, rinitial, extinitial, extevinitial, next, rsp, enext, D.RootBegin))
+	run (D.RegimeState (0.0, 0.0, initial, evinitial, dinitial, rinitial, extinitial, extevinitial, next, rsp, enext, D.RootBefore))
     end
 |  start (f,initial,SOME evinitial,NONE,NONE,extinitial,extevinitial,next,rsp,SOME enext,tmax) =
     let
@@ -77,7 +77,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Domain
     in
 	printState (0.0, initial);
-	run (D.EventState (0.0, 0.0, initial, evinitial, extinitial, extevinitial, next, rsp, enext, D.RootBegin))
+	run (D.EventState (0.0, 0.0, initial, evinitial, extinitial, extevinitial, next, rsp, enext, D.RootBefore))
     end
 |  start (f,initial,NONE,NONE,NONE,extinitial,extevinitial,next,rsp,NONE,tmax) =
     let
