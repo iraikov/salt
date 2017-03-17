@@ -72,7 +72,7 @@ type error_state   = real array
 type external_state = real array
 type externalev_state = real array
 
-datatype model_root = RootBefore | RootFound of real list | RootStep of real list 
+datatype model_root = RootBefore | RootFound of real list | RootAfter of real list | RootStep of real list 
                              
 datatype model_state = 
          RegimeState of real * real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * 
@@ -196,10 +196,10 @@ fun posdetect2 (x, e, x', e') =
    if (x' > x)
    then 
        (case vfindi2 thr2 (e,e') of
-            SOME (i,ev) => (putStrLn("posdetect2: x = " ^ (showReal (x)) ^
+            SOME (i,ev) => ((*putStrLn("posdetect2: x = " ^ (showReal (x)) ^
                                      " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e,i))) ^
                                      " x' = " ^ (showReal (x')) ^
-                                     " ev = " ^ (showReal ev));
+                                     " ev = " ^ (showReal ev));*)
                             SOME (Vector.fromList [(x, getindex (e,i)), (x', ev)]))
           | NONE => NONE)
    else NONE
@@ -312,8 +312,15 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                                                     (x,y,e,d,r,ext,extev,yrsp)
                  val e'  = fixthr (fcond (x,y',e,d',r',ext,extev,enext))
              in
-                 case hs of [] => RegimeState(x,cx,y',e',d',r',ext,extev,ynext,y,e,RootBefore)
-                         |  _ => RegimeState(x,cx,y',e',d',r',ext,extev,ynext,y,e,RootStep hs)
+                 RegimeState(x,cx,y',e',d',r',ext,extev,ynext,y,e,RootAfter hs)
+             end
+           | RootAfter hs =>
+             let (*val _ = putStrLn "RootFound"*)
+                 val (x',cx')  = csum (x,cx,1E~11)
+                 val y'  = stepper (d,r,ext,extev,1E~11,x,y,ynext)
+             in
+                 case hs of [] => RegimeState(x',cx',y',e,d,r,ext,extev,ynext,y,e,RootBefore)
+                         |  _ => RegimeState(x',cx',y',e,d,r,ext,extev,ynext,y,e,RootStep hs)
              end
            | _ => raise Domain)
             
@@ -367,7 +374,15 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                    val y' = evresponse (fpos,fneg) (x,y,e,ext,extev,yrsp)
                    val e'  = fixthr (fcond (x,y',e,ext,extev,enext))
                in
-                   EventState(x,cx,y',e',ext,extev,ynext,y,e,RootStep hs)
+                   EventState(x,cx,y',e',ext,extev,ynext,y,e,RootAfter hs)
+               end
+             | RootAfter hs =>
+               let
+                   val (x',cx')  = csum (x,cx,1E~11)
+                   val y'  = stepper (ext,extev,1E~11,x,y,ynext)
+               in
+                   case hs of [] => EventState(x',cx',y',e,ext,extev,ynext,y,e,RootBefore)
+                          |  h1::hs => EventState(x',cx',y',e,ext,extev,ynext,y,e,RootStep ((h1-1E~11)::hs))
                end
              |  _ => raise Domain)
           | integral' _ =
