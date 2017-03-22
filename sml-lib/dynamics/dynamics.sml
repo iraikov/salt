@@ -186,7 +186,7 @@ fun thr2 (v1,v2) =
     end
 
 fun fixthr (v) =
-    (Array.modify (fn(x) => if Real.>(Real.abs(x), 1E~11) then x else 0.0) v; v)
+    (Array.modify (fn(x) => if Real.>(Real.abs(x), 1E~6) then x else 0.0) v; v)
 
 fun posdetect1 (x, e) =
   (case vfind thr e of (SOME _) => true | NONE => false)
