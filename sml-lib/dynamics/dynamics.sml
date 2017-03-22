@@ -186,7 +186,7 @@ fun thr2 (v1,v2) =
     end
 
 fun fixthr (v) =
-    (Array.modify (fn(x) => if Real.>(Real.abs(x), 1e~6) then x else 0.0) v; v)
+    (Array.modify (fn(x) => if Real.>(Real.abs(x), 1E~11) then x else 0.0) v; v)
 
 fun posdetect1 (x, e) =
   (case vfind thr e of (SOME _) => true | NONE => false)
@@ -245,7 +245,7 @@ fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
                          | NONE => d)
            val r'  = fregime (e,r)
            val _ = vset 0.0 ext
-           val _ = vset negInf extev
+           val _ = vset posInf extev
        in
            (y'',d',r')
        end
@@ -262,7 +262,7 @@ fun evresponse (fpos,fneg) =
                            | _ => (putErrStrLn "FunctionalHybridDynamics1: EventState integral response"; 
                                    raise Domain)
                 val _ = vset 0.0 ext
-                val _ = vset negInf extev
+                val _ = vset posInf extev
             in
                 y'
             end)
@@ -276,7 +276,11 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
       fun integral' (RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,root)) =
         (case root of
              RootBefore =>
-             integral'(RegimeState(x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,RootStep [h]))
+             let
+                 val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
+             in
+                 integral'(RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,RootStep [h]))
+             end
            | RootStep (h::hs) =>
              let val _ = putStrLn ("RootStep: h = " ^ (showReal h) ^ " x = " ^ (showReal x))
                  val (x',cx')  = csum (x,cx,h)
@@ -289,16 +293,19 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                                      " e' = " ^ (showReal (getindex (e',0))))
              in
                  if rootp
-                 then (let
-                          val h1 = xe-x
-                          val (x'',cx'')  = csum (x,cx,h1)
-                          val (x''',cx''')  = csum (x'',cx'',h-h1)
-                          val y'' = stepper (d,r,ext,extev,h1,x,y,ynext)
-                          val h2 = x''' - x''
-                          val _ = putStrLn ("RootStep: x' = " ^ (showReal x') ^ " x'' = " ^ (showReal x'') ^ " h2 = " ^ (showReal h2) ^ " cx' = " ^ (showReal cx'))
-                      in
-                                RegimeState(x'',cx'',y'',e',d,r,ext,extev,y,yrsp,e,RootFound (if h2>0.0 then h2::hs else hs))
-                      end)
+                 then (if x' > xe
+                       then
+                           let
+                               val h1 = xe-x
+                               val (x'',cx'')  = csum (x,cx,h1)
+                               val (x''',cx''')  = csum (x'',cx'',h-h1)
+                               val y'' = stepper (d,r,ext,extev,h1,x,y,ynext)
+                               val h2 = x''' - x''
+                               val _ = putStrLn ("RootStep: x' = " ^ (showReal x') ^ " x'' = " ^ (showReal x'') ^ " h2 = " ^ (showReal h2) ^ " cx' = " ^ (showReal cx'))
+                           in
+                               RegimeState(x'',cx'',y'',e',d,r,ext,extev,y,yrsp,e,RootFound (if h2>0.0 then h2::hs else hs))
+                           end
+                       else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,RootFound hs))
                  else (case hs of [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,RootBefore)
                                | _ => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,RootStep hs))
              end
@@ -310,7 +317,8 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                  RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,RootAfter hs)
              end
            | RootAfter [] =>
-             let val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
+             let  val _ = putStrLn "RootAfter []"
+                  val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
              in
                  RegimeState(x,cx,y,e',d,r,ext,extev,ynext,y,e,RootBefore)
              end
@@ -334,7 +342,11 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
         fun integral' (EventState(x,cx,y,e,ext,extev,ynext,yrsp,enext,root)) =
           (case root of
                RootBefore =>
-               integral'(EventState(x,cx,y,e,ext,extev,ynext,yrsp,enext,RootStep [h]))
+               let
+                   val e' = fixthr (fcond (x,y,e,ext,extev,enext))
+               in
+                   integral'(EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,RootStep [h]))
+               end
              | RootStep (h::hs) =>
                let
                    val _ = putStrLn ("RootStep: h = " ^ (showReal h) ^ " x = " ^ (showReal x))
