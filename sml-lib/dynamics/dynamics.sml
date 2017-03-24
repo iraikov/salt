@@ -182,6 +182,7 @@ fun thr2 (v1,v2) =
         case (s1,s2) of
            (~1,1) => true
          | (~1,0) => true
+         | (0,1) => true
          | _ => false
     end
 
@@ -193,21 +194,31 @@ fun posdetect1 (x, e) =
                        
 
 fun posdetect2 (x, e, x', e') =
-  (List.app
-       (fn(i) => putStrLn ("posdetect2: x = " ^ (showReal (x)) ^ " x' = " ^ (showReal x') ^
-                           " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e,i))) ^
-                           " e'[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e',i)))))
-       (List.tabulate(Array.length e, fn(i) => i));
-   if (x' > x)
-   then 
-       (case vfindi2 thr2 (e,e') of
-            SOME (i,ev) => (putStrLn ("posdetect2: x = " ^ (showReal (x)) ^ 
-                                        " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e,i))) ^
-                                        " x' = " ^ (showReal (x')) ^
-                                        " ev = " ^ (showReal ev));
-                            SOME (Vector.fromList [(x, getindex (e,i)), (x', ev)]))
-          | NONE => NONE)
-   else NONE)
+  let
+      fun minthr (i,v1,v2,optval) =
+        (putStrLn ("posdetect2: i = " ^ (Int.toString i) ^ " v1 = " ^ (showReal (v1)) ^ " v2 = " ^ (showReal v2));
+         if thr2 (v1,v2)
+         then (case optval of
+                   SOME (i',v,v') => (if v1<v then SOME (i,v1,v2) else optval)
+                 | NONE => SOME (i,v1,v2))
+         else optval)
+  in
+      (List.app
+           (fn(i) => putStrLn ("posdetect2: x = " ^ (showReal (x)) ^ " x' = " ^ (showReal x') ^
+                               " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e,i))) ^
+                               " e'[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e',i)))))
+           (List.tabulate(Array.length e, fn(i) => i));
+       if (x' > x)
+       then 
+           (case vfoldpi2 minthr (e, e') of
+                SOME (i,ev,ev') => (putStrLn ("posdetect2: x = " ^ (showReal (x)) ^ 
+                                              " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (ev)) ^
+                                              " x' = " ^ (showReal (x')) ^
+                                              " ev = " ^ (showReal ev));
+                                    SOME (Vector.fromList [(x, ev), (x', ev')]))
+              | NONE => NONE)
+       else NONE)
+  end
 
 fun condApply (SOME (RegimeCondition fcond)) =
     (fn(RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,root)) => 
@@ -225,10 +236,9 @@ fun condApply (SOME (RegimeCondition fcond)) =
     | _ => raise Domain)
   | condApply (NONE) = raise Domain
 
-fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
+ fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
     fn(x,y,e,d,r,ext,extev,yrsp) =>
        let
-           val _   = putStrLn "evresponse_regime"
            val y'  = case fpos of 
                          SOME (RegimeResponse f) =>
                          f (x,y,e,d,ext,extev,yrsp)
@@ -246,6 +256,8 @@ fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
            val r'  = fregime (e,r)
            val _ = vset 0.0 ext
            val _ = vset posInf extev
+           val _ = putStrLn ("evresponse_regime: y''[0] = " ^ (showReal (getindex(y'',0))) ^
+                             " d'[0] = " ^ (showReal (getindex(d',0))))
        in
            (y'',d',r')
        end
