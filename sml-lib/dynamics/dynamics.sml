@@ -196,25 +196,25 @@ fun posdetect1 (x, e) =
 fun posdetect2 (x, e, x', e') =
   let
       fun minthr (i,v1,v2,optval) =
-        (putStrLn ("posdetect2: i = " ^ (Int.toString i) ^ " v1 = " ^ (showReal (v1)) ^ " v2 = " ^ (showReal v2));
+        ((*putStrLn ("posdetect2: i = " ^ (Int.toString i) ^ " v1 = " ^ (showReal (v1)) ^ " v2 = " ^ (showReal v2));*)
          if thr2 (v1,v2)
          then (case optval of
                    SOME (i',v,v') => (if v1<v then SOME (i,v1,v2) else optval)
                  | NONE => SOME (i,v1,v2))
          else optval)
   in
-      (List.app
+      ((*List.app
            (fn(i) => putStrLn ("posdetect2: x = " ^ (showReal (x)) ^ " x' = " ^ (showReal x') ^
                                " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e,i))) ^
                                " e'[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e',i)))))
-           (List.tabulate(Array.length e, fn(i) => i));
+           (List.tabulate(Array.length e, fn(i) => i));*)
        if (x' > x)
        then 
            (case vfoldpi2 minthr (e, e') of
-                SOME (i,ev,ev') => (putStrLn ("posdetect2: x = " ^ (showReal (x)) ^ 
+                SOME (i,ev,ev') => ((*putStrLn ("posdetect2: x = " ^ (showReal (x)) ^ 
                                               " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (ev)) ^
                                               " x' = " ^ (showReal (x')) ^
-                                              " ev = " ^ (showReal ev));
+                                              " ev = " ^ (showReal ev));*)
                                     SOME (Vector.fromList [(x, ev), (x', ev')]))
               | NONE => NONE)
        else NONE)
@@ -256,8 +256,12 @@ fun condApply (SOME (RegimeCondition fcond)) =
            val r'  = fregime (e,r)
            val _ = vset 0.0 ext
            val _ = vset posInf extev
-           val _ = putStrLn ("evresponse_regime: y''[0] = " ^ (showReal (getindex(y'',0))) ^
-                             " d'[0] = " ^ (showReal (getindex(d',0))))
+           (*val _ = Array.appi
+                       (fn (i,v) => putStrLn ("evresponse_regime: y[" ^ (Int.toString i) ^ "] = " ^ (showReal v)))
+                       y
+           val _ = Array.appi
+                       (fn (i,v) => putStrLn ("evresponse_regime: y''[" ^ (Int.toString i) ^ "] = " ^ (showReal v)))
+                       y''*)
        in
            (y'',d',r')
        end
@@ -294,15 +298,15 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                  integral'(RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,RootStep [h]))
              end
            | RootStep (h::hs) =>
-             let val _ = putStrLn ("RootStep: h = " ^ (showReal h) ^ " x = " ^ (showReal x))
+             let (*val _ = putStrLn ("RootStep: h = " ^ (showReal h) ^ " x = " ^ (showReal x))*)
                  val (x',cx')  = csum (x,cx,h)
                  val y'  = stepper (d,r,ext,extev,h,x,y,ynext)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
                  val (rootp, xe) = case posdetect2 (x,e,x',e') of
                                        SOME tbl => (true, LinearInterpolation.interpolate1 tbl 0.0)
                                     |  NONE => (false, x')
-                 val _ = putStrLn ("RootStep: rootp = " ^ (Bool.toString rootp) ^ " h = " ^ (showReal h) ^ " x' = " ^ (showReal x') ^ " xe = " ^ (showReal xe) ^
-                                     " e' = " ^ (showReal (getindex (e',0))))
+                 (*val _ = putStrLn ("RootStep: rootp = " ^ (Bool.toString rootp) ^ " h = " ^ (showReal h) ^ " x' = " ^ (showReal x') ^ " xe = " ^ (showReal xe) ^
+                                     " e' = " ^ (showReal (getindex (e',0))))*)
              in
                  if rootp
                  then (if x' > xe
@@ -313,7 +317,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                                val (x''',cx''')  = csum (x'',cx'',h-h1)
                                val y'' = stepper (d,r,ext,extev,h1,x,y,ynext)
                                val h2 = x''' - x''
-                               val _ = putStrLn ("RootStep: x' = " ^ (showReal x') ^ " x'' = " ^ (showReal x'') ^ " h2 = " ^ (showReal h2) ^ " cx' = " ^ (showReal cx'))
+                               (*val _ = putStrLn ("RootStep: x' = " ^ (showReal x') ^ " x'' = " ^ (showReal x'') ^ " h2 = " ^ (showReal h2) ^ " cx' = " ^ (showReal cx'))*)
                            in
                                RegimeState(x'',cx'',y'',e',d,r,ext,extev,y,yrsp,e,RootFound (if h2>0.0 then h2::hs else hs))
                            end
@@ -322,20 +326,20 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                                | _ => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,RootStep hs))
              end
            | RootFound hs =>
-             let val _ = putStrLn "RootFound"
+             let 
                  val (y',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
                                                     (x,y,e,d,r,ext,extev,yrsp)
              in
                  RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,RootAfter hs)
              end
            | RootAfter [] =>
-             let  val _ = putStrLn "RootAfter []"
+             let 
                   val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
              in
                  RegimeState(x,cx,y,e',d,r,ext,extev,ynext,y,e,RootBefore)
              end
            | RootAfter (h1::hs) =>
-             let val _ = putStrLn "RootAfter"
+             let 
                  val (x',cx')  = csum (x,cx,1E~11)
                  val y'  = stepper (d,r,ext,extev,1E~11,x,y,ynext)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
@@ -361,14 +365,14 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                end
              | RootStep (h::hs) =>
                let
-                   val _ = putStrLn ("RootStep: h = " ^ (showReal h) ^ " x = " ^ (showReal x))
+                   (*val _ = putStrLn ("RootStep: h = " ^ (showReal h) ^ " x = " ^ (showReal x))*)
                    val (x',cx')  = csum (x,cx,h)
                    val y'  = stepper (ext,extev,h,x,y,ynext)
                    val e'  = fixthr (fcond (x',y',e,ext,extev,enext))
                    val (rootp, xe) = case posdetect2 (x,e,x',e') of
                                          SOME tbl => (true, LinearInterpolation.interpolate1 tbl 0.0)
                                       |  NONE => (false, x')
-                 val _ = putStrLn ("RootStep: rootp = " ^ (Bool.toString rootp) ^ " h = " ^ (showReal h) ^ " x' = " ^ (showReal x') ^ " xe = " ^ (showReal xe))
+                   (*val _ = putStrLn ("RootStep: rootp = " ^ (Bool.toString rootp) ^ " h = " ^ (showReal h) ^ " x' = " ^ (showReal x') ^ " xe = " ^ (showReal xe))*)
                in
                    if rootp
                    then (let
@@ -378,7 +382,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                             val y'' = stepper (ext,extev,h1,x,y,ynext)
                             val h2 = x''' - x''
                             val e'  = fixthr (fcond (x'',y'',e,ext,extev,enext))
-                            val _ = putStrLn ("RootStep: x' = " ^ (showReal x') ^ " x'' = " ^ (showReal x'') ^ " h2 = " ^ (showReal h2) ^ " cx' = " ^ (showReal cx'))
+                            (*val _ = putStrLn ("RootStep: x' = " ^ (showReal x') ^ " x'' = " ^ (showReal x'') ^ " h2 = " ^ (showReal h2) ^ " cx' = " ^ (showReal cx'))*)
                         in
                             EventState(x'',cx'',y'',e',ext,extev,y,yrsp,e,RootFound (h2::hs))
                         end)
@@ -387,19 +391,17 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                end
              | RootFound hs =>
                let
-                   val _ = putStrLn "RootFound"
                    val y' = evresponse (fpos,fneg) (x,y,e,ext,extev,yrsp)
                in
                    EventState(x,cx,y',e,ext,extev,y,ynext,enext,RootAfter hs)
                end
              | RootAfter hs =>
                let
-                   val _ = putStrLn "RootAfter"
                    val (x',cx')  = csum (x,cx,1E~11)
                    val y'  = stepper (ext,extev,1E~11,x,y,ynext)
                    val e'  = fixthr (fcond (x',y',e,ext,extev,enext))
-                   val _ = putStrLn ("RootAfter: x' = " ^ (showReal x') ^ " e' = " ^ (showReal (getindex (e',0))) ^
-                                        " y' = " ^ (showReal (getindex (y',0))))
+                   (*val _ = putStrLn ("RootAfter: x' = " ^ (showReal x') ^ " e' = " ^ (showReal (getindex (e',0))) ^
+                                        " y' = " ^ (showReal (getindex (y',0))))*)
                in
                    case hs of [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,RootBefore)
                           |  h1::hs => EventState(x',cx',y',e',ext,extev,y,yrsp,e,RootStep ((h1-1E~11)::hs))
