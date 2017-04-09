@@ -60,6 +60,7 @@
 (copy-file-to-salt-dir "sml-lib/rk/crk.sml")
 (copy-file-to-salt-dir "sml-lib/rk/crk.mlb")
 (copy-file-to-salt-dir "sml-lib/rk/crk3.c")
+(copy-file-to-salt-dir "sml-lib/rk/crk_common.h")
 (copy-file-to-salt-dir "sml-lib/rk/crk4a.c")
 (copy-file-to-salt-dir "sml-lib/rk/crk4b.c")
 (copy-file-to-salt-dir "sml-lib/rk/crkbs.c")

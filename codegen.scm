@@ -42,9 +42,11 @@
                   ))
   )
 		  
+(define (symbol-or-pair? v)
+  (or (symbol? v) (and (pair? v) (symbol? (car v)))))
 
 (define-datatype binding binding?
-  (B:Val     (name symbol?)  (v value?))
+  (B:Val     (name symbol-or-pair?)  (v value?))
   )
 
   
@@ -714,25 +716,29 @@
 
 
            (rhsfun
-            (let ((rhs-args (let ((args0 (if has-regimes? 
-                                             '((double . t) ((%pointer double) . p) ((%pointer double) . fld) 
-                                               ((%pointer double) . d) ((%pointer int) . r) 
-                                               ((%pointer double) . ext) ((%pointer double) . extev) 
-                                               ((%pointer double) . y) ((%pointer double) . dy_out))
-                                             '((double . t) ((%pointer double) . p) ((%pointer double) . fld) 
-                                               ((%pointer double) . ext) ((%pointer double) . extev) 
-                                               ((%pointer double) . y) ((%pointer double) . dy_out)))))
-                              (random-cargs args0 libs))))
+            (let ((rhs-args  '((double . t) ((%pointer double) . y) ((%pointer double) . dy_out) ((%pointer (%pointer void)) . clos))))
               (V:Fn rhs-args
-                    (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
+                    (let* ((clos-args
+                            (let ((args0 
+                                   (if has-regimes?
+                                       `(((%pointer double) . p) ((%pointer double) . fld) 
+                                         ((%pointer double) . d) ((%pointer int) . r) 
+                                         ((%pointer double) . ext) ((%pointer double) . extev))
+                                       `(((%pointer double) . p) ((%pointer double) . fld) 
+                                         ((%pointer double) . ext) ((%pointer double) . extev)))))
+                              (random-cargs args0 libs)))
+                           (odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
                            (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns asgn-dag ext-defs))
                            (stmts (codegen-set-stmts* codegen-expr1 odes 'dy_out)))
-                      (if (null? used-asgns)
-                          (E:Begin stmts)
-                          (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) used-asgns)
-                                 (E:Begin stmts)))
-                      ))
-              ))
+                      (E:Let (map (lambda (arg index) (B:Val (cons (cdr arg) (car arg)) (V:Sub (V:Var 'clos) index)))
+                                  clos-args (list-tabulate (length clos-args) (lambda (i) i)))
+                             (if (null? used-asgns)
+                                 (E:Begin stmts)
+                                 (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) used-asgns)
+                                        (E:Begin stmts)))
+                             ))
+                    ))
+            )
 
            (stepfun 
             (let* ((odes (map (match-lambda [('setindex 'dy_out index val) val]) odeblock))
@@ -1195,8 +1201,11 @@
                 (cases value v
                        (V:Fn (args body)
                              `(%fun void ,name ,(args->sexpr args) ,(stmt->sexpr body)))
-                       (else 
-                        `(%var double ,name ,(value->sexpr v)))))
+                       (else
+                        (if (pair? name)
+                            `(%var ,(cdr name) ,(car name) ,(value->sexpr v))
+                            `(%var double ,name ,(value->sexpr v))))
+                       ))
          ))
 
 
@@ -1210,15 +1219,21 @@
                                (cons
                                 (cons `(%fun void ,name ,(args->sexpr args) ,(stmt->sexpr body)) decls)
                                 (if (member name env) env (cons name env))))
-                         (else 
-                          (cons
-                           (cons (if (member name env)
-                                     `(= ,name ,(value->sexpr v))
-                                     `(%var double ,name ,(value->sexpr v))) decls)
-                           (if (member name env) env (cons name env))))
-                         ))
-           ))
-  )
+                         (else
+                          (if (pair? name)
+                              (cons
+                               (cons (if (member (car name) env)
+                                         `(= ,(car name) ,(value->sexpr v))
+                                         `(%var ,(cdr name) ,(car name) ,(value->sexpr v))) decls)
+                               (if (member name env) env (cons name env)))
+                              (cons
+                               (cons (if (member name env)
+                                         `(= ,name ,(value->sexpr v))
+                                         `(%var double ,name ,(value->sexpr v))) decls)
+                               (if (member name env) env (cons name env))))
+                          ))
+                  ))
+    ))
 
 (define (stmt->sexpr x)
     (cases stmt x
@@ -1532,6 +1547,10 @@ EOF
             ;; adaptive solvers implemented in C
             ((crkbs crkdp)
              `(
+               ("val size_closure_cont = 4" ,nll)
+               ("val size_closure_regime = 6" ,nll)
+               ("val size_closure_cont_rs = 11" ,nll)
+               ("val size_closure_regime_rs = 13" ,nll)
                ("val c_regime_cond_eval = _import * : "
                 "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
                ("val c_cond_eval = _import * : "
@@ -1542,18 +1561,35 @@ EOF
                ("fun make_cond (p,fld,f) = let val fe = c_cond_eval condcb in "
                 "fn(t,y,c,ext,extev,c_out) => (fe (t,p,fld,y,c,ext,extev,c_out); c_out) end" ,nll)
                ("val odecb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-               ,(if (member 'random libs)
-                    `("fun " ,(sprintf "~A_regime_rs" solver) "(n) = make_" ,(sprintf "~A_regime_rs" solver) "(n,odecb)" ,nll)
-                    `("fun " ,(sprintf "~A_regime" solver) "(n) = make_" ,(sprintf "~A_regime" solver) "(n,odecb)" ,nll))
-               ,(if (member 'random libs)
-                    `("fun " ,(sprintf "~A_rs" solver) "(n) = make_" ,(sprintf "~A_rs" solver) "(n,odecb)" ,nll)
-                    `("fun " ,solver "(n) = make_" ,solver "(n,odecb)" ,nll))
-               ,(if (member 'random libs)
-                    `("fun make_regime_stepper (n, deriv) = " ,(sprintf "~A_regime_rs" solver) " (n)" ,nll)
-                    `("fun make_regime_stepper (n, deriv) = " ,(sprintf "~A_regime" solver) " (n)" ,nll))
-               ,(if (member 'random libs)
-                    `("fun make_stepper (n, deriv) = " ,(sprintf "~A_rs" solver) " (n)" ,nll)
-                    `("fun make_stepper (n, deriv) = " ,solver " (n)" ,nll))
+               ,@(if (member 'random libs)
+                     `(("fun make_regime_stepper (n, deriv) = " ,nll
+                        "let " ,nll
+                        "    val solver = make_" ,solver "(n,odecb)" ,nll
+                        "    val clos = alloc_closure(size_closure_regime_rs)" ,nll
+                        "in " ,nll
+                        "fn(p,fld,d,r,ext,extev,h,x,y,yout,err,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_regime_rs (p, fld, d, r, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout, err)" ,nll
+                        "end" ,nll)
+                       ("fun make_stepper (n, deriv) = " ,nll
+                        "let " ,nll
+                        "    val solver = make_" ,solver "(n,odecb) " ,nll
+                        "    val clos = alloc_closure(size_closure_cont_rs)" ,nll
+                        "in " ,nll
+                        "fn(p,fld,ext,extev,h,x,y,yout,err,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_cont_rs (p, fld, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout,err)" ,nll
+                        "end" ,nll))
+                     `(("fun make_regime_stepper (n, deriv) = " ,nll
+                        "let ",nll
+                        "    val solver = make_" ,solver "(n,odecb) " ,nll
+                        "    val clos = alloc_closure(size_closure_regime)" ,nll
+                        "in " ,nll
+                        "fn(p,fld,d,r,ext,extev,h,x,y,yout,err) => solver (update_closure_regime (p, fld, d, r, ext, extev, clos), h, x, y, yout, err)" ,nll
+                        "end" ,nll)
+                       ("fun make_stepper (n, deriv) = " ,nll
+                        "let " ,nll
+                        "    val solver = make_" ,solver "(n,odecb) " ,nll
+                        "    val clos = alloc_closure(size_closure_cont)" ,nll
+                        "in " ,nll
+                        "fn(p,fld,ext,extev,h,x,y,yout,err) => solver (update_closure_cont (p, fld, ext, extev, clos), h, x, y, yout, err)" ,nll
+                        "end" ,nll)))
                (,nll)
                )
              )
@@ -1564,25 +1600,28 @@ EOF
                ("fun make_cond (p, fld, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nll)
                ,(if (member 'random libs)
-                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                    `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
                       "fn (p, fld, d, r, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,d,r,ext,extev,rs,rszt))) h (x,y,yout,err) " ,nll
                       "end" ,nll)
-                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                       "fn (p, fld, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout,err)" ,nll
+                       "end" ,nll))
+                    `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
                       "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
-                      "end" ,nll))
-               ,(if (member 'random libs)
-                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout,err)" ,nll
                       "end" ,nll)
-                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
-                      "end" ,nll))
+                      ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                       "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
+                       "end" ,nll)))
                (,nll)
                )
              )
             ;; fixed-step solvers implemented in C
             ((crk3 crk4a crk4b)
              `(
+               ("val size_closure_cont = 4" ,nll)
+               ("val size_closure_regime = 6" ,nll)
+               ("val size_closure_cont_rs = 11" ,nll)
+               ("val size_closure_regime_rs = 13" ,nll)
                ("val c_regime_cond_eval = _import * : "
                 "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
                ("val c_cond_eval = _import * : "
@@ -1592,19 +1631,36 @@ EOF
                 "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,fld,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
                ("fun make_cond (p,fld,f) = let val fe = c_cond_eval condcb in "
                 "fn(t,y,c,ext,extev,c_out) => (fe (t,p,fld,y,c,ext,extev,c_out); c_out) end" ,nll)
-               ("val cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-               ,(if (member 'random libs)
-                    `("fun " ,(sprintf "~A_regime_rs" solver) "(n) = make_" ,(sprintf "~A_regime_rs" solver) "(n,cb)" ,nll)
-                    `("fun " ,(sprintf "~A_regime" solver) "(n) = make_" ,(sprintf "~A_regime" solver) "(n,cb)" ,nll))
-               ,(if (member 'random libs)
-                    `("fun " ,(sprintf "~A_rs" solver) "(n) = make_" ,(sprintf "~A_rs" solver) "(n,cb)" ,nll)
-                    `("fun " ,solver "(n) = make_" ,solver "(n,cb)" ,nll))
-               ,(if (member 'random libs)
-                    `("fun make_regime_stepper (n, deriv) = " ,(sprintf "~A_regime_rs" solver) " (n)" ,nll)
-                    `("fun make_regime_stepper (n, deriv) = " ,(sprintf "~A_regime" solver) " (n)" ,nll))
-               ,(if (member 'random libs)
-                    `("fun make_stepper (n, deriv) = " ,(sprintf "~A_rs" solver) " (n)" ,nll)
-                    `("fun make_stepper (n, deriv) = " ,solver " (n)" ,nll))
+               ("val odecb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
+               ,@(if (member 'random libs)
+                     `(("fun make_regime_stepper (n, deriv) = " ,nll
+                        "let " ,nll
+                        "    val solver = make_" ,solver "(n,odecb)" ,nll
+                        "    val clos = alloc_closure(size_closure_regime_rs)" ,nll
+                        "in " ,nll
+                        "fn(p,fld,d,r,ext,extev,h,x,y,yout,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_regime_rs (p, fld, d, r, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout)" ,nll
+                        "end" ,nll)
+                       ("fun make_stepper (n, deriv) = " ,nll
+                        "let " ,nll
+                        "    val solver = make_" ,solver "(n,odecb) " ,nll
+                        "    val clos = alloc_closure(size_closure_cont_rs)" ,nll
+                        "in " ,nll
+                        "fn(p,fld,ext,extev,h,x,y,yout,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_cont_rs (p, fld, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout)" ,nll
+                        "end" ,nll))
+                     `(("fun make_regime_stepper (n, deriv) = " ,nll
+                        "let ",nll
+                        "    val solver = make_" ,solver "(n,odecb) " ,nll
+                        "    val clos = alloc_closure(size_closure_regime)" ,nll
+                        "in " ,nll
+                        "fn(p,fld,d,r,ext,extev,h,x,y,yout) => solver (update_closure_regime (p, fld, d, r, ext, extev, clos), h, x, y, yout)" ,nll
+                        "end" ,nll)
+                       ("fun make_stepper (n, deriv) = " ,nll
+                        "let " ,nll
+                        "    val solver = make_" ,solver "(n,odecb) " ,nll
+                        "    val clos = alloc_closure(size_closure_cont)" ,nll
+                        "in " ,nll
+                        "fn(p,fld,ext,extev,h,x,y,yout) => solver (update_closure_cont (p, fld, ext, extev, clos), h, x, y, yout)" ,nll
+                        "end" ,nll)))
                (,nll)
                )
              )
@@ -1614,19 +1670,18 @@ EOF
                ("fun make_cond (p, fld, f) = f" ,nll)
                ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nll)
                ,(if (member 'random libs)
-                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                    `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
                       "fn (p, fld, d, r, ext, extev, h, x, y, yout, rs, rszt) => (stepper (deriv (p,fld,d,r,ext,extev,rs,rszt))) h (x,y,yout)" ,nll
                       "end" ,nll)
-                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, d, r, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout)" ,nll
-                      "end" ,nll))
-               ,(if (member 'random libs)
-                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
                       "fn (p, fld, ext, extev, h, x, y, yout, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout)" ,nll
-                      "end" ,nll)
-                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout)" ,nll
                       "end" ,nll))
+                    `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                      "fn (p, fld, d, r, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout)" ,nll
+                      "end" ,nll)
+                      ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                       "fn (p, fld, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout)" ,nll
+                       "end" ,nll)))
                (,nll)
                ))
             ))
@@ -1637,7 +1692,9 @@ EOF
 (define (prelude/C  #!key (libs '()))
 `(
  #<<EOF
+typedef unsigned long long uint64_t;
 #define signal_heaviside(x) (x<0.0 ? 0.0 : 1.0)
+
 
 EOF
 ))

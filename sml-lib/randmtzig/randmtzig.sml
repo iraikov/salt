@@ -40,8 +40,14 @@
 signature RANDOM_MTZIG  =
 sig
 
-    type state
-    type zt
+    type state = Word32Array.array 
+
+    type zt = (Word64Array.array *
+               Word64Array.array *
+               Real64Array.array *
+               Real64Array.array *
+               Real64Array.array *
+               Real64Array.array)
 
     val ztnew: unit -> zt
 
