@@ -661,14 +661,14 @@
            (initfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 ode-defs 'y_out)))
               (V:Fn '(p fld)
-                    ;(random-decls
+                    (random-decls
                      (E:Ret (V:Fn '(y_out) 
                                   (if (null? asgn-defs)
                                       (E:Begin stmts)
                                       (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
                                                   asgn-defs)
                                              (E:Begin stmts))))
-                            )) ;libs))
+                            ) libs))
               ))
 
            (dinitfun  
