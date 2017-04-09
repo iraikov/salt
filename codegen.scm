@@ -660,7 +660,8 @@
 
            (initfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 ode-defs 'y_out)))
-              (V:Fn '(p fld)
+              (V:Fn (let ((args0 '(p fld)))
+                      (random-args args0 libs))
                     (random-decls
                      (E:Ret (V:Fn '(y_out) 
                                   (if (null? asgn-defs)
