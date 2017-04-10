@@ -36,7 +36,7 @@ fun signal_heaviside (x) =
 
 end
 
-structure FunctionalHybridDynamics1 =
+structure FunctionalHybridDynamics =
 struct
 
 open Real
@@ -68,18 +68,38 @@ type regime_state  = bool array
 type dsc_state     = real array
 type event_state   = real array
 type cont_state    = real array
-type error_state   = real array
 type external_state = real array
 type externalev_state = real array
+
+val tol = ref (Real.Math.pow (10.0, ~7.0))
+
+datatype ('a, 'b) either = Left of 'a | Right of 'b
+
+fun predictor tol (h,ys) =
+  let open Real
+      val lb = 0.5
+      val ub = 0.9
+      val e  = Array.foldl (fn (y,ax) => Real.+ ((abs y),ax)) 0.0 ys
+  in 
+      if e < lb*tol
+      then Right (1.414*h, ys)	(* step too small, accept but grow *)
+      else (if e < ub*tol 
+            then Right (h, ys)	(* step just right *)
+            else Left (0.5*h, ys)) (* step too large, reject and shrink *)
+  end
+
+type error_state   = (real * real array, real * real array) either
+
+exception ConvergenceError
 
 datatype model_root = RootBefore | RootFound of real list | RootAfter of real list | RootStep of real list 
                              
 datatype model_state = 
          RegimeState of real * real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * 
-                        cont_state * cont_state * event_state * model_root
+                        cont_state * cont_state * event_state * error_state * model_root
          | EventState of real * real * cont_state * event_state * external_state * externalev_state * 
-                         cont_state * cont_state * event_state * model_root
-         | ContState  of real * real * cont_state * external_state * externalev_state * cont_state * cont_state
+                         cont_state * cont_state * event_state * error_state * model_root
+         | ContState  of real * real * cont_state * external_state * externalev_state * cont_state * cont_state * error_state
 
 
 datatype model_stepper = 
@@ -152,6 +172,38 @@ fun vfoldpi2 f (v1,v2) =
 
 val equal = fn (x,y) => (x = y) 
 
+(* Hermite interpolation *)                            
+fun hinterpolate (h,y0,y1,f0,f1) =
+  let open Real
+  in
+      fn(theta) => (1 - theta)*y0 + theta*y1 + theta*(theta-1)*((1 - 2*theta)*(y1-y0)+(theta-1)*h*f0 + theta*h*f1)
+  end
+
+(* Secant method for root finding *)                                                               
+exception ConvergenceError                                                               
+fun secant tol f fg0 guess1 guess0 iter = 
+    let open Real
+        infix ==
+        val fg1 = f guess1
+        val newGuess = guess1 - fg1 * (guess1 - guess0) / (fg1 - fg0)
+        val err =  abs (newGuess - guess1)
+    in 
+        if fg1 == fg0
+        then guess1
+        else 
+            (if Int.<(iter, 10)
+             then 
+                 (if (err < (!tol))
+                  then newGuess
+                  else secant tol f fg1 newGuess guess1 (Int.+(iter,1)))
+             else (putErrrStrLn "FunctionalHybridDynamics: secant convergence error";
+                   putErrStrLn ("err = " ^ (showReal err) ^ " guess1 = " ^ (showReal guess1) ^
+                                " guess0 = " ^ (showReal guess0) ^ " guess1 = " ^ (showReal guess1) ^ 
+                                " fg0 = " ^ (showReal fg0) ^ " fg1 = " ^ (showReal fg1));
+                   raise ConvergenceError))
+                         
+    end
+  
 (* Compensated summation *)
 fun csum (x, cx, h) =
   let
@@ -187,7 +239,7 @@ fun thr2 (v1,v2) =
     end
 
 fun fixthr (v) =
-    (Array.modify (fn(x) => if Real.>(Real.abs(x), 1E~6) then x else 0.0) v; v)
+    (Array.modify (fn(x) => if Real.>(Real.abs(x), 1E~11) then x else 0.0) v; v)
 
 fun posdetect1 (x, e) =
   (case vfind thr e of (SOME _) => true | NONE => false)
@@ -215,10 +267,12 @@ fun posdetect2 (x, e, x', e') =
                                               " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (ev)) ^
                                               " x' = " ^ (showReal (x')) ^
                                               " ev = " ^ (showReal ev));*)
-                                    SOME (Vector.fromList [(x, ev), (x', ev')]))
+                                    SOME  (x, ev, x', ev'))
               | NONE => NONE)
        else NONE)
   end
+
+         
 
 fun condApply (SOME (RegimeCondition fcond)) =
     (fn(RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,root)) => 
@@ -303,7 +357,7 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
                  val y'  = stepper (d,r,ext,extev,h,x,y,ynext)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
                  val (rootp, xe) = case posdetect2 (x,e,x',e') of
-                                       SOME tbl => (true, LinearInterpolation.interpolate1 tbl 0.0)
+                                       SOME _ => (true, secant 1E~9 (hinterpolate(h,y,y',dy,dy')) y' 1.0 0.0 0)
                                     |  NONE => (false, x')
                  (*val _ = putStrLn ("RootStep: rootp = " ^ (Bool.toString rootp) ^ " h = " ^ (showReal h) ^ " x' = " ^ (showReal x') ^ " xe = " ^ (showReal xe) ^
                                      " e' = " ^ (showReal (getindex (e',0))))*)

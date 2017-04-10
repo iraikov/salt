@@ -152,6 +152,7 @@ val rkv65_aux: real stepper1  = make_rkv65_aux()
 
 val cerkdp:  real stepper3 = make_cerkdp()
 val cerkoz3:  real stepper3 = make_cerkoz3()
+val cerkoz4:  real stepper3 = make_cerkoz4()
 
 
 fun run() =
@@ -173,6 +174,7 @@ fun run() =
                     (rkv65, show_rkv65)];
   putStrLn "#### Continuous Solvers";
   List.app solver3 [(cerkoz3, show_cerkoz3)];
+  List.app solver3 [(cerkoz4, show_cerkoz4)];
   List.app solver3 [(cerkdp, show_cerkdp)];
   putStrLn "#### Auxiliary Solvers: Error Estimators from Adaptives";
   List.app solver1 [(rkhe_aux, show_rkhe_aux),

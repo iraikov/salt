@@ -551,6 +551,38 @@ val ws_oz = ratToRCLs [[RAT 1, ~65//48, 41//72],
 fun make_cerkoz3 (): 'a stepper3  = core3 (cs_oz, as_oz, bs_oz, ds_oz, ws_oz)
 val show_cerkoz3 = rk_show3 ("Continuous Owren-Zennaro 3(2)", cs_oz, as_oz, bs_oz, ds_oz, ws_oz)
 
+(* Owren-Zennaro, order 4/3 CERK method *)
+
+val cs_oz4 = ratToReals [RAT 0, 1//6, 11//37, 11//17, 13//15, RAT 1]
+val as_oz4 = ratToRCLs [[], 
+                       [1//6], 
+                       [44//1369, 363//1369], 
+                       [3388//4913, ~8349//4913, 8140//4913],
+                       [~36764//408375, 767//1125, ~32708//136125, 210392//408375],
+                       [1697//18876, RAT 0, 50653//116160, 299693//1626240, 3375//11648]]
+val r1_oz4 = [1697//18876, RAT 0, 50653//116160, 299693//1626240, 3375//11648]	
+val r2_oz4 = [101//63, RAT 0, ~1369//14520, 11849//14520]
+val bs_oz4 = ratToRCL r1_oz4
+val ds_oz4 = ratToRCL (diffs (r1_oz4, r2_oz4))
+fun make_rkoz4 (): 'a stepper2 = core2 (cs_oz4, as_oz4, bs_oz4, ds_oz4)
+val show_rkoz4 = rk_show2 ("Owren-Zennaro 4(3)", cs_oz4, as_oz4, bs_oz4, ds_oz4)
+
+val bs_oz4_aux = ratToRCL r2_oz4
+fun make_rkoz4_aux (): 'a stepper1 = core1 (cs_oz4, as_oz4, bs_oz4_aux)
+val show_rkoz4_aux = rk_show1 ("Owren-Zennaro (3)", cs_oz4, as_oz4, bs_oz4_aux)
+
+(* interpolation coeffs for continuous method *)
+val ws_oz4 = ratToRCLs [[RAT 1, ~104217//37466, 1806901//618189, ~866577//824252],
+                        [],
+                        [RAT 0, 861101//230560, ~2178079//380424, 12308679//5072320],
+                        [RAT 0, ~638869//293440, 6244423//5325936, ~7816583//10144640],
+                        [RAT 0, ~1522125//762944, 982125//190736, ~624375//217984],
+                        [RAT 0, 165//131, ~461//131, 296//131]]
+
+fun make_cerkoz4 (): 'a stepper3  = core3 (cs_oz4, as_oz4, bs_oz4, ds_oz4, ws_oz4)
+val show_cerkoz4 = rk_show3 ("Continuous Owren-Zennaro 4(3)", cs_oz4, as_oz4, bs_oz4, ds_oz4, ws_oz4)
+fun make_interp_cerkoz4 () = interp ws_oz4
+
 (* Runge-Kutta-Norsett, order 3/4 *)
 
 val cs_rkn34 = ratToReals [RAT 0, 3//8, 9//16, 25//32, RAT 1]
