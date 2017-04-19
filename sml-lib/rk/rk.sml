@@ -40,7 +40,7 @@ sig
   val sum_fn   : state * state * state -> state
 end
 
-functor RungeKutta (S: STATE) =
+functor RungeKuttaFn (structure S: STATE) =
 struct
 
 open S
@@ -389,11 +389,12 @@ fun rk_show2 (title,cs,ar: RCL list,bs,ds) =
     "\nas:\t" ^ (list_show (rcl_show,"\n\t","","") ar) 
 
 fun rk_show3 (title,cs,ar: RCL list,bs,ds,ws) =
-    title ^ ":ws:\t" ^ (list_show (rcl_show,"\n\t","","") ws) ^
-    "\nds:\t" ^ (rcl_show ds) ^ 
-    "\ncs:\t" ^ ((def_list_show Real.toString) cs) ^
-    "\nbs:\t" ^ (rcl_show bs) ^ 
-    "\nas:\t" ^ (list_show (rcl_show,"\n\t","","") ar) 
+  title ^ ":" ^
+  "\nws:\t" ^ (list_show (rcl_show,"\n\t","","") ws) ^
+  "\nds:\t" ^ (rcl_show ds) ^ 
+  "\ncs:\t" ^ ((def_list_show Real.toString) cs) ^
+  "\nbs:\t" ^ (rcl_show bs) ^ 
+  "\nas:\t" ^ (list_show (rcl_show,"\n\t","","") ar) 
 
 fun negate x = (RAT ~1) */ x
 

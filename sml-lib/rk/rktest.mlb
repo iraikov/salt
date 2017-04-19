@@ -7,7 +7,7 @@ local
 	rk.sml
 	rktest.sml
 in
-	structure RungeKutta
+	functor RungeKuttaFn
 	structure RungeKuttaTest
 end
 

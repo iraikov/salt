@@ -1,4 +1,15 @@
 
+
+#include <assert.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+
+#include "crk_common.h"
+
+
+
 // Dormand-Prince 5(4):
 //
 // ds:     <21369600, [26341,0,~90880,790230,~1086939,895488,~534240]>
@@ -11,15 +22,6 @@
 //         <6561, [19372,~76080,64448,~1908]>
 //         <167904, [477901,~1806240,1495424,46746,~45927]>
 //         <142464, [12985,0,64000,92750,~45927,18656]>
-
-
-#include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <math.h>
-
-#include "crk_common.h"
 
 int Dormand_Prince_5_4(int, void (*f)(double,double*,double*,void**), 
                        void **clos,
@@ -57,7 +59,7 @@ int Dormand_Prince_5_4(int, void (*f)(double,double*,double*,void**),
 
 int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,void **), 
                        void **clos,
-                       double *y, double x0, double h, double *yout, double *err,
+                       double *y, double x0, double h, double *yout, double *err, 
                        double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, double *k7, 
                        double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, double *t10, 
                        double *t11, double *t12)
@@ -162,4 +164,17 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,void **),
   //printf("c: xn = %g err[0] = %g\n", x0+h, err[0]);
   
   return 0;
+}
+
+/* Hermite interpolation routine */
+int Dormand_Prince_5_4_interp(int n, void (*f)(double,double *,double *,void **), 
+                              void **clos,
+                              double *y, double x0, double h, double *yout, double *err, 
+                              double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, double *k7, 
+                              double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, double *t10, 
+                              double *t11, double *t12)
+{
+
+  
+  
 }

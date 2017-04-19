@@ -3,10 +3,10 @@
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/unsafe.mlb
 $(INTERP_LIB)/lininterp.mlb
+$(PRINTF_LIB)/printf.mlb
 
 local
 	dynamics.sml
 in
-	structure FunctionalHybridDynamics1
-	structure FunctionalHybridDynamics2
+	structure FunctionalHybridDynamics
 end
