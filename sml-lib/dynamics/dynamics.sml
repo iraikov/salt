@@ -72,7 +72,8 @@ type external_state = real array
 type externalev_state = real array
 
 val tol = ref (Real.Math.pow (10.0, ~7.0))
-
+val maxit = 10
+                
 datatype ('a, 'b) either = Left of 'a | Right of 'b
 
 fun predictor tol (h,ys) =
@@ -107,6 +108,15 @@ datatype model_stepper =
                            real * real * cont_state * cont_state) -> cont_state
          | EventStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> cont_state
          | ContStepper  of (external_state * externalev_state * real * real * cont_state * cont_state) -> cont_state
+
+datatype model_stepper = 
+         RegimeStepper of dsc_state * regime_state * external_state * externalev_state *
+                          real * real * cont_state * cont_state -> 
+                          (cont_state * error_state * cont_state)
+         | EventStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> 
+                           (cont_state * error_state * cont_state)
+         | ContStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> 
+                          (cont_state * error_state)
 
 datatype model_condition = 
          RegimeCondition of (real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * event_state) -> event_state
@@ -241,14 +251,10 @@ fun thr2 (v1,v2) =
 fun fixthr (v) =
     (Array.modify (fn(x) => if Real.>(Real.abs(x), 1E~11) then x else 0.0) v; v)
 
-fun posdetect1 (x, e) =
-  (case vfind thr e of (SOME _) => true | NONE => false)
-                       
-
-fun posdetect2 (x, e, x', e') =
+fun posdetect (x, e, x', e') =
   let
       fun minthr (i,v1,v2,optval) =
-        ((*putStrLn ("posdetect2: i = " ^ (Int.toString i) ^ " v1 = " ^ (showReal (v1)) ^ " v2 = " ^ (showReal v2));*)
+        ((*putStrLn ("posdetect: i = " ^ (Int.toString i) ^ " v1 = " ^ (showReal (v1)) ^ " v2 = " ^ (showReal v2));*)
          if thr2 (v1,v2)
          then (case optval of
                    SOME (i',v,v') => (if v1<v then SOME (i,v1,v2) else optval)
@@ -256,14 +262,14 @@ fun posdetect2 (x, e, x', e') =
          else optval)
   in
       ((*List.app
-           (fn(i) => putStrLn ("posdetect2: x = " ^ (showReal (x)) ^ " x' = " ^ (showReal x') ^
+           (fn(i) => putStrLn ("posdetect: x = " ^ (showReal (x)) ^ " x' = " ^ (showReal x') ^
                                " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e,i))) ^
                                " e'[" ^ (Int.toString i) ^ "] = " ^ (showReal (getindex(e',i)))))
            (List.tabulate(Array.length e, fn(i) => i));*)
        if (x' > x)
        then 
            (case vfoldpi2 minthr (e, e') of
-                SOME (i,ev,ev') => ((*putStrLn ("posdetect2: x = " ^ (showReal (x)) ^ 
+                SOME (i,ev,ev') => ((*putStrLn ("posdetect: x = " ^ (showReal (x)) ^ 
                                               " e[" ^ (Int.toString i) ^ "] = " ^ (showReal (ev)) ^
                                               " x' = " ^ (showReal (x')) ^
                                               " ev = " ^ (showReal ev));*)
@@ -338,11 +344,36 @@ fun evresponse (fpos,fneg) =
             end)
       | _ => (putErrStrLn "FunctionalHybridDynamics1: unsupported event response configuration"; 
               raise Domain)
+
+fun adaptive_regime_stepper (stepper,fcond,fdiscrete,fregime)  =
+    let open Real
+        fun f iter (h,d,r,ext,extev,ynext,yrsp,enext,root) =
+            if Int.<(iter,maxiter)
+            then 
+                (let
+                    val (ys',err',w) = stepper (h,d,r,ext,extev,h,x,ys,yout,err)
+                    val ev' = fixthr(fcond (x+h,ys',ev,d,r,ext,extev,falloc nev))
+                in
+                    case tol of
+                        SOME => 
+                        (case predictor tol (h,err') of
+                             Right h' => 
+                             (x',ys'',evdir,ev'',d',r',ext,extev,h')
+                           | Left h'  => 
+                             f (Int.+(iter,1)) (x,ys,ev,d,r,ext,extev,h'))
+                     |  NONE => 
+                end)
+            else raise ConvergenceError
+    in
+        f 0
+    end
         
 
 fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),                          
               fpos,fneg,fdiscrete,SOME fregime,h) =
   let
+      val fstepper = adaptive_regime_stepper (stepper,fcond,fdiscrete,fregime)
+
       fun integral' (RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,root)) =
         (case root of
              RootBefore =>
@@ -354,9 +385,10 @@ fun integral (RegimeStepper stepper,SOME (RegimeCondition fcond),
            | RootStep (h::hs) =>
              let (*val _ = putStrLn ("RootStep: h = " ^ (showReal h) ^ " x = " ^ (showReal x))*)
                  val (x',cx')  = csum (x,cx,h)
-                 val y'  = stepper (d,r,ext,extev,h,x,y,ynext)
+                 val (y',err',w) = fstepper (d,r,ext,extev,h,x,y,ynext,err)
+
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
-                 val (rootp, xe) = case posdetect2 (x,e,x',e') of
+                 val (rootp, xe) = case posdetect (x,e,x',e') of
                                        SOME _ => (true, secant 1E~9 (hinterpolate(h,y,y',dy,dy')) y' 1.0 0.0 0)
                                     |  NONE => (false, x')
                  (*val _ = putStrLn ("RootStep: rootp = " ^ (Bool.toString rootp) ^ " h = " ^ (showReal h) ^ " x' = " ^ (showReal x') ^ " xe = " ^ (showReal xe) ^

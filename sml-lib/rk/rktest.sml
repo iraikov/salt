@@ -123,70 +123,21 @@ fun solver3 (integrator,stats) =
    putStrLn "# All done!\n")
 
 
-val rkfe: real stepper1 = make_rkfe()
-val rk3:  real stepper1 = make_rk3()
-val rk4a: real stepper1 = make_rk4a()
-val rk4b: real stepper1 = make_rk4b()
-
-val rkhe:  real stepper2 = make_rkhe()
-val rkbs:  real stepper2 = make_rkbs()
-val rkoz3:  real stepper2 = make_rkoz3()
-val rkn34: real stepper2 = make_rkn34()
-val rkf45: real stepper2 = make_rkf45()
-val rkck:  real stepper2 = make_rkck()
-val rkdp:  real stepper2 = make_rkdp()
-val rkdpb: real stepper2 = make_rkdpb()
-val rkf78: real stepper2 = make_rkf78()
-val rkv65: real stepper2 = make_rkv65()
-
-val rkhe_aux:  real stepper1  = make_rkhe_aux()
-val rkbs_aux:  real stepper1  = make_rkbs_aux()
-val rkoz3_aux: real stepper1  = make_rkoz3_aux()
-val rkn34_aux: real stepper1  = make_rkn34_aux()
-val rkf45_aux: real stepper1  = make_rkf45_aux()
-val rkck_aux:  real stepper1  = make_rkck_aux()
-val rkdp_aux:  real stepper1  = make_rkdp_aux()
-val rkdpb_aux:  real stepper1 = make_rkdpb_aux()
-val rkf78_aux: real stepper1  = make_rkf78_aux()
-val rkv65_aux: real stepper1  = make_rkv65_aux()
-
 val cerkdp:  real stepper3 = make_cerkdp()
 val cerkoz3:  real stepper3 = make_cerkoz3()
 val cerkoz4:  real stepper3 = make_cerkoz4()
 
 
 fun run() =
- (putStrLn "#### Non-Adaptive Solvers";
-  List.app solver1 [(rkfe, show_rkfe),
-                    (rk3,  show_rk3),
-                    (rk4a, show_rk4a),
-                    (rk4b, show_rk4b)];
-  putStrLn "#### Adaptive Solvers";
-  List.app solver2 [(rkhe, show_rkhe),
-                    (rkbs, show_rkbs),
-                    (rkoz3, show_rkoz3),
-                    (rkn34, show_rkn34),
-                    (rkf45, show_rkf45),
-                    (rkck, show_rkck),
-                    (rkdp, show_rkdp),
-                    (rkdpb, show_rkdpb),
-                    (rkf78, show_rkf78),
-                    (rkv65, show_rkv65)];
+ (
   putStrLn "#### Continuous Solvers";
   List.app solver3 [(cerkoz3, show_cerkoz3)];
   List.app solver3 [(cerkoz4, show_cerkoz4)];
   List.app solver3 [(cerkdp, show_cerkdp)];
   putStrLn "#### Auxiliary Solvers: Error Estimators from Adaptives";
-  List.app solver1 [(rkhe_aux, show_rkhe_aux),
-		    (rkbs_aux, show_rkbs_aux),
-		    (rkoz3_aux, show_rkoz3_aux),
-		    (rkn34_aux, show_rkn34_aux),
-		    (rkf45_aux, show_rkf45_aux),
-		    (rkck_aux, show_rkck_aux),
-		    (rkdp_aux, show_rkdp_aux),
-		    (rkdpb_aux, show_rkdpb_aux),
-		    (rkf78_aux, show_rkf78_aux),
-                    (rkv65_aux, show_rkv65_aux)]
+  List.app solver1 [(rkoz3_aux, show_rkoz3_aux),
+                    (rkoz4_aux, show_rkoz4_aux),
+		    (rkdp_aux, show_rkdp_aux)]
   )
 
 val _ = run()
