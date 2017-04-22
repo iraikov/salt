@@ -24,9 +24,7 @@
     ((_ exp ...)
      (run:execute* (list `exp ...)))))
 
-(define adaptive-solvers '(rkhe rkbs rkck rkoz rkdp rkf45 rkf78 rkv65 crkdp crkbs))
-
-(define (test-model name model #!key (solver 'rk4b) (compile #f) (dir "tests"))
+(define (test-model name model #!key (compile #f) (dir "tests"))
   (pp model)
 
   (define elab (elaborate model))
@@ -37,17 +35,14 @@
   (pp sim)
   (pp (codegen-ODE sim))
   (let* (
-         (c-path (make-pathname dir (string-append (->string name) ".c")))
-         (c-port (open-output-file c-path))
+         (c-path   (make-pathname dir (string-append (->string name) ".c")))
+         (c-port   (open-output-file c-path))
          (sml-path (make-pathname dir (string-append (->string name) ".sml")))
-         (mlb-path (case solver
-                     ((crkbs crkdp rkhe rkbs rkck rkoz3 rkdp rkf45 rkf78 rkv65)
-                      (make-pathname dir (string-append (->string name) "_run2.mlb")))
-                     (else (make-pathname dir (string-append (->string name) "_run1.mlb")))))
+         (mlb-path (make-pathname dir (string-append (->string name) "_run.mlb")))
          (sml-port (open-output-file sml-path))
          )
-    (codegen-ODE/C name sim out: c-port solver: solver libs: '(interp))
-    (codegen-ODE/ML name sim out: sml-port solver: solver libs: '(interp))
+    (codegen-ODE/C name sim out: c-port libs: '(interp))
+    (codegen-ODE/ML name sim out: sml-port libs: '(interp))
     (close-output-port sml-port)
     (close-output-port c-port)
     (if compile
@@ -57,18 +52,13 @@
               -mlb-path-var ,(sprintf "'SALT_LIB ~A/sml-lib'" SALT-DIR)
               -mlb-path-var ,(sprintf "'RK_LIB $(SALT_LIB)/rk'")
               -mlb-path-var ,(sprintf "'STATE_LIB $(SALT_LIB)/state'")
+              -mlb-path-var ,(sprintf "'PRINTF_LIB $(SALT_LIB)/printf'")
               -mlb-path-var ,(sprintf "'DYNAMICS_LIB $(SALT_LIB)/dynamics'")
+              -mlb-path-var ,(sprintf "'INTERP_LIB $(SALT_LIB)/lininterp'")
               ,mlb-path
-              ,@(case solver 
-                 ((crk3) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crk3.c")))
-                 ((crk4a) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crk4a.c")))
-                 ((crk4b) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crk4b.c")))
-                 ((crkbs) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crkbs.c")))
-                 ((crkdp) (list c-path (make-pathname SALT-DIR "/sml-lib/rk/crkdp.c")))
-                 (else '()))
               ))))
 
-)
+  )
 
 ;(verbose 1)
 ;(add-trace 'codegen-ODE)
@@ -426,30 +416,21 @@
   )
 
 
-(test-model 'vdp vdp solver: 'rk3 compile: #t)
-(test-model 'vdp vdp solver: 'rkdp compile: #t)
+(test-model 'vdp vdp compile: #t)
 
+;; (test-model 'ml ml compile: #t)
 
-(test-model 'ml ml solver: 'crk3 compile: #t)
-(test-model 'ml ml solver: 'crkbs compile: #t)
+;; (test-model 'iaf iaf compile: #t)
 
-(test-model 'iaf iaf solver: 'rk3 compile: #t)
-(test-model 'iaf iaf solver: 'crkdp compile: #t)
+;; (test-model 'izhfs izhfs compile: #t)
 
-(test-model 'izhfs izhfs solver: 'rk4b compile: #t)
-(test-model 'izhfs izhfs solver: 'crkdp compile: #t)
+;; (test-model 'iafrefr iafrefr  compile: #t)
 
-(test-model 'iafrefr iafrefr solver: 'rk3  compile: #t)
-(test-model 'iafrefr iafrefr solver: 'crkdp  compile: #t)
+;; (test-model 'adex adex compile: #t)
 
-(test-model 'adex adex solver: 'rk3  compile: #t)
-(test-model 'adex adex solver: 'crkdp  compile: #t)
+;; (test-model 'hr hr compile: #t)
 
-(test-model 'hr hr solver: 'rk3  compile: #t)
-(test-model 'hr hr solver: 'crkdp  compile: #t)
-
-(test-model 'wb wb solver: 'rk3  compile: #t)
-(test-model 'wb wb solver: 'crkdp  compile: #t)
+;; (test-model 'wb wb compile: #t)
 
 ;(test-model 'iafsyn iafsyn)
 

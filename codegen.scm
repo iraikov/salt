@@ -78,9 +78,6 @@
 		  (E:Noop ()         (sprintf "E:Noop"))
 		  )))
 
-(define solvers '(rkfe rk3 rk4a rk4b rkhe rkbs rkck rkoz3 rkdp rkf45 rkf78 rkv65 crk3 crk4a crk4b crkbs crkdp))
-(define adaptive-solvers '(rkhe rkbs rkck rkoz3 rkdp rkf45 rkf78 rkv65 crkbs crkdp))
-
 (define (filter-assoc key alst)
   (filter-map (lambda (x) (and (equal? key (car x)) x)) alst))
 
@@ -1412,14 +1409,11 @@
 	 ))
 
 
-(define (codegen-ODE/ML name sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rk4b))
+(define (codegen-ODE/ML name sim #!key (out (current-output-port)) (mod #t) (libs '()))
 
-    (if (and solver (not (member solver solvers)))
-        (error 'codegen-ODE/ML "unknown solver" solver))
-
-    (let ((sysdefs (codegen-ODE sim adaptive: (member solver adaptive-solvers) libs: libs)))
+    (let ((sysdefs (codegen-ODE sim libs: libs)))
       
-      (if mod (print-fragments (prelude/ML csysname: name solver: solver libs: libs) out))
+      (if mod (print-fragments (prelude/ML csysname: name libs: libs) out))
 
       (print-fragments
        (map (match-lambda
@@ -1449,7 +1443,7 @@
       ))
 
 
-(define (prelude/ML  #!key (csysname "") (solver 'rk4b) (libs '()))
+(define (prelude/ML  #!key (csysname #f) (libs '()))
 `(
  #<<EOF
 structure Model = 
@@ -1462,12 +1456,23 @@ open RungeKutta
 
 EOF
 
-,(if (member solver '(crk3 crk4a crk4b crkdp crkbs))
-
-#<<EOF
-open CRungeKutta
-EOF
-"")
+,@(if csysname
+      `(("open CRungeKutta" ,nll)
+        ("val size_closure_cont = 4" ,nll)
+        ("val size_closure_regime = 6" ,nll)
+        ("val size_closure_cont_rs = 11" ,nll)
+        ("val size_closure_regime_rs = 13" ,nll)
+        ("val c_regime_cond_eval = _import * : "
+         "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
+        ("val c_cond_eval = _import * : "
+         "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array * real array  -> unit;", nll)
+        ("val cond_cb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
+        ("fun make_regime_cond (p,fld,f) = let val fe = c_regime_cond_eval cond_cb in "
+         "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,fld,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
+        ("fun make_cond (p,fld,f) = let val fe = c_cond_eval cond_cb in "
+         "fn(t,y,c,ext,extev,c_out) => (fe (t,p,fld,y,c,ext,extev,c_out); c_out) end" ,nll)
+        ("val ode_cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll))
+      '())
 
 #<<EOF
 
@@ -1506,187 +1511,79 @@ fun mk_random_poisson (RandomState, RandomZT) (lam) = RandomMTZig.randPoisson (l
 EOF
 "")
 
-,(if (not solver)
-     `(("(* dummy solver; returns only the computed derivatives *)")
-       ("fun integral (f,h) = f" ,nll))
+("fun statelen a = Array.length (a)" ,nll)
+("fun alloc n = Array.array (n, 0.0)" ,nll)
+("fun bool_alloc n = Array.array (n, false)" ,nll)
+("fun summer (a,b,y) = (vmap2 (fn (x,y) => x+y) (a,b,y))" ,nll)
+("fun scaler (a,lst,y) = vmap (fn (x) => a*x) lst y" ,nll)
+("fun make_real_initial (n, f): unit -> real Array.array = let val a = alloc n in fn () => f(a) end" ,nll)
+("val empty_real_initial: real Array.array = alloc 0" ,nll)
+("fun make_ext (n, f) = let val a = alloc n in fn () => f(a) end" ,nll)
+("fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,alloc n)" ,nll)
+("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n)" ,nll)
 
+,@(map
+   (lambda (solver)
      `(
-       ("fun statelen a = Array.length (a)" ,nll)
-       ("fun alloc n = Array.array (n, 0.0)" ,nll)
-       ("fun bool_alloc n = Array.array (n, false)" ,nll)
-       ("fun summer (a,b,y) = (vmap2 (fn (x,y) => x+y) (a,b,y))" ,nll)
-       ("fun scaler (a,lst,y) = vmap (fn (x) => a*x) lst y" ,nll)
-       ("fun make_real_initial (n, f): unit -> real Array.array = let val a = alloc n in fn () => f(a) end" ,nll)
-       ("val empty_real_initial: real Array.array = alloc 0" ,nll)
-       ("fun make_ext (n, f) = let val a = alloc n in fn () => f(a) end" ,nll)
-       ("fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,alloc n)" ,nll)
-       ("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n)" ,nll)
-
-       . ,(case solver  
-            ;; adaptive solvers with interpolation
-            ((cerkoz cerkdp)
-             `(
-               ("fun make_regime_cond (p, fld, f) = f" ,nll)
-               ("fun make_cond (p, fld, f) = f" ,nll)
-               ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
-               ,(if (member 'random libs)
-                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, d, r, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,d,r,ext,extev,rs,rszt))) h (x,y,yout,err) " ,nll
-                      "end" ,nll)
-                    `("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
-                      "end" ,nll))
-               ,(if (member 'random libs)
-                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout,err)" ,nll
-                      "end" ,nll)
-                    `("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
-                      "end" ,nll))
-               )
-             )
-            ;; adaptive solvers implemented in C
-            ((crkbs crkdp)
-             `(
-               ("val size_closure_cont = 4" ,nll)
-               ("val size_closure_regime = 6" ,nll)
-               ("val size_closure_cont_rs = 11" ,nll)
-               ("val size_closure_regime_rs = 13" ,nll)
-               ("val c_regime_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
-               ("val c_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array * real array  -> unit;", nll)
-               ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-               ("fun make_regime_cond (p,fld,f) = let val fe = c_regime_cond_eval condcb in "
-                "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,fld,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
-               ("fun make_cond (p,fld,f) = let val fe = c_cond_eval condcb in "
-                "fn(t,y,c,ext,extev,c_out) => (fe (t,p,fld,y,c,ext,extev,c_out); c_out) end" ,nll)
-               ("val odecb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-               ,@(if (member 'random libs)
-                     `(("fun make_regime_stepper (n, deriv) = " ,nll
-                        "let " ,nll
-                        "    val solver = make_" ,solver "(n,odecb)" ,nll
-                        "    val clos = alloc_closure(size_closure_regime_rs)" ,nll
-                        "in " ,nll
-                        "fn(p,fld,d,r,ext,extev,h,x,y,yout,err,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_regime_rs (p, fld, d, r, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout, err)" ,nll
-                        "end" ,nll)
-                       ("fun make_stepper (n, deriv) = " ,nll
-                        "let " ,nll
-                        "    val solver = make_" ,solver "(n,odecb) " ,nll
-                        "    val clos = alloc_closure(size_closure_cont_rs)" ,nll
-                        "in " ,nll
-                        "fn(p,fld,ext,extev,h,x,y,yout,err,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_cont_rs (p, fld, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout,err)" ,nll
-                        "end" ,nll))
-                     `(("fun make_regime_stepper (n, deriv) = " ,nll
-                        "let ",nll
-                        "    val solver = make_" ,solver "(n,odecb) " ,nll
-                        "    val clos = alloc_closure(size_closure_regime)" ,nll
-                        "in " ,nll
-                        "fn(p,fld,d,r,ext,extev,h,x,y,yout,err) => solver (update_closure_regime (p, fld, d, r, ext, extev, clos), h, x, y, yout, err)" ,nll
-                        "end" ,nll)
-                       ("fun make_stepper (n, deriv) = " ,nll
-                        "let " ,nll
-                        "    val solver = make_" ,solver "(n,odecb) " ,nll
-                        "    val clos = alloc_closure(size_closure_cont)" ,nll
-                        "in " ,nll
-                        "fn(p,fld,ext,extev,h,x,y,yout,err) => solver (update_closure_cont (p, fld, ext, extev, clos), h, x, y, yout, err)" ,nll
-                        "end" ,nll)))
-               (,nll)
-               )
-             )
-            ;; adaptive solvers with threshold detection on grid points
-            ((rkhe rkbs rkf45 rkck rkoz3 rkdp rkf45 rkf78 rkv65)
-             `(
-               ("fun make_regime_cond (p, fld, f) = f" ,nll)
-               ("fun make_cond (p, fld, f) = f" ,nll)
-               ("val " ,solver ": (real array) stepper2 = make_" ,solver "()" ,nll)
-               ,(if (member 'random libs)
-                    `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, d, r, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,d,r,ext,extev,rs,rszt))) h (x,y,yout,err) " ,nll
-                      "end" ,nll)
-                      ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                       "fn (p, fld, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout,err)" ,nll
-                       "end" ,nll))
-                    `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
-                      "end" ,nll)
-                      ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                       "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
-                       "end" ,nll)))
-               (,nll)
-               )
-             )
-            ;; fixed-step solvers implemented in C
-            ((crk3 crk4a crk4b)
-             `(
-               ("val size_closure_cont = 4" ,nll)
-               ("val size_closure_regime = 6" ,nll)
-               ("val size_closure_cont_rs = 11" ,nll)
-               ("val size_closure_regime_rs = 13" ,nll)
-               ("val c_regime_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * bool array * real array * real array * real array  -> unit;" ,nll)
-               ("val c_cond_eval = _import * : "
-                "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array * real array  -> unit;", nll)
-               ("val condcb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-               ("fun make_regime_cond (p,fld,f) = let val fe = c_regime_cond_eval condcb in "
-                "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,fld,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
-               ("fun make_cond (p,fld,f) = let val fe = c_cond_eval condcb in "
-                "fn(t,y,c,ext,extev,c_out) => (fe (t,p,fld,y,c,ext,extev,c_out); c_out) end" ,nll)
-               ("val odecb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-               ,@(if (member 'random libs)
-                     `(("fun make_regime_stepper (n, deriv) = " ,nll
-                        "let " ,nll
-                        "    val solver = make_" ,solver "(n,odecb)" ,nll
-                        "    val clos = alloc_closure(size_closure_regime_rs)" ,nll
-                        "in " ,nll
-                        "fn(p,fld,d,r,ext,extev,h,x,y,yout,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_regime_rs (p, fld, d, r, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout)" ,nll
-                        "end" ,nll)
-                       ("fun make_stepper (n, deriv) = " ,nll
-                        "let " ,nll
-                        "    val solver = make_" ,solver "(n,odecb) " ,nll
-                        "    val clos = alloc_closure(size_closure_cont_rs)" ,nll
-                        "in " ,nll
-                        "fn(p,fld,ext,extev,h,x,y,yout,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_cont_rs (p, fld, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout)" ,nll
-                        "end" ,nll))
-                     `(("fun make_regime_stepper (n, deriv) = " ,nll
-                        "let ",nll
-                        "    val solver = make_" ,solver "(n,odecb) " ,nll
-                        "    val clos = alloc_closure(size_closure_regime)" ,nll
-                        "in " ,nll
-                        "fn(p,fld,d,r,ext,extev,h,x,y,yout) => solver (update_closure_regime (p, fld, d, r, ext, extev, clos), h, x, y, yout)" ,nll
-                        "end" ,nll)
-                       ("fun make_stepper (n, deriv) = " ,nll
-                        "let " ,nll
-                        "    val solver = make_" ,solver "(n,odecb) " ,nll
-                        "    val clos = alloc_closure(size_closure_cont)" ,nll
-                        "in " ,nll
-                        "fn(p,fld,ext,extev,h,x,y,yout) => solver (update_closure_cont (p, fld, ext, extev, clos), h, x, y, yout)" ,nll
-                        "end" ,nll)))
-               (,nll)
-               )
-             )
-            (else
-             `(
-               ("fun make_regime_cond (p, fld, f) = f" ,nll)
-               ("fun make_cond (p, fld, f) = f" ,nll)
-               ("val " ,solver ": (real array) stepper1 = make_" ,solver "()" ,nll)
-               ,(if (member 'random libs)
-                    `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, d, r, ext, extev, h, x, y, yout, rs, rszt) => (stepper (deriv (p,fld,d,r,ext,extev,rs,rszt))) h (x,y,yout)" ,nll
-                      "end" ,nll)
-                      ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, ext, extev, h, x, y, yout, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout)" ,nll
-                      "end" ,nll))
-                    `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                      "fn (p, fld, d, r, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout)" ,nll
-                      "end" ,nll)
-                      ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                       "fn (p, fld, ext, extev, h, x, y, yout) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout)" ,nll
-                       "end" ,nll)))
-               (,nll)
-               ))
-            ))
-     ))
+       ("fun make_regime_cond (p, fld, f) = f" ,nll)
+       ("fun make_cond (p, fld, f) = f" ,nll)
+       ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
+       ,@(if (member 'random libs)
+             `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, fld, d, r, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,d,r,ext,extev,rs,rszt))) h (x,y,yout,err) " ,nll
+                "end" ,nll)
+               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, fld, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout,err)" ,nll
+                "end" ,nll))
+             `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
+                "end" ,nll)
+               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
+                "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
+                "end" ,nll))
+             ))
+     )
+   ;; adaptive solvers with interpolation
+   '(cerkoz3 cerkoz4 cerkdp))
+    
+;; adaptive solvers implemented in C
+,@(if (not csysname) '()
+      (map
+       (lambda (solver)
+         `(
+           ,@(if (member 'random libs)
+                 `(("fun make_regime_stepper (n, deriv) = " ,nll
+                    "let " ,nll
+                    "    val solver = make_" ,solver "(n,ode_cb)" ,nll
+                    "    val clos = alloc_closure(size_closure_regime_rs)" ,nll
+                    "in " ,nll
+                    "fn(p,fld,d,r,ext,extev,h,x,y,yout,err,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_regime_rs (p, fld, d, r, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout, err)" ,nll
+                    "end" ,nll)
+                   ("fun make_stepper (n, deriv) = " ,nll
+                    "let " ,nll
+                    "    val solver = make_" ,solver "(n,ode_cb) " ,nll
+                    "    val clos = alloc_closure(size_closure_cont_rs)" ,nll
+                    "in " ,nll
+                    "fn(p,fld,ext,extev,h,x,y,yout,err,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_cont_rs (p, fld, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout,err)" ,nll
+                    "end" ,nll))
+                 `(("fun make_regime_stepper (n, deriv) = " ,nll
+                    "let ",nll
+                    "    val solver = make_" ,solver "(n,ode_cb) " ,nll
+                    "    val clos = alloc_closure(size_closure_regime)" ,nll
+                    "in " ,nll
+                    "fn(p,fld,d,r,ext,extev,h,x,y,yout,err) => solver (update_closure_regime (p, fld, d, r, ext, extev, clos), h, x, y, yout, err)" ,nll
+                    "end" ,nll)
+                   ("fun make_stepper (n, deriv) = " ,nll
+                    "let " ,nll
+                    "    val solver = make_" ,solver "(n,ode_cb) " ,nll
+                    "    val clos = alloc_closure(size_closure_cont)" ,nll
+                    "in " ,nll
+                    "fn(p,fld,ext,extev,h,x,y,yout,err) => solver (update_closure_cont (p, fld, ext, extev, clos), h, x, y, yout, err)" ,nll
+                    "end" ,nll)))
+           (,nll)
+           ))
+       '(rkoz3 rkoz4 rkdp))
+      ))
 )
 
 

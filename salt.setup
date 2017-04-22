@@ -59,12 +59,8 @@
 (copy-file-to-salt-dir "sml-lib/rk/rk.mlb")
 (copy-file-to-salt-dir "sml-lib/rk/crk.sml")
 (copy-file-to-salt-dir "sml-lib/rk/crk.mlb")
-(copy-file-to-salt-dir "sml-lib/rk/crk3.c")
-(copy-file-to-salt-dir "sml-lib/rk/crk_common.h")
-(copy-file-to-salt-dir "sml-lib/rk/crk4a.c")
-(copy-file-to-salt-dir "sml-lib/rk/crk4b.c")
-(copy-file-to-salt-dir "sml-lib/rk/crkbs.c")
-(copy-file-to-salt-dir "sml-lib/rk/crkdp.c")
+;(copy-file-to-salt-dir "sml-lib/rk/crk3.c")
+;(copy-file-to-salt-dir "sml-lib/rk/crk_common.h")
 
 (copy-file-to-salt-dir "sml-lib/dynamics/dynamics.sml")
 (copy-file-to-salt-dir "sml-lib/dynamics/dynamics.mlb")
@@ -79,4 +75,7 @@
 (copy-file-to-salt-dir "sml-lib/randmtzig/randmtzig.sml")
 (copy-file-to-salt-dir "sml-lib/randmtzig/randmtziglib.c")
 (copy-file-to-salt-dir "sml-lib/randmtzig/randmtzig.mlb")
+
+(copy-file-to-salt-dir "sml-lib/printf/printf.sml")
+(copy-file-to-salt-dir "sml-lib/printf/printf.mlb")
 
