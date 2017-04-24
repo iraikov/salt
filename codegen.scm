@@ -1413,7 +1413,7 @@
 
     (let ((sysdefs (codegen-ODE sim libs: libs)))
       
-      (if mod (print-fragments (prelude/ML csysname: name libs: libs) out))
+      (if mod (print-fragments (prelude/ML libs: libs) out))
 
       (print-fragments
        (map (match-lambda

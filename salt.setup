@@ -76,6 +76,9 @@
 (copy-file-to-salt-dir "sml-lib/randmtzig/randmtziglib.c")
 (copy-file-to-salt-dir "sml-lib/randmtzig/randmtzig.mlb")
 
+(copy-file-to-salt-dir "sml-lib/findroot/findroot.sml")
+(copy-file-to-salt-dir "sml-lib/findroot/findroot.mlb")
+
 (copy-file-to-salt-dir "sml-lib/printf/printf.sml")
 (copy-file-to-salt-dir "sml-lib/printf/printf.mlb")
 
