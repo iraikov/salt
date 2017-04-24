@@ -1,0 +1,11 @@
+(* import libraries *)
+
+$(SML_LIB)/basis/basis.mlb
+$(SML_LIB)/basis/unsafe.mlb
+$(PRINTF_LIB)/printf.mlb
+
+local
+	findroot.sml
+in
+	structure FindRoot
+end
