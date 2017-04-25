@@ -109,10 +109,6 @@ val rsp         = Model.initfun(p, fld) (Model.alloc Model.n)
 val err         = Model.alloc Model.n
 val evnext      = optApply Model.initcondfun (Model.alloc Model.nev)
 
-val f = D.integral(Model.odefun (p, fld),optApply Model.condfun (p, fld),
-                   optApply Model.posfun (p, fld),optApply Model.negfun (p, fld),
-                   optApply Model.dposfun (p, fld),Model.regfun)
-
 val optStatus = ref NONE
 val (opts, _) = (Options.getopt optStatus) (CommandLine.arguments())
 
@@ -120,12 +116,22 @@ val _ = (case !optStatus of
 	     SOME msg => exitError (CommandLine.name(), msg)
 	   | NONE => ())
 		    
-val {is_help, is_time, is_timestep, is_tol} = Options.getstate (opts)
+val {is_help, is_time, is_timestep, is_tol, is_solver} = Options.getstate (opts)
 						                 
 val _ = if is_help then exitHelp (CommandLine.name()) else ()
 
 val h0     = case is_timestep of SOME dt => dt | NONE => 0.01
 val tstop = case is_time of SOME t => t | NONE => 150.0
+val solver = case is_solver of
+                 "rkoz3" => Model.cerkoz3
+              |  "rkoz4" => Model.cerkoz4
+              |  "rkdp"  => Model.cerkdp
+              |  _ => raise Fail ("unknown solver " ^ is_solver)
+                                                      
+
+val f = D.integral(Model.odefun solver (p, fld),optApply Model.condfun (p, fld),
+                   optApply Model.posfun (p, fld),optApply Model.negfun (p, fld),
+                   optApply Model.dposfun (p, fld),Model.regfun)
 
 val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial(),extevinitial(),tstop,h0,ynext,rsp,err,evnext)
 
