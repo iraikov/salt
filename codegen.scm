@@ -762,7 +762,7 @@
                           ))
                    )
               (V:Op (if has-regimes? 'make_regime_stepper 'make_stepper)
-                    (list (V:C ode-n) rhsfun))))
+                    (list rhsfun))))
 
            (odefun    
             (V:Fn (random-args '(p fld) libs)
@@ -1412,9 +1412,13 @@
 (define (codegen-ODE/ML name sim #!key (out (current-output-port)) (mod #t) (libs '()))
 
     (let ((sysdefs (codegen-ODE sim libs: libs)))
-      
-      (if mod (print-fragments (prelude/ML libs: libs) out))
 
+      (if mod (print-fragments
+               (list "structure Model =" nll
+                     "struct" nll
+                     nll)
+               out))
+      
       (print-fragments
        (map (match-lambda
              ((name . def) (list (binding->ML (B:Val name def)) nll)))
@@ -1424,6 +1428,8 @@
               (ndsc . ,(V:C (alist-ref 'dsc-n sysdefs)))
               ))
        out)
+
+      (if mod (print-fragments (prelude/ML libs: libs) out))
       
       (print-fragments
        (map (match-lambda
@@ -1446,13 +1452,11 @@
 (define (prelude/ML  #!key (csysname #f) (libs '()))
 `(
  #<<EOF
-structure Model = 
-struct
-
-open Real
-open Math
-open Dynamics
-open RungeKutta
+structure ModelPrelude = ModelPreludeFn(val n = n
+                                        val nev = nev
+                                        val nregime = nregime
+                                        val ndsc = ndsc)
+open ModelPrelude
 
 EOF
 
@@ -1474,77 +1478,8 @@ EOF
         ("val ode_cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll))
       '())
 
-#<<EOF
 
-fun putStrLn str = 
-  (TextIO.output (TextIO.stdOut, str);
-   TextIO.output (TextIO.stdOut, "\n"))
-
-fun putStr str = (TextIO.output (TextIO.stdOut, str))
-
-fun showReal n = 
-let open StringCvt
-in
-(if n < 0.0 then "-" else "") ^ (fmt (FIX (SOME 12)) (abs n))
-end
-
-val getindex = Unsafe.Array.sub
-val setindex = Unsafe.Array.update
-
-EOF
-
-,(if (member 'random libs)
-#<<EOF
-
-fun RandomState () = RandomMTZig.fromEntropy()
-fun RandomStateFromInt i = RandomMTZig.fromInt(i)
-
-val RandomZT = RandomMTZig.ztnew
-
-fun mk_random_uniform RandomState () = RandomMTZig.randUniform RandomState
-fun mk_random_unifrange RandomState (a, b) = a + (RandomMTZig.randUniform RandomState) * (b-a)
-fun mk_random_normal (RandomState, RandomZT) () = RandomMTZig.randNormal (RandomState, RandomZT)
-fun mk_random_exponential (RandomState, RandomZT) (mu) = mu * RandomMTZig.randExp (RandomState, RandomZT)
-fun mk_random_poisson (RandomState, RandomZT) (lam) = RandomMTZig.randPoisson (lam, RandomState, RandomZT)
-
-
-EOF
-"")
-
-("fun statelen a = Array.length (a)" ,nll)
-("fun alloc n = Array.array (n, 0.0)" ,nll)
-("fun bool_alloc n = Array.array (n, false)" ,nll)
-("fun summer (a,b,y) = (vmap2 (fn (x,y) => x+y) (a,b,y))" ,nll)
-("fun scaler (a,lst,y) = vmap (fn (x) => a*x) lst y" ,nll)
-("fun make_real_initial (n, f): unit -> real Array.array = let val a = alloc n in fn () => f(a) end" ,nll)
-("val empty_real_initial: real Array.array = alloc 0" ,nll)
-("fun make_ext (n, f) = let val a = alloc n in fn () => f(a) end" ,nll)
-("fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,alloc n)" ,nll)
-("fun make_transition (n, f) = fn (e,r) => f(e,r,bool_alloc n)" ,nll)
-
-,@(map
-   (lambda (solver)
-     `(
-       ("fun make_regime_cond (p, fld, f) = f" ,nll)
-       ("fun make_cond (p, fld, f) = f" ,nll)
-       ("val " ,solver ": (real array) stepper3 = make_" ,solver "()" ,nll)
-       ,@(if (member 'random libs)
-             `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, fld, d, r, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,d,r,ext,extev,rs,rszt))) h (x,y,yout,err) " ,nll
-                "end" ,nll)
-               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, fld, ext, extev, h, x, y, yout, err, rs, rszt) => (stepper (deriv (p,fld,ext,extev,rs,rszt))) h (x,y,yout,err)" ,nll
-                "end" ,nll))
-             `(("fun make_regime_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, fld, d, r, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,d,r,ext,extev))) h (x,y,yout,err) " ,nll
-                "end" ,nll)
-               ("fun make_stepper (n, deriv) = let val stepper = " ,solver " (fn () => alloc n,scaler,summer) in " ,nll
-                "fn (p, fld, ext, extev, h, x, y, yout, err) => (stepper (deriv (p,fld,ext,extev))) h (x,y,yout,err)" ,nll
-                "end" ,nll))
-             ))
-     )
-   ;; adaptive solvers with interpolation
-   '(cerkoz3 cerkoz4 cerkdp))
+,(if (member 'random libs) `(,nll "open ModelRandom" ,nll) '())
     
 ;; adaptive solvers implemented in C
 ,@(if (not csysname) '()

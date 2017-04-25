@@ -30,27 +30,20 @@
  *	rkoz3_aux, rkoz4_aux, rkdp_aux
 *)
 
-signature STATE =
+signature RKSTATE =
 sig
   type state
 
-  val alloc_fn : unit -> state
-  val copy_fn  : state * state -> state 
-  val sc_fn    : real * state * state -> state 
-  val sum_fn   : state * state * state -> state
+  val state : unit -> state
+  val copy  : state * state -> state 
+  val scale : real * state * state -> state 
+  val sum   : state * state * state -> state
 end
 
-functor RungeKuttaFn (structure S: STATE) =
+functor RungeKuttaFn (structure S: RKSTATE) =
 struct
 
 open S
-         
-fun putStr str =
-    (TextIO.output (TextIO.stdOut, str))
-
-fun putStrLn str =
-    (TextIO.output (TextIO.stdOut, str);
-     TextIO.output (TextIO.stdOut, "\n"))
 
 
 fun foldl1 f (a::b::lst) = List.foldl f (f(a,b)) lst
@@ -166,12 +159,12 @@ val ratToRCLs = fn x => map ratToRCL x
 (* ratToReals :: [rational] -> [real] *)
 val ratToReals = fn x => map fromRational x
 
-fun m_scale sc_fn (s,v,y) =
+fun m_scale scale (s,v,y) =
     if Real.== (s, 0.0)
     then NONE
     else (if Real.== (s, 1.0)
           then SOME v
-	  else SOME (sc_fn (s,v,y)))
+	  else SOME (scale (s,v,y)))
 
 
 (* Helper function to sum a list of K_i, skipping
@@ -194,7 +187,7 @@ fun k_sum (h, (d,ns), ks, (t1, t2, t3)) =
           | recur f g ([], _, ax) = ax
 
     in
-        sc_fn (Real./ (h,d), recur (m_scale sc_fn) sum_fn (ns, ks, t2), t1)
+        scale (Real./ (h,d), recur (m_scale scale) sum (ns, ks, t2), t1)
     end
 
 
@@ -205,7 +198,7 @@ fun gen_ks (der_fn: real * state * state -> state,
 
   | gen_ks (der_fn,h,old as (tn,yn),ks,(c::cs),(a::ar),(t1::ts1),(t2::ts2),ts3) =
     let
-	val yn1 = if (FunQueue.empty ks) then yn else sum_fn (yn, k_sum (h,a,ks,ts3), t1)
+	val yn1 = if (FunQueue.empty ks) then yn else sum (yn, k_sum (h,a,ks,ts3), t1)
         val k1  = der_fn (tn + c*h, yn1, t2)
     in
         gen_ks (der_fn, h, old, FunQueue.enque(ks,k1), cs, ar, ts1, ts2, ts3)
@@ -228,15 +221,15 @@ fun bk_sum (bs: RCL list) =
                     val (k, ks) = valOf (FunQueue.deque ks)
                     val t = hd ts
                 in
-                    case m_scale sc_fn (bsum, k, t) of 
-                        SOME bk => recur (bs, ks, (sc_fn (h/d, bk, t))::fs, tl ts)
+                    case m_scale scale (bsum, k, t) of 
+                        SOME bk => recur (bs, ks, (scale (h/d, bk, t))::fs, tl ts)
                       | NONE => recur (bs, ks, fs, ts)
                 end
                 | recur ([], ks, [], ts) =
                   raise Fail "RungeLutta.bk_sum: empty list of function evaluations"
                 | recur ([], ks, fs, ts) = 
                   if FunQueue.empty ks 
-                  then foldl1 (fn(x,y) => sum_fn (x,y,yout)) fs
+                  then foldl1 (fn(x,y) => sum (x,y,yout)) fs
                   else raise Fail "RungeLutta.bk_sum: invalid coefficients"
           in
               recur (bs, ks, [], ts)
@@ -250,14 +243,14 @@ type hinterp = (real * state FunQueue.t * real * state) ->
                    
 fun hinterp (ws: RCL list) =
   let
-      val ts1  = List.tabulate (List.length ws, fn (i) => alloc_fn())
-      val t1   = alloc_fn()
+      val ts1  = List.tabulate (List.length ws, fn (i) => state())
+      val t1   = state()
   in
       (fn (h: real, ks, tn, yn: state) =>
           fn (theta, yout: state) =>
              if theta > 0.0 
-             then sum_fn (yn, bk_sum ws (ks,h) (theta,ts1,t1), yout)
-             else copy_fn (yn, yout))
+             then sum (yn, bk_sum ws (ks,h) (theta,ts1,t1), yout)
+             else copy (yn, yout))
   end
 
 (*
@@ -296,10 +289,10 @@ type stepper1 =  (real * state * state -> state) ->
                         
 fun core1 (cl: real list, al: RCL list, bl: RCL) =
   let
-      val ts1  = List.tabulate (List.length cl, fn (i) => alloc_fn())
-      val ts2  = List.tabulate (List.length cl, fn (i) => alloc_fn())
-      val ts3  = (alloc_fn(),alloc_fn(),alloc_fn())
-      val tys  = (alloc_fn(),alloc_fn(),alloc_fn())
+      val ts1  = List.tabulate (List.length cl, fn (i) => state())
+      val ts2  = List.tabulate (List.length cl, fn (i) => state())
+      val ts3  = (state(),state(),state())
+      val tys  = (state(),state(),state())
   in
       fn (der_fn: real * state * state -> state) =>
 	 fn (h: real) =>
@@ -307,7 +300,7 @@ fun core1 (cl: real list, al: RCL list, bl: RCL) =
                   let
                       val ks  = gen_ks (der_fn, h, (tn,yn), FunQueue.new(), cl, al, ts1, ts2, ts3)
                   in
-                      sum_fn (yn, k_sum (h, bl, ks, tys), yout)
+                      sum (yn, k_sum (h, bl, ks, tys), yout)
                   end
   end
 
@@ -323,12 +316,12 @@ type stepper2 =  (real * state * state -> state) ->
 
 fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
   let
-      val ts1  = List.tabulate (List.length cl, fn (i) => alloc_fn())
-      val ts2  = List.tabulate (List.length cl, fn (i) => alloc_fn())
-      val ts3  = (alloc_fn(),alloc_fn(),alloc_fn())
-      val tys  = (alloc_fn(),alloc_fn(),alloc_fn())
-      val te1  = alloc_fn()
-      val te2  = alloc_fn()
+      val ts1  = List.tabulate (List.length cl, fn (i) => state())
+      val ts2  = List.tabulate (List.length cl, fn (i) => state())
+      val ts3  = (state(),state(),state())
+      val tys  = (state(),state(),state())
+      val te1  = state()
+      val te2  = state()
   in
       fn (der_fn: real * state * state -> state) =>
          fn (h: real) =>
@@ -336,7 +329,7 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
                let
                    val ks = gen_ks (der_fn, h, (tn,yn), FunQueue.new(), cl, al, ts1, ts2, ts3)
                in
-                   (sum_fn (yn, k_sum (h, bl, ks, tys), yout),
+                   (sum (yn, k_sum (h, bl, ks, tys), yout),
                     k_sum (h, dl, ks, (err,te1,te2)))
                end
   end
@@ -351,13 +344,13 @@ type stepper3 = (real * state * state -> state) ->
 
 fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) =
   let
-      val ts1  = List.tabulate (List.length cl, fn (i) => alloc_fn())
-      val ts2  = List.tabulate (List.length cl, fn (i) => alloc_fn())
-      val ts3  = (alloc_fn(),alloc_fn(),alloc_fn())
-      val tys  = (alloc_fn(),alloc_fn(),alloc_fn())
-      val te1  = alloc_fn()
-      val te2  = alloc_fn()
-      val ti   = alloc_fn()
+      val ts1  = List.tabulate (List.length cl, fn (i) => state())
+      val ts2  = List.tabulate (List.length cl, fn (i) => state())
+      val ts3  = (state(),state(),state())
+      val tys  = (state(),state(),state())
+      val te1  = state()
+      val te2  = state()
+      val ti   = state()
   in
       fn (der_fn: real * state * state -> state) =>
 	 fn (h: real) =>
@@ -366,7 +359,7 @@ fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) =
                    val ks   = gen_ks (der_fn, h, (tn,yn), 
                                       FunQueue.new(), cl, al, ts1, ts2, ts3)
                in
-                   (sum_fn (yn, k_sum (h, bl, ks, tys), yout),
+                   (sum (yn, k_sum (h, bl, ks, tys), yout),
                     k_sum (h, dl, ks, (err,te1,te2)),
                     ks)
                end
