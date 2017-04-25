@@ -30,10 +30,16 @@ struct
       val B = fn z => spec Bool.toString z
       val I = fn z => spec Int.toString z
       val R = fn z => spec Real.toString z
-      fun ISeq foldr z = spec (fn v => String.concatWith ", " (foldr (fn (x, ax) => (Int.toString x)::ax)  [] v)) z
-      fun RSeq foldr z = spec (fn v => String.concatWith ", " (foldr (fn (x, ax) => (Real.toString x)::ax) [] v)) z
+      fun ISeq foldr z = spec (fn v => "[" ^ (String.concatWith ", " (foldr (fn (x, ax) => (Int.toString x)::ax)  [] v)) ^ "]") z
+      fun RSeq foldr z = spec (fn v => "[" ^ (String.concatWith ", " (foldr (fn (x, ax) => (Real.toString x)::ax) [] v)) ^ "]")  z
                            
-      fun test () = printf `"Int="I`"  Bool="B`"  Real="R`"\n" $ 1 false 2.0
+      fun test () =
+        let
+            val IA = ISeq Array.foldr
+            val RA = RSeq Array.foldr       
+        in
+            printf `"Int="I`"  Bool="B`"  Real="R `" Real array = "RA `"\n" $ 1 false 2.0 (Array.fromList [1.0,2.0,3.0])
+        end
 end
     
-
+                   
