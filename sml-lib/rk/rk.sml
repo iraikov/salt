@@ -24,7 +24,7 @@
  * e_{n+1} = h sum_{i=1}^s d_i k_i
  *
  * adaptive solvers with interpolation (CERK):
- *	cerkoz3, cerkdp
+ *	cerkoz3, cerkoz4, cerkdp
  *
  * auxiliary non-adaptive solvers (error estimators from the adaptive ones):
  *	rkoz3_aux, rkoz4_aux, rkdp_aux
@@ -239,15 +239,16 @@ fun bk_sum (bs: RCL list) =
 (* Hermite interpolation routine for continuous explicit RK (CERK) methods *)
 
 type hinterp = (real * state FunQueue.t * real * state) ->
-               (real * state -> state)
+               real -> state
                    
 fun hinterp (ws: RCL list) =
   let
       val ts1  = List.tabulate (List.length ws, fn (i) => state())
       val t1   = state()
+      val yout = state()
   in
       (fn (h: real, ks, tn, yn: state) =>
-          fn (theta, yout: state) =>
+          fn (theta) =>
              if theta > 0.0 
              then sum (yn, bk_sum ws (ks,h) (theta,ts1,t1), yout)
              else copy (yn, yout))

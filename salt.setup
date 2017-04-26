@@ -59,7 +59,7 @@
 (copy-file-to-salt-dir "sml-lib/rk/rk.mlb")
 (copy-file-to-salt-dir "sml-lib/rk/crk.sml")
 (copy-file-to-salt-dir "sml-lib/rk/crk.mlb")
-;(copy-file-to-salt-dir "sml-lib/rk/crk3.c")
+;(copy-file-to-salt-dir "sml-lib/rk/crk_lib.c")
 ;(copy-file-to-salt-dir "sml-lib/rk/crk_common.h")
 
 (copy-file-to-salt-dir "sml-lib/dynamics/dynamics.sml")
@@ -81,4 +81,10 @@
 
 (copy-file-to-salt-dir "sml-lib/printf/printf.sml")
 (copy-file-to-salt-dir "sml-lib/printf/printf.mlb")
+
+(copy-file-to-salt-dir "sml-lib/state/state.sml")
+(copy-file-to-salt-dir "sml-lib/state/state.mlb")
+
+(copy-file-to-salt-dir "sml-lib/model/prelude.sml")
+(copy-file-to-salt-dir "sml-lib/model/random.sml")
 

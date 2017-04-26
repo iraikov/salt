@@ -81,5 +81,5 @@ val show = Real.toString
 
 end
 
-structure BitArrayState = ArrayState (structure E = BoolElem)
+structure BoolArrayState = ArrayState (structure E = BoolElem)
 structure RealArrayState = ArrayState (structure E = RealElem)

@@ -162,7 +162,7 @@
       ))
 
 
-(define (codegen-ODE sim #!key (adaptive #f) (libs '()))
+(define (codegen-ODE sim #!key (libs '()))
 
 
   (define (update-bucket k v alst)
@@ -769,105 +769,69 @@
                   (E:Ret
                    (cond
                     (has-regimes?
-                     (V:Op 'RegimeStepper (list (V:Fn (if adaptive
-                                                          '(d r ext extev h x y yout err) 
-                                                          '(d r ext extev h x y yout))
-                                                      (E:Ret (V:Op 'stepfun
-                                                                   (random-vargs
-                                                                    (if adaptive
-                                                                        (list (V:Var 'p) 
-                                                                              (V:Var 'fld) 
-                                                                              (V:Var 'd) 
-                                                                              (V:Var 'r) 
-                                                                              (V:Var 'ext) 
-                                                                              (V:Var 'extev) 
-                                                                              (V:Var 'h) 
-                                                                              (V:Var 'x) 
-                                                                              (V:Var 'y) 
-                                                                              (V:Var 'yout) 
-                                                                              (V:Var 'err) 
-                                                                              )                                                                       
-                                                                        (list (V:Var 'p) 
-                                                                              (V:Var 'fld) 
-                                                                              (V:Var 'd) 
-                                                                              (V:Var 'r) 
-                                                                              (V:Var 'ext) 
-                                                                              (V:Var 'extev) 
-                                                                              (V:Var 'h) 
-                                                                              (V:Var 'x) 
-                                                                              (V:Var 'y) 
-                                                                              (V:Var 'yout) 
-                                                                             ))
-                                                                    libs))
-                                                             ))
-                                                ))
+                     (V:Op 'RegimeStepper
+                           (list (V:Fn '(d r ext extev h x y yout err) 
+                                       (E:Ret (V:Op 'stepfun
+                                                    (random-vargs
+                                                     (list (V:Var 'p) 
+                                                           (V:Var 'fld) 
+                                                           (V:Var 'd) 
+                                                           (V:Var 'r) 
+                                                           (V:Var 'ext) 
+                                                           (V:Var 'extev) 
+                                                           (V:Var 'h) 
+                                                           (V:Var 'x) 
+                                                           (V:Var 'y) 
+                                                           (V:Var 'yout) 
+                                                           (V:Var 'err) 
+                                                           )
+                                                     libs))
+                                              ))
+                                 ))
                      )
                     
                     (has-conds?
-                     (V:Op 'EventStepper (list (V:Fn (if adaptive
-                                                         '(ext extev h x y yout err) 
-                                                         '(ext extev h x y yout))
-                                                     (E:Ret (V:Op 'stepfun
-                                                                  (random-vargs
-                                                                   (if adaptive
-                                                                       (list (V:Var 'p) 
-                                                                             (V:Var 'fld) 
-                                                                             (V:Var 'ext) 
-                                                                             (V:Var 'extev) 
-                                                                             (V:Var 'h) 
-                                                                             (V:Var 'x) 
-                                                                             (V:Var 'y) 
-                                                                             (V:Var 'yout) 
-                                                                             (V:Var 'err) 
-                                                                             )
-                                                                       (list (V:Var 'p) 
-                                                                             (V:Var 'fld) 
-                                                                             (V:Var 'ext) 
-                                                                             (V:Var 'extev) 
-                                                                             (V:Var 'h) 
-                                                                             (V:Var 'x) 
-                                                                             (V:Var 'y) 
-                                                                             (V:Var 'yout) 
-                                                                             ))
-                                                                   libs)
-                                                                  ))
-                                                     ))
+                     (V:Op 'EventStepper
+                           (list (V:Fn '(ext extev h x y yout err) 
+                                       (E:Ret (V:Op 'stepfun
+                                                    (random-vargs
+                                                     (list (V:Var 'p) 
+                                                           (V:Var 'fld) 
+                                                           (V:Var 'ext) 
+                                                           (V:Var 'extev) 
+                                                           (V:Var 'h) 
+                                                           (V:Var 'x) 
+                                                           (V:Var 'y) 
+                                                           (V:Var 'yout) 
+                                                           (V:Var 'err) 
+                                                           )
+                                                     libs)
+                                                    ))
+                                       ))
                            )
                      )
                     
                     (else
-                     (V:Op 'ContStepper (list  (V:Fn (if adaptive
-                                                         '(ext extev h x y yout err) 
-                                                         '(ext extev h x y yout))
-                                                     (E:Ret (V:Op 'stepfun
-                                                                  (random-vargs
-                                                                   (if adaptive
-                                                                       (list (V:Var 'p) 
-                                                                             (V:Var 'fld) 
-                                                                             (V:Var 'ext) 
-                                                                             (V:Var 'extev) 
-                                                                             (V:Var 'h) 
-                                                                             (V:Var 'x) 
-                                                                             (V:Var 'y) 
-                                                                             (V:Var 'yout) 
-                                                                             (V:Var 'err) 
-                                                                             )
-                                                                       (list (V:Var 'p) 
-                                                                             (V:Var 'fld) 
-                                                                             (V:Var 'ext) 
-                                                                             (V:Var 'extev) 
-                                                                             (V:Var 'h) 
-                                                                             (V:Var 'x) 
-                                                                             (V:Var 'y) 
-                                                                             (V:Var 'yout) 
-                                                                             )
-                                                                       )
-                                                                   libs))
-                                                            ))
+                     (V:Op 'ContStepper
+                           (list  (V:Fn '(ext extev h x y yout err) 
+                                        (E:Ret (V:Op 'stepfun
+                                                     (random-vargs
+                                                      (list (V:Var 'p) 
+                                                            (V:Var 'fld) 
+                                                            (V:Var 'ext) 
+                                                            (V:Var 'extev) 
+                                                            (V:Var 'h) 
+                                                            (V:Var 'x) 
+                                                            (V:Var 'y) 
+                                                            (V:Var 'yout) 
+                                                            (V:Var 'err) 
+                                                            )
+                                                      libs))
                                                ))
+                                  ))
                      ))
-                   )
-            ))
+                   ))
+            )
                                     
            (initcondfun 
             (if (null? condblock)
@@ -1552,9 +1516,3 @@ EOF
        sysdefs)
       
       ))
-
-
-
-
-
-

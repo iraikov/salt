@@ -49,12 +49,9 @@
         (run (mlton 
               -profile alloc
               -default-ann "'allowFFI true'"
-              -mlb-path-var ,(sprintf "'SALT_LIB ~A/sml-lib'" SALT-DIR)
-              -mlb-path-var ,(sprintf "'RK_LIB $(SALT_LIB)/rk'")
-              -mlb-path-var ,(sprintf "'STATE_LIB $(SALT_LIB)/state'")
-              -mlb-path-var ,(sprintf "'PRINTF_LIB $(SALT_LIB)/printf'")
-              -mlb-path-var ,(sprintf "'DYNAMICS_LIB $(SALT_LIB)/dynamics'")
-              -mlb-path-var ,(sprintf "'INTERP_LIB $(SALT_LIB)/lininterp'")
+              -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
+              -mlb-path-var "'SALT_LIB $(SALT_HOME)/sml-lib'"
+              -mlb-path-map ,(sprintf "~A/sml-lib/mlb-path-map" SALT-DIR)
               ,mlb-path
               ))))
 
@@ -418,13 +415,13 @@
 
 (test-model 'vdp vdp compile: #t)
 
-;; (test-model 'ml ml compile: #t)
+(test-model 'ml ml compile: #t)
 
-;; (test-model 'iaf iaf compile: #t)
+(test-model 'iaf iaf compile: #t)
 
-;; (test-model 'izhfs izhfs compile: #t)
+(test-model 'izhfs izhfs compile: #t)
 
-;; (test-model 'iafrefr iafrefr  compile: #t)
+(test-model 'iafrefr iafrefr  compile: #t)
 
 ;; (test-model 'adex adex compile: #t)
 

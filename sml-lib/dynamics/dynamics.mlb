@@ -2,6 +2,7 @@
 
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/unsafe.mlb
+$(SALT_LIB)/queue/fun-queue.mlb
 $(FINDROOT_LIB)/findroot.mlb
 $(PRINTF_LIB)/printf.mlb
 
