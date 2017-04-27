@@ -56,8 +56,8 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 	          then (putStrLn "# All done!"; nstate)
 	          else (run rs'))
 
-               | _ => raise Domain)
-            | run _ = raise Domain
+               | _ => raise Fail "invalid state type")
+            | run _ = raise Fail "invalid state type"
     in
 	printState (0.0, initial);
 	run (D.RegimeState (0.0, 0.0, initial, evinitial, dinitial, rinitial, extinitial, extevinitial, ynext, rsp, evnext, (h0,err), D.RootBefore))
@@ -71,8 +71,8 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 	          if (x'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
 	          else (run es'))
-               | _ => raise Domain)
-            | run _ = raise Domain
+               | _ => raise Fail "invalid state type")
+            | run _ = raise Fail "invalid state type"
     in
 	printState (0.0, initial);
 	run (D.EventState (0.0, 0.0, initial, evinitial, extinitial, extevinitial, ynext, rsp, evnext, (h0,err), D.RootBefore))
@@ -86,8 +86,8 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
 	          if (x'  > tmax)
 	          then (putStrLn "# All done!"; nstate)
 	          else (run cs'))
-               | _ => raise Domain)
-            | run _ = raise Domain
+               | _ => raise Fail "invalid state type")
+            | run _ = raise Fail "invalid state type"
     in
 	printState (0.0, initial);
 	run (D.ContState (0.0, 0.0, initial, ext, extev, ynext, (h0,err)))
