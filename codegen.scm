@@ -27,6 +27,8 @@
   (V:Fn      (args list?) (body stmt?))
   (V:Op      (name symbol?)  (args (lambda (x) (every value? x))))
   (V:Ifv     (test value?)  (ift value?) (iff value?))
+  (V:Rcon    (args (lambda (x) (every (lambda (p) (and (pair? p) (symbol? (car x)) (value? (cdr x)))) x))))
+  (V:Rsel    (v value?) (fld symbol?))
   )
 
   
@@ -39,6 +41,8 @@
 		  (V:Ifv (test tv fv) (sprintf  "(V:Ifv ~A ~A ~A)" test tv fv))
 		  (V:Fn  (args body) (sprintf "(V:Fn ~A = ~A)" args body))
 		  (V:Op (name args) (sprintf "(V:Op ~A ~A)" name args))
+		  (V:Rcon (args) (sprintf "(V:Rcon ~A)" args))
+		  (V:Rsel (v fld) (sprintf "(V:Rsel ~A ~A)" v fld))
                   ))
   )
 		  
@@ -743,26 +747,28 @@
 
                    (used-asgns (fold-used-asgns odes asgn-idxs asgn-defs asgns asgn-dag ext-defs))
 
-                   (rhs-args (let ((args0 (if has-regimes? '(p fld d r ext extev) '(p fld ext extev))))
+                   (clos-args (let ((args0 (if has-regimes? '(p fld d r ext extev) '(p fld ext extev))))
                                (random-args args0 libs)))
                    
                    (rhsfun 
-                    (V:Fn rhs-args
-                          (random-decls
-                           (E:Ret 
-                            (V:Fn '(t y dy_out)
-                                  (let ((stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
-                                    (if (null? used-asgns)
-                                        (E:Begin stmts)
-                                        (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) used-asgns)
-                                               (E:Begin stmts))
-                                        ))
-                                  ))
-                           libs)
+                    (V:Fn '(clos)
+                          (E:Let
+                           (map (lambda (arg) (B:Val arg (V:Rsel (V:Var 'clos) arg)))
+                                clos-args )
+                           (random-decls
+                            (E:Ret 
+                             (V:Fn '(t y dy_out)
+                                   (let ((stmts (codegen-set-stmts codegen-expr1 odes 'dy_out)))
+                                     (if (null? used-asgns)
+                                         (E:Begin stmts)
+                                         (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs)))) used-asgns)
+                                                (E:Begin stmts))
+                                         ))
+                                   ))
+                            libs))
                           ))
                    )
-              (V:Op (if has-regimes? 'make_regime_stepper 'make_stepper)
-                    (list rhsfun))))
+              (V:Op 'make_stepper (list rhsfun))))
 
            (odefun    
             (V:Fn (random-args '(p fld) libs)
@@ -772,61 +778,63 @@
                      (V:Op 'RegimeStepper
                            (list (V:Fn '(d r ext extev h x y yout err) 
                                        (E:Ret (V:Op 'stepfun
-                                                    (random-vargs
-                                                     (list (V:Var 'p) 
-                                                           (V:Var 'fld) 
-                                                           (V:Var 'd) 
-                                                           (V:Var 'r) 
-                                                           (V:Var 'ext) 
-                                                           (V:Var 'extev) 
-                                                           (V:Var 'h) 
-                                                           (V:Var 'x) 
-                                                           (V:Var 'y) 
-                                                           (V:Var 'yout) 
-                                                           (V:Var 'err) 
-                                                           )
-                                                     libs))
+                                                    (list (V:Rcon
+                                                           (random-vargs
+                                                            `((p     . ,(V:Var 'p))
+                                                              (fld   . ,(V:Var 'fld))
+                                                              (d     . ,(V:Var 'd))
+                                                              (r     . ,(V:Var 'r))
+                                                              (ext   . ,(V:Var 'ext))
+                                                              (extev . ,(V:Var 'extev))
+                                                              (h     . ,(V:Var 'h))
+                                                              (x     . ,(V:Var 'x))
+                                                              (y     . ,(V:Var 'y))
+                                                              (yout  . ,(V:Var 'yout))
+                                                              (err   . ,(V:Var 'err)))
+                                                            libs))
+                                                          ))
                                               ))
-                                 ))
-                     )
+                                 )
+                           ))
                     
                     (has-conds?
                      (V:Op 'EventStepper
                            (list (V:Fn '(ext extev h x y yout err) 
                                        (E:Ret (V:Op 'stepfun
-                                                    (random-vargs
-                                                     (list (V:Var 'p) 
-                                                           (V:Var 'fld) 
-                                                           (V:Var 'ext) 
-                                                           (V:Var 'extev) 
-                                                           (V:Var 'h) 
-                                                           (V:Var 'x) 
-                                                           (V:Var 'y) 
-                                                           (V:Var 'yout) 
-                                                           (V:Var 'err) 
+                                                     (list (V:Rcon
+                                                            (random-vargs
+                                                            `((p     . ,(V:Var 'p))
+                                                              (fld   . ,(V:Var 'fld))
+                                                              (ext   . ,(V:Var 'ext))
+                                                              (extev . ,(V:Var 'extev))
+                                                              (h     . ,(V:Var 'h))
+                                                              (x     . ,(V:Var 'x))
+                                                              (y     . ,(V:Var 'y))
+                                                              (yout  . ,(V:Var 'yout))
+                                                              (err   . ,(V:Var 'err)))
+                                                            libs))
                                                            )
-                                                     libs)
                                                     ))
                                        ))
-                           )
-                     )
+                           ))
                     
                     (else
                      (V:Op 'ContStepper
                            (list  (V:Fn '(ext extev h x y yout err) 
                                         (E:Ret (V:Op 'stepfun
-                                                     (random-vargs
-                                                      (list (V:Var 'p) 
-                                                            (V:Var 'fld) 
-                                                            (V:Var 'ext) 
-                                                            (V:Var 'extev) 
-                                                            (V:Var 'h) 
-                                                            (V:Var 'x) 
-                                                            (V:Var 'y) 
-                                                            (V:Var 'yout) 
-                                                            (V:Var 'err) 
-                                                            )
-                                                      libs))
+                                                     (list (V:Rcon
+                                                            (random-vargs
+                                                             `((p     . ,(V:Var 'p))
+                                                               (fld   . ,(V:Var 'fld))
+                                                               (ext   . ,(V:Var 'ext))
+                                                               (extev . ,(V:Var 'extev))
+                                                               (h     . ,(V:Var 'h))
+                                                               (x     . ,(V:Var 'x))
+                                                               (y     . ,(V:Var 'y))
+                                                               (yout  . ,(V:Var 'yout))
+                                                               (err   . ,(V:Var 'err)))
+                                                             libs))
+                                                           ))
                                                ))
                                   ))
                      ))
@@ -1365,6 +1373,12 @@
                            (list "(" name1 " (" (value->ML (car args)) "))"))
                           (else
                            (list "(" name1 "(" (intersperse (map value->ML args) ",") "))")))))
+	 (V:Rcon      (args) 
+                      (list "{ "
+                            (intersperse (map (lambda (x) (list (name/ML (car x)) "=" (value->ML (cdr x)))) args) ",")
+                            " }"))
+	 (V:Rsel      (v fld) 
+                      (list "(#" (name/ML fld) "(" (value->ML v) "))"))
 	 (V:Ifv     (test ift iff)
 		    (list "(if (" (value->ML test) ") " 
 			  "then " (value->ML ift ) " " 

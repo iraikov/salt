@@ -1,4 +1,5 @@
 RK_LIB $(SALT_HOME)/sml-lib/rk
+RANDMTZIG_LIB $(SALT_HOME)/sml-lib/randmtzig
 DYNAMICS_LIB $(SALT_HOME)/sml-lib/dynamics
 INTERP_LIB $(SALT_HOME)/sml-lib/lininterp
 PRINTF_LIB $(SALT_HOME)/sml-lib/printf
