@@ -6,7 +6,20 @@ $(RK_LIB)/rk.mlb
 $(RK_LIB)/crk.mlb
 $(DYNAMICS_LIB)/dynamics.mlb
 
-structure Dynamics = FunctionalHybridDynamics1
+structure Dynamics = FunctionalHybridDynamics
+
+local
+        $(STATE_LIB)/state.sml
+in
+        structure BoolArrayState
+        structure RealArrayState
+end
+
+local
+        $(MODEL_LIB)/prelude.sml
+in
+        functor ModelPreludeFn
+end
 
 local
         options.sml
@@ -19,5 +32,5 @@ local
 in
 	structure Model
 end
-model_run1.sml
+model_run.sml
 
