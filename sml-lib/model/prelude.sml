@@ -32,7 +32,7 @@ structure RungeKutta = RungeKuttaFn(structure S = RKArrayState)
 open RungeKutta
                                 
 fun make_stepper deriv =
-  fn (clos: 'a, h, x, y, yout, err) => (cerkdp (deriv clos)) h (x,y,yout,err) 
+  fn (clos: 'a, h, x, y, yout) => (cerkdp (deriv clos)) h (x,y,yout) 
 
 val interpfun = interp_cerkdp 
 

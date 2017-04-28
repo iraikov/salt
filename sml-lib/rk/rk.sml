@@ -313,7 +313,7 @@ fun core1 (cl: real list, al: RCL list, bl: RCL) =
 *)
 
 type stepper2 =  (real * state * state -> state) ->
-		 real -> (real * state * state * state) -> (state * state)
+		 real -> (real * state * state) -> (state * state)
 
 fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
   let
@@ -323,10 +323,11 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
       val tys  = (state(),state(),state())
       val te1  = state()
       val te2  = state()
+      val err  = state()
   in
       fn (der_fn: real * state * state -> state) =>
          fn (h: real) =>
-            fn (old as (tn,yn: state, yout: state, err: state)) =>
+            fn (old as (tn,yn: state, yout: state)) =>
                let
                    val ks = gen_ks (der_fn, h, (tn,yn), FunQueue.new(), cl, al, ts1, ts2, ts3)
                in
@@ -340,7 +341,7 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
    coefficients for this timestep. *)
 
 type stepper3 = (real * state * state -> state) -> 
-		real -> (real * state * state * state) ->
+		real -> (real * state * state) ->
                 (state * state * state FunQueue.t)
 
 fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) =
@@ -352,10 +353,11 @@ fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) =
       val te1  = state()
       val te2  = state()
       val ti   = state()
+      val err  = state()
   in
       fn (der_fn: real * state * state -> state) =>
 	 fn (h: real) =>
-	    fn (old as (tn,yn: state,yout: state,err: state)) =>
+	    fn (old as (tn,yn: state,yout: state)) =>
                let
                    val ks   = gen_ks (der_fn, h, (tn,yn), 
                                       FunQueue.new(), cl, al, ts1, ts2, ts3)

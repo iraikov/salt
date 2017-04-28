@@ -27,7 +27,7 @@
   (V:Fn      (args list?) (body stmt?))
   (V:Op      (name symbol?)  (args (lambda (x) (every value? x))))
   (V:Ifv     (test value?)  (ift value?) (iff value?))
-  (V:Rcon    (args (lambda (x) (every (lambda (p) (and (pair? p) (symbol? (car x)) (value? (cdr x)))) x))))
+  (V:Rcon    (args (lambda (x) (every (lambda (p) (and (pair? p) (symbol? (car p)) (value? (cdr p)))) x))))
   (V:Rsel    (v value?) (fld symbol?))
   )
 
@@ -404,7 +404,10 @@
                            )) arg-list))
   
   (define (random-vargs arg-list libs)
-    (if (member 'random libs) (append arg-list `(,(V:Var 'rs) ,(V:Var 'rszt))) arg-list))
+    (if (member 'random libs)
+        (append arg-list `((rs . ,(V:Var 'rs))
+                           (rszt . ,(V:Var 'rszt))))
+        arg-list))
   
 
   (let* (
@@ -753,8 +756,13 @@
                    (rhsfun 
                     (V:Fn '(clos)
                           (E:Let
-                           (map (lambda (arg) (B:Val arg (V:Rsel (V:Var 'clos) arg)))
-                                clos-args )
+                           (filter-map (lambda (arg)
+                                         (let ((dflt (B:Val arg (V:Rsel (V:Var 'clos) arg))))
+                                           (case arg
+                                             ((p)  (if has-params? dflt #f)) 
+                                             ((fld) (if has-fields? dflt #f))
+                                             (else  dflt))))
+                                       clos-args )
                            (random-decls
                             (E:Ret 
                              (V:Fn '(t y dy_out)
@@ -785,17 +793,16 @@
                                                               (d     . ,(V:Var 'd))
                                                               (r     . ,(V:Var 'r))
                                                               (ext   . ,(V:Var 'ext))
-                                                              (extev . ,(V:Var 'extev))
-                                                              (h     . ,(V:Var 'h))
-                                                              (x     . ,(V:Var 'x))
-                                                              (y     . ,(V:Var 'y))
-                                                              (yout  . ,(V:Var 'yout))
-                                                              (err   . ,(V:Var 'err)))
+                                                              (extev . ,(V:Var 'extev)))
                                                             libs))
+                                                          (V:Var 'h)
+                                                          (V:Var 'x)
+                                                          (V:Var 'y)
+                                                          (V:Var 'yout)
                                                           ))
                                               ))
-                                 )
-                           ))
+                                 ))
+                     )
                     
                     (has-conds?
                      (V:Op 'EventStepper
@@ -806,15 +813,13 @@
                                                             `((p     . ,(V:Var 'p))
                                                               (fld   . ,(V:Var 'fld))
                                                               (ext   . ,(V:Var 'ext))
-                                                              (extev . ,(V:Var 'extev))
-                                                              (h     . ,(V:Var 'h))
-                                                              (x     . ,(V:Var 'x))
-                                                              (y     . ,(V:Var 'y))
-                                                              (yout  . ,(V:Var 'yout))
-                                                              (err   . ,(V:Var 'err)))
+                                                              (extev . ,(V:Var 'extev)))
                                                             libs))
-                                                           )
-                                                    ))
+                                                           (V:Var 'h)
+                                                           (V:Var 'x)
+                                                           (V:Var 'y)
+                                                           (V:Var 'yout))
+                                                     ))
                                        ))
                            ))
                     
@@ -827,14 +832,12 @@
                                                              `((p     . ,(V:Var 'p))
                                                                (fld   . ,(V:Var 'fld))
                                                                (ext   . ,(V:Var 'ext))
-                                                               (extev . ,(V:Var 'extev))
-                                                               (h     . ,(V:Var 'h))
-                                                               (x     . ,(V:Var 'x))
-                                                               (y     . ,(V:Var 'y))
-                                                               (yout  . ,(V:Var 'yout))
-                                                               (err   . ,(V:Var 'err)))
+                                                               (extev . ,(V:Var 'extev)))
                                                              libs))
-                                                           ))
+                                                           (V:Var 'h)
+                                                           (V:Var 'x)
+                                                           (V:Var 'y)
+                                                           (V:Var 'yout)))
                                                ))
                                   ))
                      ))
@@ -877,7 +880,7 @@
                           (list 
                            (V:Fn '(p fld) 
                                  (E:Ret (if has-regimes?
-                                            (V:Op 'RegimeCondition  (list (V:Op 'make_regime_cond (list (V:Var 'p) (V:Var 'fld) fnval))))
+                                            (V:Op 'RegimeCondition  (list (V:Op 'make_cond (list (V:Var 'p) (V:Var 'fld) fnval))))
                                             (V:Op 'SCondition (list (V:Op 'make_cond (list (V:Var 'p) (V:Var 'fld) fnval))))
                                             )
                                         ))
@@ -1449,8 +1452,6 @@ EOF
         ("val c_cond_eval = _import * : "
          "MLton.Pointer.t -> real * real array * real array * real array * real array * real array * real array * real array  -> unit;", nll)
         ("val cond_cb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
-        ("fun make_regime_cond (p,fld,f) = let val fe = c_regime_cond_eval cond_cb in "
-         "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,fld,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
         ("fun make_cond (p,fld,f) = let val fe = c_cond_eval cond_cb in "
          "fn(t,y,c,ext,extev,c_out) => (fe (t,p,fld,y,c,ext,extev,c_out); c_out) end" ,nll)
         ("val ode_cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll))

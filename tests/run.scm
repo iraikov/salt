@@ -423,11 +423,11 @@
 
 (test-model 'iafrefr iafrefr  compile: #t)
 
-;; (test-model 'adex adex compile: #t)
+(test-model 'adex adex compile: #t)
 
-;; (test-model 'hr hr compile: #t)
+(test-model 'hr hr compile: #t)
 
-;; (test-model 'wb wb compile: #t)
+(test-model 'wb wb compile: #t)
 
 ;(test-model 'iafsyn iafsyn)
 

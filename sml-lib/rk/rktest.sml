@@ -9,10 +9,10 @@ structure State: STATE =
 struct
 
 type state = real
-fun sum_fn (a,b,y) = Real.+(a,b)
-fun sc_fn  (a,b,y) = Real.* (a,b)
-fun copy_fn (a,b)  = a
-fun alloc_fn ()   = 0.0
+fun sum (a,b,y) = Real.+(a,b)
+fun scale  (a,b,y) = Real.* (a,b)
+fun copy (a,b)  = a
+fun state ()   = 0.0
 
 end
     
@@ -55,7 +55,7 @@ fun gen_soln1 (integrator,h,t,st) =
 
 fun gen_soln2 (integrator,h,t,st) =
   let 
-      val (stn,en) = integrator (t,st,st,st)
+      val (stn,en) = integrator (t,st,st)
       val tn       = Real.+(t,h)
   in 
       if t >= 5.0
@@ -99,12 +99,12 @@ fun solver2 (integrator,stats) =
 
 fun gen_soln3 (integrator,interp,h,t,st) =
   let 
-      val (stn,en,inptbl) = integrator (t,st,st,st)
+      val (stn,en,inptbl) = integrator (t,st,st)
       val tn       = Real.+(t,h)
   in 
       if t >= 5.0
       then (putStr (showst (tn,stn));
-            putStrLn ("\t" ^ (showReal (interp (h, inptbl, t, st) (1.0, st)))))
+            putStrLn ("\t" ^ (showReal (interp (h, inptbl, t, st) 1.0))))
       else gen_soln3 (integrator,interp,h,tn,stn)
   end
 
