@@ -86,7 +86,8 @@ and brent_int_swap xdelta ydelta f a fa b fb c fc mflag d i =
 fun error_bracket (loc, a, fa, b, fb) =
   raise Fail (loc ^ ": root must be bracketed:" ^
               " f(" ^ (Real.toString a) ^ ") = " ^ (Real.toString fa) ^ 
-              " f(" ^ (Real.toString b) ^ ") = " ^ (Real.toString fa))
+              " f(" ^ (Real.toString b) ^ ") = " ^ (Real.toString fb) ^
+              " fa * fb = " ^ (Real.toString (fa * fb)))
         
 fun brent delta f a b =
   let val fa = f a 

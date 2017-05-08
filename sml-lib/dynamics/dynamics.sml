@@ -60,9 +60,9 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val evtol = 1E~15                             
-val tol = ref (SOME (Real.Math.pow (10.0, ~7.0)))
-
+val evtol   = 1E~15                             
+val tol     = ref (SOME (Real.Math.pow (10.0, ~7.0)))
+val maxstep = ref 10.0
                 
 datatype ('a, 'b) either = Left of 'a | Right of 'b
 
@@ -73,12 +73,30 @@ fun predictor tol (h,ys) =
       val e  = Array.foldl (fn (y,ax) => Real.+ ((abs y),ax)) 0.0 ys
   in 
       if e < lb*tol
-      then Right (1.414*h)	(* step too small, accept but grow *)
+      then Right (min(1.414*h, (!maxstep))) (* step too small, accept but grow *)
       else (if e < ub*tol 
             then Right (h)	(* step just right *)
             else Left (0.5*h)) (* step too large, reject and shrink *)
   end
 
+(* FIXME: Equation 391a in Butcher p. 293 *)
+(*
+fun predictor p tol (h,ys) =
+  let open Real
+      val lb = 0.5
+      val ub = 0.9
+      val f  = 2.0
+      val e  = Array.foldl (fn (y,ax) => Real.+ ((abs y),ax)) 0.0 ys
+      val r  = max(lb, min (f, ub * (exp (tol / e, 1.0 / (p + 1.0)))))
+  in 
+      if e < lb*tol
+      then Right (r*h)	(* step too small, accept but grow *)
+      else (if e < ub*tol 
+            then Right (h)	(* step just right *)
+            else Left (r*h)) (* step too large, reject and shrink *)
+  end
+*)
+      
 type error_state   = real * cont_state
 
 exception ConvergenceError
@@ -176,7 +194,6 @@ fun csum (x, cx, h) =
       (x', cx')
   end
 
-(* Fixed time step integrator *)
 
 fun thr (v1) = 
     let
@@ -358,29 +375,33 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val (rootp, e_x, e_y) =
                      case posdetect (x,e,x',e') of
                          SOME (i,_,_,_,_) =>
-                         let
-                             val finterp' = finterp (h,w,x,y)
-                             fun evtest (theta) =
-                               let
-                                   val _ = if debug
-                                           then Printf.printf `"RootStep.evtest: theta = "R
-                                                              `"h = "R `" x = "R 
-                                                              `"\n" $ theta h x
-                                           else ()
-                                   val e_x = x+theta*h
-                                   val e_y = finterp' theta
-                                   val _ = if debug
-                                           then Printf.printf `"RootStep.evtest: theta = "R
-                                                              `" e_x = "R `" e_y = "RA 
-                                                              `"\n" $ theta e_x e_y
-                                           else ()
-                               in
-                                   getindex(fcond(e_x,e_y,e,d,r,ext,extev,enext), i)
-                               end
-                             val theta = FindRoot.brent evtol evtest 0.0 1.0
-                         in
-                             (true, x+theta*h, finterp' theta)
-                         end
+                         if getindex(e',i) <= evtol
+                         then (true, x', y')
+                         else 
+                             (let
+                                 val finterp' = finterp (h,w,x,y)
+                                 fun evtest (theta) =
+                                   let
+                                       val _ = if debug
+                                               then Printf.printf `"RootStep.evtest: theta = "R
+                                                                  `" h = "R `" x = "R 
+                                                                  `"\n" $ theta h x
+                                               else ()
+                                       val e_x = x+theta*h
+                                       val e_y = finterp' theta
+                                       val res = getindex(fcond(e_x,e_y,e,d,r,ext,extev,enext), i)
+                                       val _ = if debug
+                                               then Printf.printf `"RootStep.evtest: theta = "R
+                                                                  `" e_x = "R `" e_y = "RA `" res = "R
+                                                                  `"\n" $ theta e_x e_y res
+                                               else ()
+                                   in
+                                       res
+                                   end
+                                 val theta = FindRoot.brent evtol evtest 0.0 1.0
+                             in
+                                 (true, x+theta*h, finterp' theta)
+                             end)
                       |  NONE => (false, x', y')
              in
                  if rootp
@@ -466,11 +487,6 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                            else ()
                                    val e_x = x+theta*h
                                    val e_y = finterp' theta
-                                   val _ = if debug
-                                           then Printf.printf `"RootStep.evtest: theta = "R
-                                                              `" e_x = "R `" e_y = "RA 
-                                                              `"\n" $ theta e_x e_y
-                                           else ()
 
                                in
                                    getindex(fcond(e_x,e_y,e,ext,extev,enext), i)
@@ -541,7 +557,6 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
     end
 | integral _ =
   raise Fail "integral: unsupported stepper configuration"
-
-
+         
 
 end
