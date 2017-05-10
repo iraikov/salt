@@ -44,6 +44,7 @@ open Math
 open SignalMath
 
 val debug = false
+val trace = false
 
 val B = Printf.B       
 val I = Printf.I
@@ -65,6 +66,7 @@ val tol     = ref (SOME (Real.Math.pow (10.0, ~7.0)))
 val maxstep = ref 10.0
                 
 datatype ('a, 'b) either = Left of 'a | Right of 'b
+datatype ('a, 'b, 'c) ternary = Near of 'a | Mid of 'b | Far of 'c
 
 fun predictor tol (h,ys) =
   let open Real
@@ -102,6 +104,11 @@ type error_state   = real * cont_state
 exception ConvergenceError
 
 datatype model_root = RootBefore | RootFound of real list | RootAfter of real list | RootStep of real list 
+
+fun showRoot (RootFound lst) = ("RootFound " ^ (String.concatWith ", " (map Real.toString lst)))
+  | showRoot (RootStep lst)  = ("RootStep " ^ (String.concatWith ", " (map Real.toString lst)))
+  | showRoot (RootAfter lst)  = ("RootAfter " ^ (String.concatWith ", " (map Real.toString lst)))
+  | showRoot RootBefore    = "RootBefore"
                              
 datatype model_state = 
          RegimeState of real * real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * 
@@ -195,26 +202,16 @@ fun csum (x, cx, h) =
   end
 
 
-fun thr (v1) = 
-    let
-        val s1 = Real.sign v1
-    in
-        case s1 of
-            1 => true
-          | 0 => true
-          | _ => false
-    end
-
-fun thr2 (v1,v2) = 
+fun thr2 (i,v1,v2) = 
     let
         val s1 = Real.sign v1
         val s2 = Real.sign v2
     in
         case (s1,s2) of
-           (~1,1) => true
-         | (~1,0) => true
-         | (0,1) => true
-         | _ => false
+           (~1,1) => SOME (Mid i)
+         | (~1,0) => SOME (Far i)
+         | (0,1)  => SOME (Near i)
+         | _      => NONE
     end
 
 fun fixthr (v) =
@@ -224,25 +221,23 @@ fun fixthr (v) =
 fun posdetect (x, e, x', e') =
   let
       fun minthr (i,v1,v2,optval) =
-        (if debug
+        (if trace
          then Printf.printf `"posdetect: i = "I `" v1 = "R `" v2 = "R`"\n" $ i v1 v2
          else ();
-         if thr2 (v1,v2)
-         then (case optval of
-                   SOME (i',v,v') => (if v1<v then SOME (i,v1,v2) else optval)
-                 | NONE => SOME (i,v1,v2))
-         else optval)
+         case thr2 (i,v1,v2) of
+             SOME t =>
+             (case optval of
+                  SOME (_,v,v') => (if v1<v then SOME (t,v1,v2) else optval)
+                | NONE => SOME (t,v1,v2))
+          | NONE => optval)
   in
-      (*if debug
-      then Printf.printf `"posdetect: e = "RA `" e' = "RA `"\n" $ e e'
-      else ();*)
       if (x' > x)
       then 
            (case vfoldpi2 minthr (e, e') of
-                SOME (i,ev,ev') => (if debug
+                SOME (t,ev,ev') => (if trace
                                     then Printf.printf `"posdetect: x = "R `" ev = "R `" x' = "R `" ev' = "R `"\n" $ x ev x' ev'
                                     else (); 
-                                    SOME  (i, x, ev, x', ev'))
+                                    SOME  (t, x, ev, x', ev'))
               | NONE => NONE)
       else NONE
   end
@@ -358,7 +353,10 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
       val fstepper = adaptive_regime_stepper stepper
 
       fun integral' (RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,(h,err),root)) =
-        (case root of
+        (if not (h > 0.0)
+         then raise Fail ("Dynamics.integral: RegimeState: zero time step (root=" ^ (showRoot root) ^ ")")
+         else ();
+         case root of
              RootBefore =>
              let
                  val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
@@ -372,12 +370,18 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val (x',cx')  = csum (x,cx,h) 
                  val (y',h',err',w) = fstepper (d,r,ext,extev,h,x,y,ynext,err)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
-                 val (rootp, e_x, e_y) =
+                 val _ = if debug
+                         then Printf.printf `"RootStep: h' = "R `" x' = "R`"\n" $ h' x'
+                         else ()
+                 val rootval =
                      case posdetect (x,e,x',e') of
-                         SOME (i,_,_,_,_) =>
-                         if getindex(e',i) <= evtol
-                         then (true, x', y')
-                         else 
+                         SOME (t,_,_,_,_) =>
+                         (case t of
+                             Near i => (* threshold crossing is at first time point *)
+                             SOME (t, x, y)
+                           | Far i =>  (* threshold crossing is at second time point *)
+                             SOME (t, x', y')
+                           | Mid i => 
                              (let
                                  val finterp' = finterp (h,w,x,y)
                                  fun evtest (theta) =
@@ -400,12 +404,27 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                    end
                                  val theta = FindRoot.brent evtol evtest 0.0 1.0
                              in
-                                 (true, x+theta*h, finterp' theta)
-                             end)
-                      |  NONE => (false, x', y')
+                                 SOME (t, x+theta*h, finterp' theta)
+                             end))
+                      |  NONE => NONE
              in
-                 if rootp
-                 then (if x' > e_x
+                 case rootval of
+                     SOME (Near i,e_x,e_y) =>
+                     (if debug
+                      then Printf.printf `"RootStep: Near: " `" x = "R 
+                                         `" y' = "R
+                                         `"\n" $ x (getindex(y',0))
+                      else ();
+                      RegimeState(x,cx,y,e,d,r,ext,extev,y,yrsp,e,(h,err),RootFound (h::hs)))
+                   | SOME (Far i,e_x,e_y) =>
+                     (if debug
+                      then Printf.printf `"RootStep: x = "R 
+                                         `" y' = "R
+                                         `"\n" $ x (getindex(y',0))
+                      else ();
+                      RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootFound hs))
+                   | SOME (Mid i,e_x,e_y) =>
+                     (if x' > e_x
                        then
                            let
                                val x'' = e_x
@@ -422,18 +441,25 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                            RootFound (if h''>0.0 then h''::hs else hs))
                            end
                        else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootFound hs))
-                 else (case hs of [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootBefore)
-                               | _ => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootStep hs))
+                   | NONE => (case hs of
+                                  [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootBefore)
+                                | _ => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootStep hs))
              end
            | RootFound hs =>
              let 
                  val (y',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
                                                     (x,y,e,d,r,ext,extev,yrsp)
+                 val _ = if debug
+                         then Printf.printf `"RootFound: x = "R `" y' = "R `"\n" $ x (getindex(y',0))
+                         else ()
              in
                  RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,(h,err),RootAfter hs)
              end
            | RootAfter [] =>
              let 
+                 val _ = if debug
+                         then Printf.printf `"RootAfter: x = "R `" y = "R `" h = "R `"\n" $ x (getindex(y,0)) h
+                         else ()
                   val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
              in
                  RegimeState(x,cx,y,e',d,r,ext,extev,ynext,y,e,(h,err),RootBefore)
@@ -443,8 +469,11 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val (x',cx')  = csum (x,cx,evtol)
                  val (y',h',err',w) = fstepper (d,r,ext,extev,evtol,x,y,ynext,err)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
+                 val _ = if debug
+                         then Printf.printf `"RootAfter: x' = "R `" y' = "R `" h = "R `"\n" $ x' (getindex(y',0)) h
+                         else ()
              in
-                 RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootStep ((h1-evtol)::hs))
+                 RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h,err),RootStep ((h1-evtol)::hs))
              end
            | _ => raise Fail "integral: invalid arguments to regime stepper")
             
@@ -458,7 +487,10 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
         val fstepper = adaptive_stepper stepper
 
         fun integral' (EventState(x,cx,y,e,ext,extev,ynext,yrsp,enext,(h,err),root)) =
-          (case root of
+          (if not (h > 0.0)
+           then raise Fail ("Dynamics.integral: EventState: zero time step (root=" ^ (showRoot root) ^ ")")
+           else ();
+           case root of
                RootBefore =>
                let
                    val e' = fixthr (fcond (x,y,e,ext,extev,enext))
@@ -473,47 +505,60 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                    val (x',cx')  = csum (x,cx,h)
                    val (y',h',err',w) = fstepper (ext,extev,h,x,y,ynext,err)
                    val e'  = fixthr (fcond (x',y',e,ext,extev,enext))
-                   val (rootp, e_x, e_y) =
+                   val rootval =
                      case posdetect (x,e,x',e') of
-                         SOME (i,_,_,_,_) =>
-                         let
-                             val finterp' = finterp (h,w,x,y)
-                             fun evtest (theta) =
-                               let
-                                   val _ = if debug
-                                           then Printf.printf `"RootStep.evtest: theta = "R
-                                                              `" h = "R `" x = "R 
-                                                              `"\n" $ theta h x
-                                           else ()
-                                   val e_x = x+theta*h
-                                   val e_y = finterp' theta
-
-                               in
-                                   getindex(fcond(e_x,e_y,e,ext,extev,enext), i)
-                               end
-                             val theta = FindRoot.brent evtol evtest 0.0 1.0
-                         in
-                             (true, x+theta*h, finterp' theta)
-                         end
-                      |  NONE => (false, x', y')
+                         SOME (t,_,_,_,_) =>
+                         (case t of
+                             Near i => (* threshold crossing is at first time point *)
+                             SOME (t, x, y)
+                           | Far i =>  (* threshold crossing is at second time point *)
+                             SOME (t, x', y')
+                           | Mid i => 
+                             (let
+                                 val finterp' = finterp (h,w,x,y)
+                                 fun evtest (theta) =
+                                   let
+                                       val _ = if debug
+                                               then Printf.printf `"RootStep.evtest: theta = "R
+                                                                  `" h = "R `" x = "R 
+                                                                  `"\n" $ theta h x
+                                               else ()
+                                       val e_x = x+theta*h
+                                       val e_y = finterp' theta
+                                                          
+                                   in
+                                       getindex(fcond(e_x,e_y,e,ext,extev,enext), i)
+                                   end
+                                 val theta = FindRoot.brent evtol evtest 0.0 1.0
+                             in
+                                 SOME (t, x+theta*h, finterp' theta)
+                             end))
+                      | NONE => NONE
                in
-                   if rootp
-                   then (let
-                            val x'' = e_x
-                            val y'' = y'
-                            val _   = Array.copy {src=e_y, dst=y'', di=0}
-                            val h'' = x'-x''
-                            val _ = if debug
-                                    then Printf.printf `"RootStep: x' = "R `" x'' = "R 
-                                                       `" h'' = "R `" y'' = "R
+                 case rootval of
+                     SOME (Near i,e_x,e_y) =>
+                     EventState(x,cx,y,e,ext,extev,y,yrsp,e,(h,err),RootFound (h::hs))
+                   | SOME (Far i,e_x,e_y) =>
+                     EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootFound hs)
+                   | SOME (Mid i,e_x,e_y) =>
+                     (let
+                         val x'' = e_x
+                         val y'' = y'
+                         val _   = Array.copy {src=e_y, dst=y'', di=0}
+                         val h'' = x'-x''
+                         val _ = if debug
+                                 then Printf.printf `"RootStep: x' = "R `" x'' = "R 
+                                                    `" h'' = "R `" y'' = "R
                                                        `"\n" $ x' x'' h'' (getindex(y'',0))
-                                    else ()
-                        in
-                            EventState(x'',0.0,y'',e',ext,extev,y,yrsp,e,(h',err'),
-                                       RootFound (if h''>0.0 then h''::hs else hs))
-                        end)
-                   else (case hs of [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootBefore)
-                                      | _ => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootStep hs))
+                                 else ()
+                     in
+                         EventState(x'',0.0,y'',e',ext,extev,y,yrsp,e,(h',err'),
+                                    RootFound (if h''>0.0 then h''::hs else hs))
+                     end)
+                   | NONE =>
+                     (case hs of
+                          [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootBefore)
+                        | _  => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootStep hs))
                end
              | RootFound hs =>
                let
@@ -526,14 +571,14 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                    val (x',cx')  = csum (x,cx,evtol)
                    val (y',h',err',w)  = fstepper (ext,extev,evtol,x,y,ynext,err)
                    val e'  = fixthr (fcond (x',y',e,ext,extev,enext))
-                   (*val _   = if debug
-                             then Printf.printf `"RootAfter: x' = "R `" e' = "RA 
-                                                `" y' = "RA `"\n" $ x' e' y'
-                             else ()*)
+                   val _   = if debug
+                             then Printf.printf `"RootAfter: x' = "R `" e' = "R
+                                                `" y' = "R `"\n" $ x' (getindex(e',0)) (getindex(y',0))
+                             else ()
                in
                    case hs of
-                       [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootBefore)
-                    |  h1::hs => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootStep ((h1-evtol)::hs))
+                       [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h,err),RootBefore)
+                    |  h1::hs => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h,err),RootStep ((h1-evtol)::hs))
                end
              |  _ => raise Fail "integral: invalid arguments to event stepper")
           | integral' _ =
