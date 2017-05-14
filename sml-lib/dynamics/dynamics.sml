@@ -103,9 +103,9 @@ type error_state   = real * cont_state
 
 exception ConvergenceError
 
-datatype model_root = RootBefore | RootFound of real list | RootAfter of real list | RootStep of real list 
+datatype model_root = RootBefore | RootFound of int * real list | RootAfter of real list | RootStep of real list 
 
-fun showRoot (RootFound lst) = ("RootFound " ^ (String.concatWith ", " (map Real.toString lst)))
+fun showRoot (RootFound (i,lst)) = ("RootFound " ^ (Int.toString i) ^ " " ^ (String.concatWith ", " (map Real.toString lst)))
   | showRoot (RootStep lst)  = ("RootStep " ^ (String.concatWith ", " (map Real.toString lst)))
   | showRoot (RootAfter lst)  = ("RootAfter " ^ (String.concatWith ", " (map Real.toString lst)))
   | showRoot RootBefore    = "RootBefore"
@@ -140,7 +140,6 @@ val update = Unsafe.Array.update
 
 val vfind = Array.find
 val vfindi = Array.findi
-fun vset v a = Array.modify (fn (x) => v) a
                             
 fun vmap f v u = 
     let
@@ -261,7 +260,7 @@ fun condApply (SOME (RegimeCondition fcond)) =
   | condApply (NONE) = raise Fail "condApply"
                                    
 fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
-  fn(x,y,e,d,r,ext,extev,yrsp) =>
+  fn(i,x,y,e,d,r,ext,extev,yrsp) =>
      let
          val y'  = case fpos of 
                        SOME (RegimeResponse f) =>
@@ -276,8 +275,6 @@ fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
                          SOME f => f (x,y,e,d)
                        | NONE => d)
          val r'  = fregime (e,r)
-         val _ = vset 0.0 ext
-         val _ = vset posInf extev
      in
          (y'',d',r')
      end
@@ -286,14 +283,12 @@ fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
 fun evresponse (fpos,fneg) =
     case fpos of 
         SOME (SResponse fpos) =>
-        (fn(x,y,e,ext,extev,yrsp) =>
+        (fn(i,x,y,e,ext,extev,yrsp) =>
             let 
                 val y' = case fneg of 
                              NONE => fpos(x,y,e,ext,extev,yrsp)
                            | SOME (SResponse f) => f (x,fpos(x,y,e,ext,extev,yrsp),e,ext,extev,yrsp)
                            | _ => raise Fail "evresponse: EventState integral response"
-                val _ = vset 0.0 ext
-                val _ = vset posInf extev
             in
                 y'
             end)
@@ -417,14 +412,14 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                          `" y' = "R
                                          `"\n" $ x (getindex(y',0))
                       else ();
-                      RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,(h,err),RootFound (h::hs)))
+                      RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,(h,err),RootFound (i,h::hs)))
                    | SOME (Far i,e_x,e_y) =>
                      (if debug
                       then Printf.printf `"RootStep: x = "R 
                                          `" y' = "R
                                          `"\n" $ x (getindex(y',0))
                       else ();
-                      RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootFound hs))
+                      RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootFound (i,hs)))
                    | SOME (Mid i,e_x,e_y) =>
                      (if x' > e_x
                        then
@@ -440,17 +435,17 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                        else ()
                            in
                                RegimeState(x'',0.0,y'',e',d,r,ext,extev,y,yrsp,e,(h',err'),
-                                           RootFound (if h''>0.0 then h''::hs else hs))
+                                           RootFound (i,if h''>0.0 then h''::hs else hs))
                            end
-                       else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootFound hs))
+                       else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootFound (i,hs)))
                    | NONE => (case hs of
                                   [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootBefore)
                                 | _ => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootStep hs))
              end
-           | RootFound hs =>
+           | RootFound (i,hs) =>
              let 
                  val (y',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
-                                                    (x,y,e,d,r,ext,extev,yrsp)
+                                                    (i,x,y,e,d,r,ext,extev,yrsp)
                  val _ = if debug
                          then Printf.printf `"RootFound: x = "R `" y' = "R `"\n" $ x (getindex(y',0))
                          else ()
@@ -539,9 +534,9 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                in
                  case rootval of
                      SOME (Near i,e_x,e_y) =>
-                     EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,(h,err),RootFound (h::hs))
+                     EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,(h,err),RootFound (i,h::hs))
                    | SOME (Far i,e_x,e_y) =>
-                     EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootFound hs)
+                     EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootFound (i,hs))
                    | SOME (Mid i,e_x,e_y) =>
                      (let
                          val x'' = e_x
@@ -555,16 +550,16 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                  else ()
                      in
                          EventState(x'',0.0,y'',e',ext,extev,y,yrsp,e,(h',err'),
-                                    RootFound (if h''>0.0 then h''::hs else hs))
+                                    RootFound (i,if h''>0.0 then h''::hs else hs))
                      end)
                    | NONE =>
                      (case hs of
                           [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootBefore)
                         | _  => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootStep hs))
                end
-             | RootFound hs =>
+             | RootFound (i,hs) =>
                let
-                   val y' = evresponse (fpos,fneg) (x,y,e,ext,extev,yrsp)
+                   val y' = evresponse (fpos,fneg) (i,x,y,e,ext,extev,yrsp)
                in
                    EventState(x,cx,y',e,ext,extev,y,ynext,enext,(h,err),RootAfter hs)
                end
