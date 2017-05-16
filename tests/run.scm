@@ -24,7 +24,7 @@
     ((_ exp ...)
      (run:execute* (list `exp ...)))))
 
-(define (test-model name model #!key (compile #f) (dir "tests"))
+(define (test-model name model #!key (solver 'rkdp) (compile #f) (dir "tests"))
   (pp model)
 
   (define elab (elaborate model))
@@ -41,13 +41,14 @@
          (mlb-path (make-pathname dir (string-append (->string name) "_run.mlb")))
          (sml-port (open-output-file sml-path))
          )
-    (codegen-ODE/C name sim out: c-port libs: '(interp))
-    (codegen-ODE/ML name sim out: sml-port libs: '(interp))
+    (codegen-ODE/C name sim out: c-port libs: '())
+    (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver)
     (close-output-port sml-port)
     (close-output-port c-port)
     (if compile
         (run (mlton 
-              -profile alloc
+              ;-profile alloc
+              -const "'Exn.keepHistory true'"
               -default-ann "'allowFFI true'"
               -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
               -mlb-path-var "'SALT_LIB $(SALT_HOME)/sml-lib'"
@@ -419,7 +420,7 @@
 
 (test-model 'iaf iaf compile: #t)
 
-(test-model 'izhfs izhfs compile: #t)
+(test-model 'izhfs izhfs compile: #t solver: 'rkoz4)
 
 (test-model 'iafrefr iafrefr  compile: #t)
 

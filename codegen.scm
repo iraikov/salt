@@ -654,13 +654,13 @@
                          (V:Op 'make_real_initial
                                (list (V:C (length params))
                                      (V:Fn '(p_out) (E:Begin (codegen-set-stmts codegen-expr1 params 'p_out)))))
-                         (V:Fn '(p_out) (E:Ret (V:C 'empty_real_initial)))))
+                         (V:Fn '() (E:Ret (V:C 'empty_real_initial)))))
 
            (fieldfun (if has-fields?
                          (V:Op 'make_real_initial
                                (list (V:C (length fields))
                                      (V:Fn '(fld_out) (E:Begin (codegen-set-stmts codegen-expr1 fields 'fld_out)))))
-                         (V:Fn '(fld_out) (E:Ret (V:C 'empty_real_initial)))))
+                         (V:Fn '() (E:Ret (V:C 'empty_real_initial)))))
 
            (initfun  
             (let ((stmts (codegen-set-stmts codegen-expr1 ode-defs 'y_out)))
@@ -1390,12 +1390,12 @@
 	 ))
 
 
-(define (codegen-ODE/ML name sim #!key (out (current-output-port)) (mod #t) (libs '()))
+(define (codegen-ODE/ML name sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rkdp))
 
     (let ((sysdefs (codegen-ODE sim libs: libs)))
 
       (if mod (print-fragments
-               (list "structure Model =" nll
+               (list "structure Model :> MODEL =" nll
                      "struct" nll
                      nll)
                out))
@@ -1410,7 +1410,7 @@
               ))
        out)
 
-      (if mod (print-fragments (prelude/ML libs: libs) out))
+      (if mod (print-fragments (prelude/ML libs: libs solver: solver) out))
       
       (print-fragments
        (map (match-lambda
@@ -1430,7 +1430,7 @@
       ))
 
 
-(define (prelude/ML  #!key (csysname #f) (libs '()))
+(define (prelude/ML  #!key (csysname #f) (solver 'rkdp) (libs '()))
 `(
  #<<EOF
 structure ModelPrelude = ModelPreludeFn(val n = n
@@ -1440,6 +1440,16 @@ structure ModelPrelude = ModelPreludeFn(val n = n
 open ModelPrelude
 
 EOF
+
+,(case solver
+   ((rkdp rkoz3 rkoz4) `(
+                         (,(sprintf "val make_stepper = make_stepper_~A" solver) ,nll)
+                         (,(sprintf "val interpfun = interp_ce~A" solver) ,nll)
+                         ))
+   (else `(("val make_stepper = make_stepper_rkdp" ,nll)
+           ("val interpfun = interp_cerkdp" ,nll)
+           ))
+   )
 
 ,@(if csysname
       `(("open CRungeKutta" ,nll)

@@ -116,18 +116,12 @@ val _ = (case !optStatus of
 	     SOME msg => exitError (CommandLine.name(), msg)
 	   | NONE => ())
 		    
-val {is_help, is_time, is_timestep, is_tol, is_solver} = Options.getstate (opts)
+val {is_help, is_time, is_timestep, is_tol} = Options.getstate (opts)
 						                 
 val _ = if is_help then exitHelp (CommandLine.name()) else ()
 
 val h0     = case is_timestep of SOME dt => dt | NONE => 0.01
 val tstop = case is_time of SOME t => t | NONE => 150.0
-val solver = case is_solver of
-                 NONE => Model.cerkoz3
-              |  SOME "rkoz3" => Model.cerkoz3
-              |  SOME "rkoz4" => Model.cerkoz4
-              |  SOME "rkdp"  => Model.cerkdp
-              |  SOME x => raise Fail ("unknown solver " ^ x)
                                                       
 
 val f = D.integral(Model.odefun (p, fld),Model.interpfun,optApply Model.condfun (p, fld),

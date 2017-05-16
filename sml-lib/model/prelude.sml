@@ -30,13 +30,18 @@ fun make_cond (p, fld, f) = f
 
 structure RungeKutta = RungeKuttaFn(structure S = RKArrayState)
 open RungeKutta
-                                
-fun make_stepper deriv =
-  fn (clos: 'a, h, x, y, yout) => (cerkdp (deriv clos)) h (x,y,yout) 
-
-val interpfun = interp_cerkdp 
 
 val getindex = Unsafe.Array.sub
 val setindex = Unsafe.Array.update
+
+fun make_stepper_rkdp deriv =
+  fn (clos: 'a, h, x, y, yout) => (cerkdp (deriv clos)) h (x,y,yout) 
+
+fun make_stepper_rkoz4 deriv =
+  fn (clos: 'a, h, x, y, yout) => (cerkoz4 (deriv clos)) h (x,y,yout) 
+
+fun make_stepper_rkoz3 deriv =
+  fn (clos: 'a, h, x, y, yout) => (cerkoz3 (deriv clos)) h (x,y,yout) 
+
                    
 end
