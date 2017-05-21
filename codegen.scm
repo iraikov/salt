@@ -1395,7 +1395,7 @@
     (let ((sysdefs (codegen-ODE sim libs: libs)))
 
       (if mod (print-fragments
-               (list "structure Model :> MODEL =" nll
+               (list "structure Model =" nll
                      "struct" nll
                      nll)
                out))
