@@ -103,11 +103,11 @@ type error_state   = real * cont_state
 
 exception ConvergenceError
 
-datatype model_root = RootBefore | RootFound of int * real list | RootAfter of real list | RootStep of real list 
+datatype model_root = RootBefore | RootFound of int * real list | RootAfter of int * real list | RootStep of real list 
 
 fun showRoot (RootFound (i,lst)) = ("RootFound " ^ (Int.toString i) ^ " " ^ (String.concatWith ", " (map Real.toString lst)))
   | showRoot (RootStep lst)  = ("RootStep " ^ (String.concatWith ", " (map Real.toString lst)))
-  | showRoot (RootAfter lst)  = ("RootAfter " ^ (String.concatWith ", " (map Real.toString lst)))
+  | showRoot (RootAfter (i,lst))  = ("RootAfter " ^ (Int.toString i) ^ " " ^ (String.concatWith ", " (map Real.toString lst)))
   | showRoot RootBefore    = "RootBefore"
                              
 datatype model_state = 
@@ -450,9 +450,9 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          then Printf.printf `"RootFound: x = "R `" y' = "R `"\n" $ x (getindex(y',0))
                          else ()
              in
-                 RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,(h,err),RootAfter hs)
+                 RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,(h,err),RootAfter (i,hs))
              end
-           | RootAfter [] =>
+           | RootAfter (i,[]) =>
              let 
                  val _ = if debug
                          then Printf.printf `"RootAfter: x = "R `" y = "R `" h = "R `"\n" $ x (getindex(y,0)) h
@@ -461,7 +461,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
              in
                  RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,(h,err),RootBefore)
              end
-           | RootAfter (h1::hs) =>
+           | RootAfter (i,h1::hs) =>
              let 
                  val (x',cx')  = csum (x,cx,evtol)
                  val (y',h',err',w) = fstepper (d,r,ext,extev,evtol,x,y,ynext,err)
@@ -561,9 +561,9 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                let
                    val y' = evresponse (fpos,fneg) (i,x,y,e,ext,extev,yrsp)
                in
-                   EventState(x,cx,y',e,ext,extev,y,ynext,enext,(h,err),RootAfter hs)
+                   EventState(x,cx,y',e,ext,extev,y,ynext,enext,(h,err),RootAfter (i,hs))
                end
-             | RootAfter hs =>
+             | RootAfter (i,hs) =>
                let
                    val (x',cx')  = csum (x,cx,evtol)
                    val (y',h',err',w)  = fstepper (ext,extev,evtol,x,y,ynext,err)
