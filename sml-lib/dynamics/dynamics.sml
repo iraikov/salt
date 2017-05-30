@@ -61,8 +61,8 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val evtol   = 1E~15                             
-val tol     = ref (SOME (Real.Math.pow (10.0, ~7.0)))
+val evtol   = 1E~15
+val tol     = ref (SOME (1E~10))
 val maxstep = ref 10.0
                 
 datatype ('a, 'b) either = Left of 'a | Right of 'b
