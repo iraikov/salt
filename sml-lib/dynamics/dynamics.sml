@@ -428,7 +428,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          then Printf.printf `"RootBefore: x = "R `" e'[0] = "R`"\n" $ x (getindex(e',0))
                          else ()
              in
-                 integral'(RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,(h,err),RootStep [h]))
+                 RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,(h,err),RootStep [h])
              end
            | RootStep (h::hs) =>
              let
@@ -532,7 +532,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                let
                    val e' = fixthr (fcond (x,y,e,ext,extev,enext))
                in
-                   integral'(EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,(h,err),RootStep [h]))
+                   EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,(h,err),RootStep [h])
                end
              | RootStep (h::hs) =>
                let
