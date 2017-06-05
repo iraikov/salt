@@ -61,7 +61,7 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val evtol   = 1E~15
+val evtol   = 1E~12
 val tol     = ref (SOME (1E~10))
 val maxstep = ref 10.0
                 
@@ -578,7 +578,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                end
              | RootAfter (i,hs) =>
                let
-                   val (x',cx')  = csum (x,cx,evtol)
+                   val (x',cx')  = csum (x,cx,Real.*(0.5,evtol))
                    val (y',h',err',w)  = fstepper (ext,extev,evtol,x,y,ynext,err)
                    val e'  = fixthr (fcond (x',y',e,ext,extev,enext))
                    val _   = if debug
