@@ -6,5 +6,9 @@ $(SML_LIB)/basis/unsafe.mlb
 local
 	state.sml
 in
-	structure State
+        signature ELEM
+        signature STATE
+	functor ArrayState
+        structure BoolArrayState
+        structure RealArrayState
 end

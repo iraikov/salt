@@ -435,7 +435,7 @@ val as_oz4 = ratToRCLs [[],
                        [~36764//408375, 767//1125, ~32708//136125, 210392//408375],
                        [1697//18876, RAT 0, 50653//116160, 299693//1626240, 3375//11648]]
 val r1_oz4 = [1697//18876, RAT 0, 50653//116160, 299693//1626240, 3375//11648]	
-val r2_oz4 = [101//63, RAT 0, ~1369//14520, 11849//14520]
+val r2_oz4 = [101//363, RAT 0, ~1369//14520, 11849//14520]
 val bs_oz4 = ratToRCL r1_oz4
 val ds_oz4 = ratToRCL (diffs (r1_oz4, r2_oz4))
 val rkoz4: stepper2 = core2 (cs_oz4, as_oz4, bs_oz4, ds_oz4)
@@ -456,6 +456,42 @@ val ws_oz4 = ratToRCLs [[RAT 1, ~104217//37466, 1806901//618189, ~866577//824252
 val cerkoz4: stepper3  = core3 (cs_oz4, as_oz4, bs_oz4, ds_oz4, ws_oz4)
 val show_cerkoz4 = rk_show3 ("Continuous Owren-Zennaro 4(3)", cs_oz4, as_oz4, bs_oz4, ds_oz4, ws_oz4)
 val interp_cerkoz4: hinterp = hinterp ws_oz4
+
+(* Owren-Zennaro, order 5/4 CERK method *)
+val cs_oz5 = ratToReals [RAT 0, 1//6, 1//4, 1//2, 1//2, 9//14, 7//8, RAT 1]
+val as_oz5 = ratToRCLs [[], 
+                       [1//6], 
+                       [1//16, 3//16], 
+                       [1//4, ~3//4, RAT 1],
+                       [~3//4, 15//4, RAT ~3, 1//2],
+                       [369//1372, ~243//343, 297//343, 1485//9604, 297//4802],
+                       [~133//4512, 1113//6016, 7945//16544, ~12845//24064, ~315//24064, 156065//198528],
+                       [83//945, RAT 0, 248//825, 41//180, 1//36, 2401//38610, 6016//20475]]
+                       
+val r1_oz5 = [83//945, RAT 0, 248//825, 41//180, 1//36, 2401//38610, 6016//20475]
+val r2_oz5 = [~1//9, RAT 0, 40//33, ~7//4, ~1//12, 343//198]
+val bs_oz5 = ratToRCL r1_oz5
+val ds_oz5 = ratToRCL (diffs (r1_oz5, r2_oz5))
+val rkoz5: stepper2 = core2 (cs_oz5, as_oz5, bs_oz5, ds_oz5)
+val show_rkoz5 = rk_show2 ("Owren-Zennaro 5(4)", cs_oz5, as_oz5, bs_oz5, ds_oz5)
+
+val bs_oz5_aux = ratToRCL r2_oz5
+val rkoz5_aux: stepper1 = core1 (cs_oz5, as_oz5, bs_oz5_aux)
+val show_rkoz5_aux = rk_show1 ("Owren-Zennaro (4)", cs_oz5, as_oz5, bs_oz5_aux)
+
+(* interpolation coeffs for continuous method *)
+val ws_oz5 = ratToRCLs [[RAT 1, ~3292//819, 17893//2457, ~4969//819, 596//315],
+                        [],
+                        [RAT 0, 5112//715, ~43568//2145, 1344//65, ~1984//275],
+                        [RAT 0, ~123//52, 3161//234, ~1465//78, 118//15],
+                        [RAT 0, ~63//52, 1061//234, ~413//78, RAT 2],
+                        [RAT 0, ~40817//33462, 60025//50193, 2401//1521, ~9604//6435],
+                        [RAT 0, 18048//5915, ~637696//52235, 96256//5915, ~48128//6825],
+                        [RAT 0, ~18//13, 75//13, ~109//13, RAT 4]]
+
+val cerkoz5: stepper3  = core3 (cs_oz5, as_oz5, bs_oz5, ds_oz5, ws_oz5)
+val show_cerkoz5 = rk_show3 ("Continuous Owren-Zennaro 5(4)", cs_oz5, as_oz5, bs_oz5, ds_oz5, ws_oz5)
+val interp_cerkoz5: hinterp = hinterp ws_oz5
 
                                     
 (* Dormand-Prince, order 5/4 (use 5th-order sol'n, coeffs chosen to

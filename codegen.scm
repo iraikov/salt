@@ -1442,7 +1442,7 @@ open ModelPrelude
 EOF
 
 ,(case solver
-   ((rkdp rkoz3 rkoz4) `(
+   ((rkdp rkoz3 rkoz4 rkoz5) `(
                          (,(sprintf "val make_stepper = make_stepper_~A" solver) ,nll)
                          (,(sprintf "val interpfun = interp_ce~A" solver) ,nll)
                          ))
@@ -1506,7 +1506,7 @@ EOF
                     "end" ,nll)))
            (,nll)
            ))
-       '(rkoz3 rkoz4 rkdp))
+       '(rkoz3 rkoz4 rkoz5 rkdp))
       ))
 )
 

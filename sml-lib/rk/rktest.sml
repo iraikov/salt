@@ -4,8 +4,8 @@
 
 structure RungeKuttaTest =
 struct
-
-structure State: STATE =
+    
+structure State: RKSTATE =
 struct
 
 type state = real
@@ -132,10 +132,12 @@ fun run() =
   putStrLn "#### Continuous Solvers";
   List.app solver3 [(cerkoz3, show_cerkoz3, interp_cerkoz3)];
   List.app solver3 [(cerkoz4, show_cerkoz4, interp_cerkoz4)];
+  List.app solver3 [(cerkoz5, show_cerkoz5, interp_cerkoz5)];
   List.app solver3 [(cerkdp, show_cerkdp,   interp_cerkdp)];
   putStrLn "#### Auxiliary Solvers: Error Estimators from Adaptives";
   List.app solver1 [(rkoz3_aux, show_rkoz3_aux),
                     (rkoz4_aux, show_rkoz4_aux),
+                    (rkoz5_aux, show_rkoz5_aux),
 		    (rkdp_aux, show_rkdp_aux)]
   )
 
