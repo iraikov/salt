@@ -505,7 +505,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
              let 
                  val hev       = Real.*(0.5,evtol)
                  val (x',cx')  = csum (x,cx,hev)
-                 val (y',h',err',w) = fstepper (d,r,ext,extev,evtol,x,y,ynext,err)
+                 val (y',h',err',w) = fstepper (d,r,ext,extev,hev,x,y,ynext,err)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
                  val _ = if debug
                          then Printf.printf `"RootAfter: x = "R `" y = "R `" x' = "R `" y' = "R `" h = "R `" h1 = "R `"\n" $ x (getindex(y,0)) x' (getindex(y',0)) h h1
@@ -586,7 +586,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                let
                    val hev       = Real.*(0.5,evtol)
                    val (x',cx')  = csum (x,cx,hev)
-                   val (y',h',err',w)  = fstepper (ext,extev,evtol,x,y,ynext,err)
+                   val (y',h',err',w)  = fstepper (ext,extev,hev,x,y,ynext,err)
                    val e'  = fixthr (fcond (x',y',e,ext,extev,enext))
                    val _   = if debug
                              then Printf.printf `"RootAfter: x' = "R `" e' = "R
