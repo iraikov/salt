@@ -24,10 +24,10 @@
  * e_{n+1} = h sum_{i=1}^s d_i k_i
  *
  * adaptive solvers with interpolation (CERK):
- *	cerkoz3, cerkoz4, cerkdp
+ *	cerkoz3, cerkoz4, cerkoz5, cerkdp
  *
  * auxiliary non-adaptive solvers (error estimators from the adaptive ones):
- *	rkoz3_aux, rkoz4_aux, rkdp_aux
+ *	rkoz3_aux, rkoz4_aux, rkoz5_aux, rkdp_aux
 *)
 
 signature RKSTATE =
@@ -449,7 +449,7 @@ val show_rkoz4_aux = rk_show1 ("Owren-Zennaro (3)", cs_oz4, as_oz4, bs_oz4_aux)
 val ws_oz4 = ratToRCLs [[RAT 1, ~104217//37466, 1806901//618189, ~866577//824252],
                         [],
                         [RAT 0, 861101//230560, ~2178079//380424, 12308679//5072320],
-                        [RAT 0, ~638869//293440, 6244423//5325936, ~7816583//10144640],
+                        [RAT 0, ~63869//293440, 6244423//5325936, ~7816583//10144640],
                         [RAT 0, ~1522125//762944, 982125//190736, ~624375//217984],
                         [RAT 0, 165//131, ~461//131, 296//131]]
 
@@ -486,7 +486,7 @@ val ws_oz5 = ratToRCLs [[RAT 1, ~3292//819, 17893//2457, ~4969//819, 596//315],
                         [RAT 0, ~123//52, 3161//234, ~1465//78, 118//15],
                         [RAT 0, ~63//52, 1061//234, ~413//78, RAT 2],
                         [RAT 0, ~40817//33462, 60025//50193, 2401//1521, ~9604//6435],
-                        [RAT 0, 18048//5915, ~637696//52235, 96256//5915, ~48128//6825],
+                        [RAT 0, 18048//5915, ~637696//53235, 96256//5915, ~48128//6825],
                         [RAT 0, ~18//13, 75//13, ~109//13, RAT 4]]
 
 val cerkoz5: stepper3  = core3 (cs_oz5, as_oz5, bs_oz5, ds_oz5, ws_oz5)
