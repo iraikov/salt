@@ -40,6 +40,9 @@ fun make_stepper_rkdp deriv =
 fun make_stepper_rkoz4 deriv =
   fn (clos: 'a, h, x, y, yout) => (cerkoz4 (deriv clos)) h (x,y,yout) 
 
+fun make_stepper_rkoz5 deriv =
+  fn (clos: 'a, h, x, y, yout) => (cerkoz5 (deriv clos)) h (x,y,yout) 
+
 fun make_stepper_rkoz3 deriv =
   fn (clos: 'a, h, x, y, yout) => (cerkoz3 (deriv clos)) h (x,y,yout) 
 
