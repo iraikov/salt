@@ -120,6 +120,9 @@ val {is_help, is_time, is_timestep, is_tol} = Options.getstate (opts)
 						                 
 val _ = if is_help then exitHelp (CommandLine.name()) else ()
 
+val _ = case is_tol of SOME tol => D.tol := (SOME tol)
+                     | NONE => ()
+                                                               
 val h0     = case is_timestep of SOME dt => dt | NONE => 0.01
 val tstop = case is_time of SOME t => t | NONE => 150.0
                                                       

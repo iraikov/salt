@@ -420,7 +420,7 @@
 
 (test-model 'iaf iaf compile: #t)
 
-(test-model 'izhfs izhfs compile: #t solver: 'rkoz4)
+(test-model 'izhfs izhfs compile: #t solver: 'rkoz5)
 
 (test-model 'iafrefr iafrefr  compile: #t)
 
@@ -430,7 +430,7 @@
 
 (test-model 'wb wb compile: #t)
 
-;(test-model 'iafsyn iafsyn)
+(test-model 'iafsyn iafsyn)
 
 
 
