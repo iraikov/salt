@@ -28,117 +28,73 @@ fun exact t = 1.75*Real.Math.exp(con*(t - t0))
 fun showReal n = Real.toString n
 
 val cb = _address "rhsfun" public: MLton.Pointer.t;
+val size_closure_cont = 4
 
-fun showst1 (t, y) = String.concat [showReal (Array.sub(y,0)), "\t", 
-                                    showReal (Array.sub(y,0) - (exact t))]
+fun showst (t, y, e) = String.concat [showReal (Array.sub(y,0)), "\t", 
+                                      showReal (Array.sub(y,0) - (exact t)), "\t",
+                                     showReal (Array.sub(e,0))]
 
-fun gen_soln1 (integrator,h,t,st) =
+fun gen_soln (integrator,interp,h,t,st,err) =
   let 
-      val stn = Array.array (1, 0.0)
-      val _   = integrator (h,t,st,stn)
-      val tn  = Real.+(t,h)
+      val (stn,en,inptbl) = integrator (h,t,st,st,err)
+      val tn       = Real.+(t,h)
   in 
       if t >= 5.0
-      then putStrLn (showst1 (tn,stn))
-      else gen_soln1 (integrator,h,tn,stn)
+      then (putStr (showst (tn,stn,en));
+            putStrLn ("\t" ^ (showReal (Array.sub (interp (h, inptbl, t, st) 1.0, 0)))))
+      else gen_soln (integrator,interp,h,tn,stn,err)
   end
 
-fun do_case1 (integrator) n =
-  let 
-      val h = if n < 0 then Real.Math.pow (2.0,Real.fromInt (~n)) 
-	      else Real.Math.pow (0.5,Real.fromInt n)
-      val sep = if n <= 4 then "\t\t" else "\t"
-  in
-      putStr (String.concat [(showReal h), sep]);
-      gen_soln1 (integrator,h,t0,y0)
-  end
-
-
-fun showst2 (t, y, e) = String.concat [showReal (Array.sub(y,0)), "\t", 
-                                       showReal (Array.sub(y,0) - (exact t)), "\t", 
-                                       showReal (Array.sub(e,0))]
-
-fun gen_soln2 (integrator,h,t,st) =
-  let 
-      val stn = Array.array (1, 0.0)
+fun do_case (integrator, interp) n =
+  let
       val err = Array.array (1, 0.0)
-      val _   = integrator (h,t,st,stn,err)
-      val tn  = Real.+(t,h)
-  in 
-      if t >= 5.0
-      then putStrLn (showst2 (tn,stn,err))
-      else gen_soln2 (integrator,h,tn,stn)
-  end
-
-fun do_case2 (integrator) n =
-  let 
-      val h = if n < 0 then Real.Math.pow (2.0,Real.fromInt (~n)) 
-	      else Real.Math.pow (0.5,Real.fromInt n)
+      val h   = if n < 0 then Real.Math.pow (2.0,Real.fromInt (~n)) 
+	        else Real.Math.pow (0.5,Real.fromInt n)
       val sep = if n <= 4 then "\t\t" else "\t"
   in
       putStr (String.concat [(showReal h), sep]);
-      gen_soln2 (integrator,h,t0,y0)
+      gen_soln (integrator,interp,h,t0,y0,err)
+  end
+
+fun solver (integrator,stats,interp) =
+  (putStrLn stats;
+   putStrLn "# step yf err uf";
+   List.app (do_case (integrator, interp))
+	    (List.tabulate (15, fn x => x - 2));
+   putStrLn "# All done!\n")
+
+
+fun run_h (integrator, interp) h =
+  let
+      val err = Array.array (1, 0.0)
+      val sep = "\t\t"
+  in
+      putStr (String.concat [(showReal h), sep]);
+      gen_soln (integrator,interp,h,t0,y0,err)
   end
 
 
-
-fun run1 (integrator) =
-  (putStrLn "# step yf err";
-   List.app (do_case1 integrator)
+fun run (integrator,interp) =
+  (putStrLn "# step yf delta err est";
+   List.app (do_case (integrator,interp))
 	    (List.tabulate (15, fn x => x - 2));
    putStrLn "# All done!\n")
 
-
-fun run2 (integrator) =
-  (putStrLn "# step yf err est";
-   List.app (do_case2 integrator)
-	    (List.tabulate (15, fn x => x - 2));
-   putStrLn "# All done!\n")
-
-
-val _ = let val stepper = make_crk3(1,cb)  
-            val p = Array.fromList [con]
-            val fld = Array.fromList []
-            val ext = Array.fromList []
-            val extev = Array.fromList []
-        in 
-            run1  (fn(h,t,y,yout) => stepper (p,fld,ext,extev,h,t,y,yout))
-        end
-
-val _ = let val stepper = make_crk4a(1,cb)  
-            val p = Array.fromList [con]
-            val fld = Array.fromList []
-            val ext = Array.fromList []
-            val extev = Array.fromList []
-        in 
-            run1  (fn(h,t,y,yout) => stepper (p,fld,ext,extev,h,t,y,yout))
-        end
-
-val _ = let val stepper = make_crk4b(1,cb)  
-            val p = Array.fromList [con]
-            val fld = Array.fromList []
-            val ext = Array.fromList []
-            val extev = Array.fromList []
-        in 
-            run1  (fn(h,t,y,yout) => stepper (p,fld,ext,extev,h,t,y,yout))
-        end
-
-val _ = let val stepper = make_crkbs(1,cb)  
-            val p = Array.fromList [con]
-            val fld = Array.fromList []
-            val ext = Array.fromList []
-            val extev = Array.fromList []
-        in 
-            run2  (fn(h,t,y,yout,err) => stepper (p,fld,ext,extev,h,t,y,yout,err))
-        end
 
 val _ = let val stepper = make_crkdp(1,cb)  
-            val p = Array.fromList [con]
-            val fld = Array.fromList []
-            val ext = Array.fromList []
+            val p     = Array.fromList [con]
+            val fld   = Array.fromList []
+            val ext   = Array.fromList []
             val extev = Array.fromList []
+            val clos  = alloc_closure size_closure_cont
         in 
-            run2  (fn(h,t,y,yout,err) => stepper (p,fld,ext,extev,h,t,y,yout,err))
+            run (fn(h,t,y,yout,err) =>
+                    let
+                        val _ = update_closure_cont (p,fld,ext,extev,clos)
+                    in
+                        stepper (clos,h,t,y,yout,err)
+                    end,
+                 make_crkdp_hinterp 1)
         end
 
 
