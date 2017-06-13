@@ -36,7 +36,8 @@ fun showst (t, y, e) = String.concat [showReal (Array.sub(y,0)), "\t",
 
 fun gen_soln (integrator,interp,h,t,st,err) =
   let 
-      val (stn,en,inptbl) = integrator (h,t,st,st,err)
+      val yout = Array.array (1, 0.0)
+      val (stn,en,inptbl) = integrator (h,t,st,yout,err)
       val tn       = Real.+(t,h)
   in 
       if t >= 5.0

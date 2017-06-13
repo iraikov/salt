@@ -74,7 +74,7 @@ val c_rkdp_hinterp = _import "Dormand_Prince_5_4_hinterp" public:
              int * real * real array * real * real * real array * 
              real array * real array * real array * real array * real array * real array * real array *
              real array * real array * real array * real array * real array * real array * real array *
-             real array * real array
+             real array
              -> int;
 
 
@@ -88,13 +88,12 @@ fun make_crkdp_hinterp (n) =
         val t6 = Array.array (n, 0.0) 
         val t7 = Array.array (n, 0.0) 
         val t8 = Array.array (n, 0.0) 
-        val t9 = Array.array (n, 0.0) 
         val yout = Array.array (n, 0.0) 
     in
         fn (h, (k1, k2, k3, k4, k5, k6, k7), tn, yn) =>
            (fn (theta) => 
                (c_rkdp_hinterp (n, theta, yn, tn, h, yout, k1, k2, k3, k4, k5, k6, k7,
-                                t1, t2, t3, t4, t5, t6, t7, t8, t9);
+                                t1, t2, t3, t4, t5, t6, t7, t8);
                 yout))
     end
 

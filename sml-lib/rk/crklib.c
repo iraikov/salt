@@ -179,7 +179,7 @@ int Dormand_Prince_5_4_hinterp(int n, double theta,
                                double *y, double x0, double h, double *yout, 
                                double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, double *k7, 
                                double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7,
-                               double *t8, double *t9)
+                               double *t8)
 {
   if (theta > 0.0)
     {
@@ -188,28 +188,24 @@ int Dormand_Prince_5_4_hinterp(int n, double theta,
       double theta3 = theta2*theta;
       double theta4 = theta3*theta;
       
-      double bsum1 = 5760.0*theta + -16044.0*theta2 + 16624.0*theta3 + -5815.0*theta4;
-      double bsum2 = 12648.0*theta2 + -18728.0*theta3 + 7580.0*theta4;
-      double bsum3 = -324.0*theta2 + 864.0*theta3 + -415.0*theta4;
-      double bsum4 = -8748.0*theta2 + 42768.0*theta3 + -44955.0*theta4;
-      double bsum5 = 396.0*theta2 + -1276.0*theta3 + 935.0*theta4;
+      double b1 = 5760.0*theta + -16044.0*theta2 + 16624.0*theta3 + -5815.0*theta4;
+      double b3 = 12648.0*theta2 + -18728.0*theta3 + 7580.0*theta4;
+      double b4 = -324.0*theta2 + 864.0*theta3 + -415.0*theta4;
+      double b5 = -8748.0*theta2 + 42768.0*theta3 + -44955.0*theta4;
+      double b6 = 396.0*theta2 + -1276.0*theta3 + 935.0*theta4;
       
-      vector_scale (n, bsum1, k1, t1);  vector_scale (n, h/5760.0, t1, t2);
-      vector_scale (n, 1.0, k2, t3);
-      vector_scale (n, bsum2, k2, t1);  vector_scale (n, h/3339.0, t1, t4);
-      vector_scale (n, bsum3, k3, t1);  vector_scale (n, h/192.0, t1, t5);
-      vector_scale (n, bsum4, k4, t1);  vector_scale (n, h/33920.0, t1, t6);
-      vector_scale (n, bsum5, k5, t1);  vector_scale (n, h/420.0, t1, t7);
+      vector_scale (n, b1, k1, t1);  vector_scale (n, h/5760.0, t1, t2);
+      vector_scale (n, b3, k3, t1);  vector_scale (n, h/3339.0, t1, t3);
+      vector_scale (n, b4, k4, t1);  vector_scale (n, h/192.0, t1, t4);
+      vector_scale (n, b5, k5, t1);  vector_scale (n, h/33920.0, t1, t5);
+      vector_scale (n, b6, k6, t1);  vector_scale (n, h/420.0, t1, t6);
       vector_scale (n, 1.0, k7, t8);
       
-      vector_scale (n, 1.0, y, t9);
-      vector_sum (n, t2, t9, t9);
-      vector_sum (n, t3, t9, t9);
-      vector_sum (n, t4, t9, t9);
-      vector_sum (n, t5, t9, t9);
-      vector_sum (n, t6, t9, t9);
-      vector_sum (n, t7, t9, t9);
-      vector_sum (n, t8, t9, yout);
+      vector_sum (n, t2, y, t8);
+      vector_sum (n, t3, t8, t8);
+      vector_sum (n, t4, t8, t8);
+      vector_sum (n, t5, t8, t8);
+      vector_sum (n, t6, t8, yout);
     }
   else
     vector_scale (n, 1.0, y, yout);
