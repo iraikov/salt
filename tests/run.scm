@@ -42,7 +42,7 @@
          (sml-port (open-output-file sml-path))
          )
     (codegen-ODE/C name sim out: c-port libs: '())
-    (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver)
+    (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver csysname: (->string name))
     (close-output-port sml-port)
     (close-output-port c-port)
     (if compile

@@ -61,12 +61,13 @@ fun make_crkdp (n, fp) =
         val t9 = Array.array (n, 0.0) 
         val t10 = Array.array (n, 0.0) 
         val t11 = Array.array (n, 0.0) 
-        val t12 = Array.array (n, 0.0) 
+        val t12 = Array.array (n, 0.0)
+        val q   = List.foldl (fn(x,ax) => FunQueue.enque (ax,x)) (FunQueue.new()) [k1,k2,k3,k4,k5,k6,k7]
     in
         fn (clos, h, tn, yn, yout, err) => 
            (c_rkdp (n, fp, clos, yn, tn, h, yout, err, k1, k2, k3, k4, k5, k6, k7,
                     t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12);
-            (yout,err,(k1, k2, k3, k4, k5, k6, k7)))
+            (yout,err,q))
     end
 
         

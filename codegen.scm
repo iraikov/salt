@@ -1390,7 +1390,7 @@
 	 ))
 
 
-(define (codegen-ODE/ML name sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rkdp))
+(define (codegen-ODE/ML name sim #!key (out (current-output-port)) (mod #t) (libs '()) (solver 'rkdp) (csysname #f))
 
     (let ((sysdefs (codegen-ODE sim libs: libs)))
 
@@ -1410,7 +1410,7 @@
               ))
        out)
 
-      (if mod (print-fragments (prelude/ML libs: libs solver: solver) out))
+      (if mod (print-fragments (prelude/ML libs: libs solver: solver csysname: csysname) out))
       
       (print-fragments
        (map (match-lambda
@@ -1432,7 +1432,7 @@
 
 (define (prelude/ML  #!key (csysname #f) (solver 'rkdp) (libs '()))
 `(
- #<<EOF
+#<<EOF
 structure ModelPrelude = ModelPreludeFn(val n = n
                                         val nev = nev
                                         val nregime = nregime
@@ -1441,15 +1441,18 @@ open ModelPrelude
 
 EOF
 
-,(case solver
-   ((rkdp rkoz3 rkoz4 rkoz5) `(
-                         (,(sprintf "val make_stepper = make_stepper_~A" solver) ,nll)
-                         (,(sprintf "val interpfun = interp_ce~A" solver) ,nll)
-                         ))
+,@(if (not csysname)
+ (case solver
+   ((rkdp rkoz3 rkoz4 rkoz5)
+    `(
+      (,(sprintf "val make_stepper = make_stepper_~A" solver) ,nll)
+      (,(sprintf "val interpfun = interp_ce~A" solver) ,nll)
+      ))
    (else `(("val make_stepper = make_stepper_rkdp" ,nll)
            ("val interpfun = interp_cerkdp" ,nll)
            ))
    )
+'())
 
 ,@(if csysname
       `(("open CRungeKutta" ,nll)
@@ -1475,38 +1478,43 @@ EOF
       (map
        (lambda (solver)
          `(
+           ("val interpfun = make_c" ,solver "_hinterp(n)" ,nll)
            ,@(if (member 'random libs)
                  `(("fun make_regime_stepper (n, deriv) = " ,nll
                     "let " ,nll
-                    "    val solver = make_" ,solver "(n,ode_cb)" ,nll
+                    "    val solver = make_c" ,solver "(n,ode_cb)" ,nll
                     "    val clos = alloc_closure(size_closure_regime_rs)" ,nll
+                    "    val err  = state()" ,nll
                     "in " ,nll
-                    "fn(p,fld,d,r,ext,extev,h,x,y,yout,err,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_regime_rs (p, fld, d, r, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout, err)" ,nll
+                    "fn({p,fld,d,r,ext,extev,rs,rszt as (ki,ke,wi,fi,we,fe)},h,x,y,yout) => solver (update_closure_regime_rs (p, fld, d, r, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout, err)" ,nll
                     "end" ,nll)
-                   ("fun make_stepper (n, deriv) = " ,nll
+                   ("fun make_stepper (deriv) = " ,nll
                     "let " ,nll
-                    "    val solver = make_" ,solver "(n,ode_cb) " ,nll
+                    "    val solver = make_c" ,solver "(n,ode_cb) " ,nll
                     "    val clos = alloc_closure(size_closure_cont_rs)" ,nll
+                    "    val err  = state()" ,nll
                     "in " ,nll
-                    "fn(p,fld,ext,extev,h,x,y,yout,err,rs,rszt as (ki,ke,wi,fi,we,fe)) => solver (update_closure_cont_rs (p, fld, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout,err)" ,nll
+                    "fn({p,fld,ext,extev,rs,rszt as (ki,ke,wi,fi,we,fe)},h,x,y,yout) => solver (update_closure_cont_rs (p, fld, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout,err)" ,nll
                     "end" ,nll))
-                 `(("fun make_regime_stepper (n, deriv) = " ,nll
+                 `(("fun make_regime_stepper (deriv) = " ,nll
                     "let ",nll
-                    "    val solver = make_" ,solver "(n,ode_cb) " ,nll
+                    "    val solver = make_c" ,solver "(n,ode_cb) " ,nll
                     "    val clos = alloc_closure(size_closure_regime)" ,nll
+                    "    val err  = state()" ,nll
                     "in " ,nll
-                    "fn(p,fld,d,r,ext,extev,h,x,y,yout,err) => solver (update_closure_regime (p, fld, d, r, ext, extev, clos), h, x, y, yout, err)" ,nll
+                    "fn({p,fld,d,r,ext,extev},h,x,y,yout) => solver (update_closure_regime (p, fld, d, r, ext, extev, clos), h, x, y, yout, err)" ,nll
                     "end" ,nll)
-                   ("fun make_stepper (n, deriv) = " ,nll
+                   ("fun make_stepper (deriv) = " ,nll
                     "let " ,nll
-                    "    val solver = make_" ,solver "(n,ode_cb) " ,nll
+                    "    val solver = make_c" ,solver "(n,ode_cb) " ,nll
                     "    val clos = alloc_closure(size_closure_cont)" ,nll
+                    "    val err  = state()" ,nll
                     "in " ,nll
-                    "fn(p,fld,ext,extev,h,x,y,yout,err) => solver (update_closure_cont (p, fld, ext, extev, clos), h, x, y, yout, err)" ,nll
+                    "fn({p,fld,ext,extev},h,x,y,yout) => solver (update_closure_cont (p, fld, ext, extev, clos), h, x, y, yout, err)" ,nll
                     "end" ,nll)))
            (,nll)
            ))
-       '(rkoz3 rkoz4 rkoz5 rkdp))
+       '(rkdp))
       ))
 )
 
