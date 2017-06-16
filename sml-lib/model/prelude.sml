@@ -27,6 +27,7 @@ fun make_ext (n, f) = let val a = RealArrayState.state n in fn () => f(a) end
 fun make_dresponse (n, f) = fn (x,y,e,d) => f(x,y,e,d,RealArrayState.state n)
 fun make_transition (n, f) = fn (e,r) => f(e,r,BoolArrayState.state n)
 fun make_cond (p, fld, f) = f
+fun make_regime_cond (p, fld, f) = f
 
 structure RungeKutta = RungeKuttaFn(structure S = RKArrayState)
 open RungeKutta

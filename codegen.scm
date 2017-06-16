@@ -779,7 +779,10 @@
                             libs))
                           ))
                    )
-              (V:Op 'make_stepper (list rhsfun))))
+              (if has-regimes?
+                  (V:Op 'make_regime_stepper (list rhsfun))
+                  (V:Op 'make_stepper (list rhsfun))))
+            )
 
            (odefun    
             (V:Fn (random-args '(p fld) libs)
@@ -883,7 +886,7 @@
                           (list 
                            (V:Fn '(p fld) 
                                  (E:Ret (if has-regimes?
-                                            (V:Op 'RegimeCondition  (list (V:Op 'make_cond (list (V:Var 'p) (V:Var 'fld) fnval))))
+                                            (V:Op 'RegimeCondition  (list (V:Op 'make_regime_cond (list (V:Var 'p) (V:Var 'fld) fnval))))
                                             (V:Op 'SCondition (list (V:Op 'make_cond (list (V:Var 'p) (V:Var 'fld) fnval))))
                                             )
                                         ))
@@ -1449,9 +1452,11 @@ EOF
    ((rkdp rkoz3 rkoz4 rkoz5)
     `(
       (,(sprintf "val make_stepper = make_stepper_~A" solver) ,nll)
+      (,(sprintf "val make_regime_stepper = make_stepper_~A" solver) ,nll)
       (,(sprintf "val interpfun = interp_ce~A" solver) ,nll)
       ))
    (else `(("val make_stepper = make_stepper_rkdp" ,nll)
+           ("val make_regime_stepper = make_stepper_rkdp" ,nll)
            ("val interpfun = interp_cerkdp" ,nll)
            ))
    )
@@ -1470,6 +1475,8 @@ EOF
         ("val cond_cb = _address " ,(sprintf "\"cond~A\"" csysname) " public: MLton.Pointer.t;" ,nll)
         ("fun make_cond (p,fld,f) = let val fe = c_cond_eval cond_cb in "
          "fn(t,y,c,ext,extev,c_out) => (fe (t,p,fld,y,c,ext,extev,c_out); c_out) end" ,nll)
+        ("fun make_regime_cond (p,fld,f) = let val fe = c_regime_cond_eval cond_cb in "
+         "fn(t,y,c,d,r,ext,extev,c_out) => (fe (t,p,fld,y,c,d,r,ext,extev,c_out); c_out) end" ,nll)
         ("val ode_cb = _address " ,(sprintf "\"~A\"" csysname) " public: MLton.Pointer.t;" ,nll))
       '())
 
@@ -1484,7 +1491,7 @@ EOF
            ("val interpfun = make_c" ,solver "_hinterp(n)" ,nll)
            ,@(if (member 'random libs)
                  `(
-                   ("type regime_clos = {p: real array,fld: real array,d: real array,r: real array,ext: real array,extev: real array,rs: RandomMTZig.state,rszt: RandomMTZig.zt}" ,nll
+                   ("type regime_clos = {p: real array,fld: real array,d: real array,r: bool array,ext: real array,extev: real array,rs: RandomMTZig.state,rszt: RandomMTZig.zt}" ,nll
                     "type clos = {p: real array,fld: real array,ext: real array,extev: real array,rs: RandomMTZig.state,rszt: RandomMTZig.zt}" ,nll
                     "fun make_regime_stepper (deriv: regime_clos -> real * real array * real array -> real array) = " ,nll
                     "let " ,nll
@@ -1502,7 +1509,7 @@ EOF
                     "in " ,nll
                     "fn({p,fld,ext,extev,rs,rszt as (ki,ke,wi,fi,we,fe)},h,x,y,yout) => solver (update_closure_cont_rs (p, fld, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout,err)" ,nll
                     "end" ,nll))
-                 `(("type regime_clos = {p: real array,fld: real array,d: real array,r: real array,ext: real array,extev: real array}" ,nll
+                 `(("type regime_clos = {p: real array,fld: real array,d: real array,r: bool array,ext: real array,extev: real array}" ,nll
                     "type clos = {p: real array,fld: real array,ext: real array,extev: real array}" ,nll
                     "fun make_regime_stepper (deriv: regime_clos -> real * real array * real array -> real array) = " ,nll
                     "let ",nll

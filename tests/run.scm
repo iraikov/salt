@@ -35,6 +35,36 @@
   (pp sim)
   (pp (codegen-ODE sim))
   (let* (
+         (sml-path (make-pathname dir (string-append (->string name) ".sml")))
+         (mlb-path (make-pathname dir (string-append (->string name) "_run.mlb")))
+         (sml-port (open-output-file sml-path))
+         )
+    (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver)
+    (close-output-port sml-port)
+    (if compile
+        (run (mlton 
+              ;-profile alloc
+              -const "'Exn.keepHistory true'"
+              -default-ann "'allowFFI true'"
+              -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
+              -mlb-path-var "'SALT_LIB $(SALT_HOME)/sml-lib'"
+              -mlb-path-map ,(sprintf "~A/sml-lib/mlb-path-map" SALT-DIR)
+              ,mlb-path
+              ))))
+
+  )
+
+(define (test-model/c name model #!key (solver 'rkdp) (dir "tests"))
+  (pp model)
+
+  (define elab (elaborate model))
+  (print "elaborate is done")
+  (pp elab)
+
+  (define sim (simcreate elab))
+  (pp sim)
+  (pp (codegen-ODE sim))
+  (let* (
          (c-path   (make-pathname dir (string-append (->string name) ".c")))
          (c-port   (open-output-file c-path))
          (sml-path (make-pathname dir (string-append (->string name) ".sml")))
@@ -45,20 +75,20 @@
     (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver csysname: (->string name))
     (close-output-port sml-port)
     (close-output-port c-port)
-    (if compile
-        (run (mlton 
-              ;-profile alloc
-              -const "'Exn.keepHistory true'"
-              -default-ann "'allowFFI true'"
-              -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
-              -mlb-path-var "'SALT_LIB $(SALT_HOME)/sml-lib'"
-              -mlb-path-map ,(sprintf "~A/sml-lib/mlb-path-map" SALT-DIR)
-              ,mlb-path
-              ,(sprintf "~A/sml-lib/rk/crklib.c" SALT-DIR)
-              ,c-path
-              ))))
+    (run (mlton 
+          ;-profile alloc
+          -const "'Exn.keepHistory true'"
+          -default-ann "'allowFFI true'"
+          -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
+          -mlb-path-var "'SALT_LIB $(SALT_HOME)/sml-lib'"
+          -mlb-path-map ,(sprintf "~A/sml-lib/mlb-path-map" SALT-DIR)
+          -output ,(sprintf "~A/~A_run_c" dir name)
+          ,mlb-path
+          ,(sprintf "~A/sml-lib/rk/crklib.c" SALT-DIR)
+          ,c-path
+          ))
+    ))
 
-  )
 
 ;(verbose 1)
 ;(add-trace 'codegen-ODE)
@@ -434,8 +464,12 @@
 
 (test-model 'iafsyn iafsyn)
 
+(test-model/c 'vdp vdp)
 
+(test-model/c 'ml ml)
 
+(test-model/c 'iaf iaf)
 
+(test-model/c 'iafrefr iafrefr)
 
-
+(test-model/c 'izhfs izhfs)

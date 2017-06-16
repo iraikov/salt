@@ -30,6 +30,21 @@ int Dormand_Prince_5_4(int, void (*f)(double,double*,double*,void**),
                        double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, 
                        double *t10, double *t11, double *t12);
 
+/* Hermite interpolation routine */
+// ws:	<5760, [5760,~16044,16624,~5815]>
+//	<1, []>
+//	<3339, [0,12648,~18728,7580]>
+//	<192, [0,~324,864,~415]>
+//	<33920, [0,~8748,42768,~44955]>
+//	<420, [0,396,~1276,935]>
+//	<1, []>
+//
+int Dormand_Prince_5_4_hinterp(int n, double theta, 
+                               double *y, double x0, double h, double *yout, 
+                               double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, double *k7, 
+                               double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7,
+                               double *t8);
+
 
 ////////////////////////////////////////////////////////////////////////////////
 //  static double Dormand_Prince_5_4(int (*f)(double,double*), double *y,     //
