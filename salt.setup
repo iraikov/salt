@@ -59,8 +59,8 @@
 (copy-file-to-salt-dir "sml-lib/rk/rk.mlb")
 (copy-file-to-salt-dir "sml-lib/rk/crk.sml")
 (copy-file-to-salt-dir "sml-lib/rk/crk.mlb")
-;(copy-file-to-salt-dir "sml-lib/rk/crk_lib.c")
-;(copy-file-to-salt-dir "sml-lib/rk/crk_common.h")
+(copy-file-to-salt-dir "sml-lib/rk/crklib.c")
+(copy-file-to-salt-dir "sml-lib/rk/crk_common.h")
 
 (copy-file-to-salt-dir "sml-lib/dynamics/dynamics.sml")
 (copy-file-to-salt-dir "sml-lib/dynamics/dynamics.mlb")

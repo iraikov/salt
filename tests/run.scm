@@ -54,6 +54,8 @@
               -mlb-path-var "'SALT_LIB $(SALT_HOME)/sml-lib'"
               -mlb-path-map ,(sprintf "~A/sml-lib/mlb-path-map" SALT-DIR)
               ,mlb-path
+              ,(sprintf "~A/sml-lib/rk/crklib.c" SALT-DIR)
+              ,c-path
               ))))
 
   )
@@ -420,7 +422,7 @@
 
 (test-model 'iaf iaf compile: #t)
 
-(test-model 'izhfs izhfs compile: #t solver: 'rkoz5)
+(test-model 'izhfs izhfs compile: #t)
 
 (test-model 'iafrefr iafrefr  compile: #t)
 
