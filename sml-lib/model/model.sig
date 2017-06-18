@@ -1,6 +1,13 @@
 signature MODEL =
 sig
 
+    type regime_state  = bool array
+    type dsc_state     = real array
+    type event_state   = real array
+    type cont_state    = real array
+    type external_state = real array
+    type externalev_state = real array
+
     type model_stepper
     type model_condition
     type model_response
@@ -17,43 +24,33 @@ sig
     val make_real_state : int -> real array
     val make_bool_state : int -> bool array
 
-    val paramfun: unit -> real array
+    val paramfun: unit -> cont_state
                                
-    val fieldfun: unit -> real array
+    val fieldfun: unit -> cont_state
                                
-    val initfun: real array * real array -> real array -> real array
+    val initfun: cont_state * cont_state -> cont_state -> cont_state
                                
-    val initextfun: real array * real array -> unit -> real array
+    val initextfun: cont_state * cont_state -> unit -> external_state
                                
-    val initextevfun: real array * real array -> unit -> real array
+    val initextevfun: cont_state * cont_state -> unit -> externalev_state
                                
-    val dinitfun: (real array * real array -> real array -> real array) option
+    val dinitfun: (cont_state * cont_state -> dsc_state -> dsc_state) option
                                
-    val initcondfun: (real array -> real array) option
+    val initcondfun: (event_state -> event_state) option
                                
-    val initregfun: (bool array -> bool array) option
-                               
-    val stepfun: {ext: real array,
-                  extev: real array,
-                  fld: real array,
-                  p: real array} *
-                 real *
-                 real *
-                 real array *
-                 real array ->
-                 real array * real array * real array FunQueue.t
+    val initregfun: (regime_state -> regime_state) option
+                                                   
+    val odefun: cont_state * cont_state -> model_stepper
 
-    val odefun: real array * real array -> model_stepper
+    val condfun: (cont_state * cont_state -> model_condition) option
 
-    val condfun: (real array * real array -> model_condition) option
+    val posfun: (cont_state * cont_state -> model_response) option
 
-    val posfun: (real array * real array -> model_response) option
+    val negfun: (cont_state * cont_state -> model_response) option
 
-    val negfun: (real array * real array -> model_response) option
+    val dposfun: (cont_state * cont_state -> (real * cont_state * event_state * dsc_state -> dsc_state)) option
 
-    val dposfun: (real array * real array -> (real * real array * real array * real array -> real array)) option
-
-    val regfun: (real array * bool array -> bool array) option
+    val regfun: (event_state * regime_state -> regime_state) option
 
     val interpfun: hinterp
                        

@@ -16,8 +16,10 @@ in
 end
 
 local
+        $(MODEL_LIB)/model.sig
         $(MODEL_LIB)/prelude.sml
 in
+        signature MODEL
         functor ModelPreludeFn
 end
 
