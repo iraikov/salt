@@ -200,13 +200,14 @@ Equations serve to define differential and algebraic equations.
 
 ## Version history
 
+- 0.20 : Support for precise event time interpolation and adaptive solvers
 - 0.5 : Support for using assigned quantities in external init equations 
 - 0.1 : Initial release
 
 ## License
 
 >
-> Copyright 2015-2016 Ivan Raikov
+> Copyright 2015-2017 Ivan Raikov
 > 
 > This program is free software: you can redistribute it and/or modify
 > it under the terms of the GNU General Public License as published by

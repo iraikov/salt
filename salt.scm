@@ -2,7 +2,7 @@
 ;;
 ;; Hybrid dynamical systems modeling.
 ;;
-;; Copyright 2015-2016 Ivan Raikov.
+;; Copyright 2015-2017 Ivan Raikov.
 ;;
 ;; This implementation follows the work of Tom Short and his Julia
 ;; Sims.jl library, which is in turn based on David Broman's MKL
