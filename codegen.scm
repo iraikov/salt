@@ -1401,9 +1401,13 @@
     (let ((sysdefs (codegen-ODE sim libs: libs)))
 
       (if mod (print-fragments
-               (list "structure Model : MODEL =" nll
-                     "struct" nll
-                     nll)
+               (if (member 'random libs)
+                   (list "structure Model : MODEL_RANDMTZIG =" nll
+                         "struct" nll
+                         nll)
+                   (list "structure Model : MODEL =" nll
+                         "struct" nll
+                         nll))
                out))
       
       (print-fragments
