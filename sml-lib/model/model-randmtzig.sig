@@ -1,4 +1,5 @@
-signature MODEL =
+
+signature MODEL_RANDMTZIG =
 sig
 
     type regime_state  = bool array
@@ -28,7 +29,7 @@ sig
                                
     val fieldfun: unit -> cont_state
                                
-    val initfun: cont_state * cont_state -> cont_state -> cont_state
+    val initfun: cont_state * cont_state * RandomMTZig.state * RandomMTZig.zt -> cont_state -> cont_state
                                
     val initextfun: cont_state * cont_state -> unit -> external_state
                                
@@ -40,15 +41,15 @@ sig
                                
     val initregfun: (regime_state -> regime_state) option
                                                    
-    val odefun: cont_state * cont_state -> model_stepper
+    val odefun: cont_state * cont_state * RandomMTZig.state * RandomMTZig.zt -> model_stepper
 
     val condfun: (cont_state * cont_state -> model_condition) option
 
-    val posfun: (cont_state * cont_state -> model_response) option
+    val posfun: (cont_state * cont_state * RandomMTZig.state * RandomMTZig.zt -> model_response) option
 
-    val negfun: (cont_state * cont_state -> model_response) option
+    val negfun: (cont_state * cont_state * RandomMTZig.state * RandomMTZig.zt -> model_response) option
 
-    val dposfun: (cont_state * cont_state -> (real * cont_state * event_state * dsc_state -> dsc_state)) option
+    val dposfun: (cont_state * cont_state * RandomMTZig.state * RandomMTZig.zt  -> (real * cont_state * event_state * dsc_state -> dsc_state)) option
 
     val regfun: (event_state * regime_state -> regime_state) option
 

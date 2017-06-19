@@ -213,7 +213,8 @@ fun thr2 (i,v1,v2) =
          | _      => NONE
     end
 
-fun fixthr (v) =
+        
+fun fixthr v =
     (Array.modify (fn(x) => if Real.>(Real.abs(x), evtol) then x else 0.0) v; v)
 
         

@@ -86,6 +86,7 @@
 (copy-file-to-salt-dir "sml-lib/state/state.mlb")
 
 (copy-file-to-salt-dir "sml-lib/model/model.sig")
+(copy-file-to-salt-dir "sml-lib/model/model-randmtzig.sig")
 (copy-file-to-salt-dir "sml-lib/model/prelude.sml")
 (copy-file-to-salt-dir "sml-lib/model/random.sml")
 
