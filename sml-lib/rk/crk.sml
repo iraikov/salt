@@ -74,21 +74,18 @@ fun make_crkdp (n, fp) =
 val c_rkdp_hinterp = _import "Dormand_Prince_5_4_hinterp" public: 
              int * real * real array * real * real * real array * 
              real array * real array * real array * real array * real array * real array * real array *
-             real array * real array * real array * real array * real array * real array * real array *
-             real array
+             real array * real array * real array * real array * real array * real array 
              -> int;
 
 
 fun make_crkdp_hinterp (n) =
     let
         val t1 = Array.array (n, 0.0) 
-        val t2 = Array.array (n, 0.0) 
         val t3 = Array.array (n, 0.0) 
         val t4 = Array.array (n, 0.0) 
         val t5 = Array.array (n, 0.0) 
         val t6 = Array.array (n, 0.0) 
         val t7 = Array.array (n, 0.0) 
-        val t8 = Array.array (n, 0.0) 
         val yout = Array.array (n, 0.0) 
     in
         fn (h, ks, tn, yn) =>
@@ -102,8 +99,9 @@ fun make_crkdp_hinterp (n) =
                val (k7,ks') = valOf(FunQueue.deque(ks'))
            in
                fn (theta) => 
-                  (c_rkdp_hinterp (n, theta, yn, tn, h, yout, k1, k2, k3, k4, k5, k6, k7,
-                                   t1, t2, t3, t4, t5, t6, t7, t8);
+                  (
+                    c_rkdp_hinterp (n, theta, yn, tn, h, yout, k1, k2, k3, k4, k5, k6, k7,
+                                   t1, t3, t4, t5, t6, t7);
                    yout)
            end
     end

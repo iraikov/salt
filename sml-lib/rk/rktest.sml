@@ -75,7 +75,7 @@ fun do_case1 integrator n =
 
 fun solver1 (integrator,stats) =
   (putStrLn stats;
-   putStrLn "# step yf err";
+   putStrLn "# step yf delta";
    List.app (do_case1 (integrator deriv))
 	    (List.tabulate (15, fn x => x - 2));
    putStrLn "# All done!\n")
@@ -92,7 +92,7 @@ fun do_case2 integrator n =
 
 fun solver2 (integrator,stats) =
   (putStrLn stats;
-   putStrLn "# step yf err";
+   putStrLn "# step yf delta";
    List.app (do_case2 (integrator deriv))
 	    (List.tabulate (15, fn x => x - 2));
    putStrLn "# All done!\n")
@@ -104,6 +104,7 @@ fun gen_soln3 (integrator,interp,h,t,st) =
   in 
       if t >= 5.0
       then (putStr (showst (tn,stn));
+            putStr ("\t " ^ (showReal en));
             putStrLn ("\t" ^ (showReal (interp (h, inptbl, t, st) 1.0))))
       else gen_soln3 (integrator,interp,h,tn,stn)
   end
@@ -120,7 +121,7 @@ fun do_case3 (integrator, interp) n =
 
 fun solver3 (integrator,stats,interp) =
   (putStrLn stats;
-   putStrLn "# step yf err uf";
+   putStrLn "# step yf delta err uf";
    List.app (do_case3 (integrator deriv, interp))
 	    (List.tabulate (15, fn x => x - 2));
    putStrLn "# All done!\n")

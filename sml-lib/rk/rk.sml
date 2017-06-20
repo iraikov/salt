@@ -209,31 +209,33 @@ fun gen_ks (der_fn: real * state * state -> state,
     
 
 (* Helper function to sum a list of b_i (theta) K_i *)
+fun putStrLn str =
+    (TextIO.output (TextIO.stdOut, str);
+     TextIO.output (TextIO.stdOut, "\n"))
 
 fun bk_sum (bs: RCL list) =
   fn (ks, h: real) =>
      fn (theta: real, ts: state list, yout: state) =>
-          let 
-              fun recur ((d,ns)::bs, ks, fs, ts) =
-                let
-                    val (bsum,_) = foldl (fn (n,(sum,theta)) => 
-                                             ((n*theta)+sum,theta*theta)) (0.0,theta) ns
-                    val (k, ks) = valOf (FunQueue.deque ks)
-                    val t = hd ts
-                in
-                    case m_scale scale (bsum, k, t) of 
-                        SOME bk => recur (bs, ks, (scale (h/d, bk, t))::fs, tl ts)
-                      | NONE => recur (bs, ks, fs, ts)
-                end
-                | recur ([], ks, [], ts) =
-                  raise Fail "RungeLutta.bk_sum: empty list of function evaluations"
-                | recur ([], ks, fs, ts) = 
-                  if FunQueue.empty ks 
-                  then foldl1 (fn(x,y) => sum (x,y,yout)) fs
-                  else raise Fail "RungeLutta.bk_sum: invalid coefficients"
-          in
-              recur (bs, ks, [], ts)
-          end
+        let
+            val thetas = List.tabulate(List.length bs, fn(i) => Real.Math.pow(theta, Real.fromInt (i+1)))
+            fun recur ((d,ns)::bs, ks, fs, ts) =
+              let
+                  val (bsum,_) = foldl (fn (n,(sum,thetas)) =>
+                                           (((n*(List.hd thetas))+sum,List.tl thetas)))
+                                       (0.0,thetas) ns
+                  val (k, ks) = valOf (FunQueue.deque ks)
+                  val t = hd ts
+              in
+                  case m_scale scale (bsum, k, t) of 
+                      SOME bk => recur (bs, ks, (scale (h/d, bk, t))::fs, tl ts)
+                    | NONE => recur (bs, ks, fs, ts)
+              end
+              | recur ([], ks, [], ts) =
+                raise Fail "RungeLutta.bk_sum: empty list of function evaluations"
+              | recur ([], ks, fs, ts) = foldl1 (fn(x,y) => sum (x,y,yout)) fs
+        in
+            recur (bs, ks, [], ts)
+        end
 
         
 (* Hermite interpolation routine for continuous explicit RK (CERK) methods *)
@@ -518,8 +520,7 @@ val ws_dp = ratToRCLs [[RAT 1, ~1337//480, 1039//360, ~1163//1152],
                        [RAT 0, 4216//1113, ~18728//3339, 7580//3339],
                        [RAT 0, ~27//16, 9//2, ~415//192],
                        [RAT 0, ~2187//8480, 2673//2120, ~8991//6784],
-                       [RAT 0, 33//35, ~319//105, 187//84],
-                       []]
+                       [RAT 0, 33//35, ~319//105, 187//84]]
                                                          
 
 val cerkdp: stepper3  = core3 (cs_dp, as_dp, bs_dp, ds_dp, ws_dp)
