@@ -197,9 +197,9 @@ int Dormand_Prince_5_4_hinterp(int n, double theta,
 
   if (theta > 0.0)
     {
-      double theta2 = theta*theta;
-      double theta3 = theta*theta*theta;
-      double theta4 = theta*theta*theta*theta;
+      double theta2 = pow(theta,2.0);
+      double theta3 = pow(theta,3.0);
+      double theta4 = pow(theta,4.0);
       
       double b1 = 5760.0*theta - 16044.0*theta2 + 16624.0*theta3 - 5815.0*theta4;
       double b3 = 12648.0*theta2 + -18728.0*theta3 + 7580.0*theta4;
