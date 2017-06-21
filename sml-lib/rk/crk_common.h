@@ -105,3 +105,12 @@ static void vector_scale (int n, double k, double *x, double *result)
       result[i] = k * x[i];
     }
 }
+
+static void vector_copy (int n, double *x, double *result)
+{
+  int i;
+  for (i = 0; i<n; i++) 
+    {
+      result[i] = x[i];
+    }
+}

@@ -25,6 +25,8 @@ val y0 = Array.array (1, 1.75)
 val con = ~0.4
 fun exact t = 1.75*Real.Math.exp(con*(t - t0))
 
+val numit = 18
+                
 fun showReal n = Real.toString n
 
 val cb = _address "rhsfun" public: MLton.Pointer.t;
@@ -61,7 +63,7 @@ fun solver (integrator,stats,interp) =
   (putStrLn stats;
    putStrLn "# step yf err uf";
    List.app (do_case (integrator, interp))
-	    (List.tabulate (15, fn x => x - 2));
+	    (List.tabulate (numit, fn x => x - 2));
    putStrLn "# All done!\n")
 
 
@@ -78,7 +80,7 @@ fun run_h (integrator, interp) h =
 fun run (integrator,interp) =
   (putStrLn "# step yf delta err est";
    List.app (do_case (integrator,interp))
-	    (List.tabulate (15, fn x => x - 2));
+	    (List.tabulate (numit, fn x => x - 2));
    putStrLn "# All done!\n")
 
 

@@ -32,6 +32,8 @@ val t0 = 0.0
 val y0 = 1.75
 fun exact t = y0*Real.Math.exp(con*(t - t0))
 
+val numit = 18
+                              
 fun putStr str =
     (TextIO.output (TextIO.stdOut, str))
 
@@ -77,7 +79,7 @@ fun solver1 (integrator,stats) =
   (putStrLn stats;
    putStrLn "# step yf delta";
    List.app (do_case1 (integrator deriv))
-	    (List.tabulate (15, fn x => x - 2));
+	    (List.tabulate (numit, fn x => x - 2));
    putStrLn "# All done!\n")
 
 fun do_case2 integrator n =
@@ -94,7 +96,7 @@ fun solver2 (integrator,stats) =
   (putStrLn stats;
    putStrLn "# step yf delta";
    List.app (do_case2 (integrator deriv))
-	    (List.tabulate (15, fn x => x - 2));
+	    (List.tabulate (numit, fn x => x - 2));
    putStrLn "# All done!\n")
 
 fun gen_soln3 (integrator,interp,h,t,st) =
@@ -123,7 +125,7 @@ fun solver3 (integrator,stats,interp) =
   (putStrLn stats;
    putStrLn "# step yf delta err uf";
    List.app (do_case3 (integrator deriv, interp))
-	    (List.tabulate (15, fn x => x - 2));
+	    (List.tabulate (numit, fn x => x - 2));
    putStrLn "# All done!\n")
 
 

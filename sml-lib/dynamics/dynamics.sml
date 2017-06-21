@@ -214,6 +214,9 @@ fun thr2 (i,v1,v2) =
     end
 
         
+fun fixthr_s v =
+  if Real.>(Real.abs(v), evtol) then v else 0.0
+                                                
 fun fixthr v =
     (Array.modify (fn(x) => if Real.>(Real.abs(x), evtol) then x else 0.0) v; v)
 
@@ -344,7 +347,7 @@ fun regime_rootval (finterp,fcond) =
                              let
                                  val e_x = x+theta*h
                                  val e_y = finterp' theta
-                                 val res = getindex(fcond(e_x,e_y,e,d,r,ext,extev,enext), i)
+                                 val res = fixthr_s (getindex(fcond(e_x,e_y,e,d,r,ext,extev,enext), i))
                                  val _ = if debug
                                          then Printf.printf `"RootStep.evtest: theta = "R
                                                             `" x = "R `" e_x = "R `" e_y = "RA `" res = "R
@@ -384,7 +387,7 @@ fun event_rootval (finterp,fcond) =
                              let
                                  val e_x = x+theta*h
                                  val e_y = finterp' theta
-                                 val res = getindex(fcond(e_x,e_y,e,ext,extev,enext), i)
+                                 val res = fixthr_s (getindex(fcond(e_x,e_y,e,ext,extev,enext), i))
                                  val _ = if debug
                                          then Printf.printf `"RootStep.evtest: theta = "R
                                                             `" x = "R `" e_x = "R `" e_y = "RA `" res = "R
