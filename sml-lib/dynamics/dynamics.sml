@@ -77,7 +77,7 @@ fun predictor tol (h,ys) =
       val est  = (Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys) / tol
   in 
       if est <= 1.0
-      then Right (min (min(Math.pow(est,pgrow), ub) * h, (!maxstep)) (* accept step and grow *)
+      then Right (min (min(Math.pow(est,pgrow), ub) * h, (!maxstep))) (* accept step and grow *)
       else Left (min(Math.pow(est,pshrink), lb) * h) (* reject step and shrink *)
   end
       
