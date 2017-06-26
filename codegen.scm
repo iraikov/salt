@@ -790,7 +790,7 @@
                    (cond
                     (has-regimes?
                      (V:Op 'RegimeStepper
-                           (list (V:Fn '(d r ext extev h x y yout err) 
+                           (list (V:Fn '(d r ext extev h x y yout) 
                                        (E:Ret (V:Op 'stepfun
                                                     (list (V:Rcon
                                                            (random-vargs
@@ -812,7 +812,7 @@
                     
                     (has-conds?
                      (V:Op 'EventStepper
-                           (list (V:Fn '(ext extev h x y yout err) 
+                           (list (V:Fn '(ext extev h x y yout) 
                                        (E:Ret (V:Op 'stepfun
                                                      (list (V:Rcon
                                                             (random-vargs
@@ -831,7 +831,7 @@
                     
                     (else
                      (V:Op 'ContStepper
-                           (list  (V:Fn '(ext extev h x y yout err) 
+                           (list  (V:Fn '(ext extev h x y yout) 
                                         (E:Ret (V:Op 'stepfun
                                                      (list (V:Rcon
                                                             (random-vargs

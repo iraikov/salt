@@ -60,7 +60,8 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Fail "invalid state type"
     in
 	printState (0.0, initial);
-	run (D.RegimeState (0.0, 0.0, initial, evinitial, dinitial, rinitial, extinitial, extevinitial, ynext, rsp, evnext, (h0,err), D.RootBefore))
+	run (D.RegimeState (0.0, 0.0, initial, evinitial, dinitial, rinitial, extinitial, extevinitial, ynext, rsp, evnext,
+                            D.Right (h0,h0,err), D.RootBefore))
     end
 |  start (f,initial,SOME evinitial,NONE,NONE,extinitial,extevinitial,tmax,h0,ynext,rsp,err,SOME evnext) =
     let
@@ -75,7 +76,8 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Fail "invalid state type"
     in
 	printState (0.0, initial);
-	run (D.EventState (0.0, 0.0, initial, evinitial, extinitial, extevinitial, ynext, rsp, evnext, (h0,err), D.RootBefore))
+	run (D.EventState (0.0, 0.0, initial, evinitial, extinitial, extevinitial, ynext, rsp, evnext,
+                           D.Right (h0,h0,err), D.RootBefore))
     end
 |  start (f,initial,NONE,NONE,NONE,ext,extev,tmax,h0,ynext,rsp,err,NONE) =
     let
@@ -90,7 +92,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Fail "invalid state type"
     in
 	printState (0.0, initial);
-	run (D.ContState (0.0, 0.0, initial, ext, extev, ynext, (h0,err)))
+	run (D.ContState (0.0, 0.0, initial, ext, extev, ynext, D.Right (h0,h0,err)))
     end
 |  start _ = raise Domain
 
@@ -106,7 +108,6 @@ val extevinitial  = Model.initextevfun (p, fld)
 val next        = Model.initfun (p, fld) (Model.make_real_state Model.n)
 val ynext       = Model.initfun(p, fld) (Model.make_real_state Model.n)
 val rsp         = Model.initfun(p, fld) (Model.make_real_state Model.n)
-val err         = Model.make_real_state Model.n
 val evnext      = optApply Model.initcondfun (Model.make_real_state Model.nev)
 
 val optStatus = ref NONE
@@ -131,5 +132,9 @@ val f = D.integral(Model.odefun (p, fld),Model.interpfun,optApply Model.condfun 
                    optApply Model.posfun (p, fld),optApply Model.negfun (p, fld),
                    optApply Model.dposfun (p, fld),Model.regfun)
 
-val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial(),extevinitial(),tstop,h0,ynext,rsp,err,evnext)
+val err0 = case (!(D.tol)) of
+               SOME tol => tol 
+            |  NONE => 0.0
+                                        
+val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial(),extevinitial(),tstop,h0,ynext,rsp,err0,evnext)
 

@@ -451,13 +451,13 @@
 
 (test-model 'ml ml compile: #t)
 
-(test-model 'iaf iaf compile: #t)
-
 (test-model 'izhfs izhfs compile: #t)
+
+(test-model 'iaf iaf compile: #t)
 
 (test-model 'iafrefr iafrefr  compile: #t)
 
-(test-model 'adex adex compile: #t)
+(test-model 'adex adex compile: #t);
 
 (test-model 'hr hr compile: #t)
 

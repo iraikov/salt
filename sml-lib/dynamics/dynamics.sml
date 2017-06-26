@@ -68,38 +68,63 @@ val maxstep = ref 2.0
 datatype ('a, 'b) either = Left of 'a | Right of 'b
 datatype ('a, 'b, 'c) ternary = Near of 'a | Mid of 'b | Far of 'c
 
-fun predictor tol (h,ys) =
+type controller_state = ((real * real * real), (real * real * real)) either
+
+fun controller_h (Left (h,_,_)) = h
+  | controller_h (Right (h,_,_)) = h
+
+fun controller_update_h (Left (h,cst,r),h') = Left(h',cst,r)
+  | controller_update_h (Right (h,cst,r),h') = Right(h',cst,r)
+
+                                                                    
+(* PID stepsize controller from Gustafsson 1991. *)
+
+fun controller tol (h,ys,prev) =
   let open Real
-      val lb = 0.1
-      val ub = 2.0
-      val pgrow   = ~0.2
-      val pshrink = ~0.25
-      val est  = (Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys) / tol
+      val k   = 0.87
+      val ki  = 0.08
+      val kp  = 0.10
+      val f   = 1.414
+      val r   = Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys
+      val est = r / tol
+      val _ = if debug
+              then Printf.printf `"controller: est = "R
+                                 `" r = "R `"\n" $ est r
+              else ()
   in 
       if est <= 1.0
-      then Right (min (min(Math.pow(est,pgrow), ub) * h, (!maxstep))) (* accept step and grow *)
-      else Left (min(Math.pow(est,pshrink), lb) * h) (* reject step and shrink *)
+      then (* current step accepted *)
+          (if h < (controller_h prev) 
+           then prev
+           else 
+               (let val cst_next =
+                        case prev of
+                            Left (h_prev, cst_prev, r_prev) => (* if previous step rejected, restart *)
+                            (if h <= (controller_h prev)
+                             then h * (h / cst_prev)
+                             else h_prev * (h_prev / cst_prev))
+                         |  Right (h_prev, cst_prev, r_prev) =>
+                            if r > 0.0 andalso r_prev > 0.0
+                            then (Math.pow (tol / r, ki)) * (Math.pow (r_prev / r, kp)) * cst_prev
+                            else f * cst_prev
+                    val h_next = min(cst_next, !maxstep)
+                    val r_prev = r
+                in
+                    Right (h_next, cst_next, r_prev)
+                end))
+      else (* step rejected *)
+          (let
+              val (cst_prev, h_prev) =
+                  case prev of
+                      Left (h_prev, cst_prev, r_prev)  => (cst_prev, h_prev)
+                   |  Right (h_prev, cst_prev, r_prev) => (cst_prev, h_prev)
+                                                                               
+              val h_next = (Math.pow (tol / r, 1.0 / k)) * h_prev
+          in
+              Left (h_next, cst_prev, r)
+          end)
   end
-      
-(* FIXME: Equation 391a in Butcher p. 293 *)
-(*
-fun predictor p tol (h,ys) =
-  let open Real
-      val lb = 0.5
-      val ub = 0.9
-      val f  = 2.0
-      val est  = Array.foldl (fn (y,ax) => Real.+ ((abs y),ax)) 0.0 ys
-      val r    = max(lb, min (f, ub * (exp (tol / est, 1.0 / (p + 1.0)))))
-  in 
-      if e < lb*tol
-      then Right (r*h)	(* step too small, accept but grow *)
-      else (if e < ub*tol 
-            then Right (h)	(* step just right *)
-            else Left (r*h)) (* step too large, reject and shrink *)
-  end
-*)
-      
-type error_state   = real * cont_state
+
 
 exception ConvergenceError
 
@@ -112,19 +137,19 @@ fun showRoot (RootFound (i,lst)) = ("RootFound " ^ (Int.toString i) ^ " " ^ (Str
                              
 datatype model_state = 
          RegimeState of real * real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * 
-                        cont_state * cont_state * event_state * error_state * model_root
+                        cont_state * cont_state * event_state * controller_state * model_root
          | EventState of real * real * cont_state * event_state * external_state * externalev_state * 
-                         cont_state * cont_state * event_state * error_state * model_root
-         | ContState  of real * real * cont_state * external_state * externalev_state * cont_state * error_state
+                         cont_state * cont_state * event_state * controller_state * model_root
+         | ContState  of real * real * cont_state * external_state * externalev_state * cont_state * controller_state
 
 
 datatype model_stepper = 
          RegimeStepper of dsc_state * regime_state * external_state * externalev_state *
-                          real * real * cont_state * cont_state * cont_state -> 
+                          real * real * cont_state * cont_state -> 
                           (cont_state * cont_state * (real array) FunQueue.t)
-         | EventStepper of (external_state * externalev_state * real * real * cont_state * cont_state * cont_state) -> 
+         | EventStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> 
                            (cont_state * cont_state * (real array) FunQueue.t)
-         | ContStepper of (external_state * externalev_state * real * real * cont_state * cont_state * cont_state) -> 
+         | ContStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> 
                           (cont_state * cont_state * (real array) FunQueue.t)
 
 datatype model_condition = 
@@ -283,22 +308,27 @@ fun evresponse (fpos,fneg) =
             end)
       | _ => raise Fail "evresponse: unsupported event response configuration"
                    
+
 fun adaptive_regime_stepper stepper  =
   let open Real
-        fun f iter (d,r,ext,extev,h,x,ys,yout,err) =
+        fun f iter (d,r,ext,extev,h,x,ys,yout,cst) =
             if Int.<(iter,maxiter)
             then
                 (let
-                    val (ys',err',w) = stepper (d,r,ext,extev,h,x,ys,yout,err)
+                    val (ys',err,w) = stepper (d,r,ext,extev,h,x,ys,yout)
                 in
                     case !tol of
-                        SOME tolv => 
-                        (case predictor tolv (h,err') of
-                             Right h' => 
-                             (ys',h',err',w)
-                           | Left h'  => 
-                             f (Int.+(iter,1)) (d,r,ext,extev,h',x,ys,yout,err))
-                     | NONE => (ys',h,err',w)
+                        SOME tolv =>
+                        let
+                            val cst' = controller tolv (h,err,cst)
+                        in
+                            case cst' of
+                                Right (h',_,_) => 
+                                (ys',h',cst',w)
+                              | Left (h',_,_)  => 
+                                f (Int.+(iter,1)) (d,r,ext,extev,h',x,ys,yout,cst')
+                        end
+                     | NONE => (ys',h,cst,w)
                 end)
             else raise Fail "convergence error in adaptive regime stepper"
     in
@@ -308,21 +338,25 @@ fun adaptive_regime_stepper stepper  =
         
 fun adaptive_stepper stepper =
     let open Real
-        fun f iter (ext,extev,h,x,ys,yout,err) =
+        fun f iter (ext,extev,h,x,ys,yout,cst) =
             if Int.<(iter,maxiter)
             then 
                 (let
-                    val (ys',err',w) = stepper (ext,extev,h,x,ys,yout,err)
+                    val (ys',err,w) = stepper (ext,extev,h,x,ys,yout)
                 in
                     case !tol of
-                        SOME tolv => 
-                        (case predictor tolv (h,err') of
-                             Right h' => 
-                             (ys',h',err',w)
-                           | Left h'  => 
-                             f (Int.+(iter,1)) (ext,extev,h',x,ys,yout,err))
+                        SOME tolv =>
+                        let
+                            val cst' = controller tolv (h,err,cst)
+                        in
+                            case cst' of
+                                Right (h',_,_) => 
+                                (ys',h',cst',w)
+                              | Left (h',_,_)  => 
+                                f (Int.+(iter,1)) (ext,extev,h',x,ys,yout,cst')
+                        end
                      |  NONE =>
-                        (ys',h,err',w)
+                        (ys',h,cst,w)
                 end)
             else raise Fail "convergence error in adaptive stepper"
     in
@@ -416,12 +450,12 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
       val fstepper = adaptive_regime_stepper stepper
       val frootval = regime_rootval (finterp,fcond)
                                              
-      fun integral' (RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,(h,err),root)) =
+      fun integral' (RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,cst,root)) =
         (if debug
          then (if y = ynext then raise Fail ("Dynamics.integral: RegimeState: y and ynext are the same") else ();
                if y = yrsp then raise Fail ("Dynamics.integral: RegimeState: y and yrsp are the same") else ())
          else ();
-         if not (h > 0.0)
+         if not ((controller_h cst) > 0.0)
          then raise Fail ("Dynamics.integral: RegimeState: zero time step (root=" ^ (showRoot root) ^ ")")
          else ();
          case root of
@@ -431,8 +465,9 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val _ = if debug
                          then Printf.printf `"RootBefore: x = "R `" e'[0] = "R`"\n" $ x (getindex(e',0))
                          else ()
+                 val h = controller_h cst
              in
-                 RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,(h,err),RootStep [h])
+                 RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,cst,RootStep [h])
              end
            | RootStep (h::hs) =>
              let
@@ -440,7 +475,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          then Printf.printf `"RootStep: h = "R `" x = "R `" y = "R `" ynext = "R `"\n" $ h x (getindex(y,0)) (getindex(ynext,0))
                          else ()
                  val (x',cx')  = csum (x,cx,h) 
-                 val (y',h',err',w) = fstepper (d,r,ext,extev,h,x,y,ynext,err)
+                 val (y',h',cst',w) = fstepper (d,r,ext,extev,h,x,y,ynext,cst)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
                  val _ = if debug
                          then Printf.printf `"RootStep: h' = "R `" x = "R `" y[0] = "R `" x' = "R `" y'[0] = "R `" e[0] = "R `" e'[0] = "R `"\n" $ h' x (getindex(y,0)) x' (getindex(y',0)) (getindex(e,0)) (getindex(e',0))
@@ -455,14 +490,14 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                          `" y' = "R
                                          `"\n" $ x (getindex(y',0))
                       else ();
-                      RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,(h,err),RootFound (i,h::hs)))
+                      RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,cst,RootFound (i,h::hs)))
                    | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
                      (if debug
                       then Printf.printf `"RootStep Far: x = "R 
                                          `" y' = "R
                                          `"\n" $ x (getindex(y',0))
                       else ();
-                      RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootFound (i,hs)))
+                      RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
                    | SOME (Mid i,e_x,e_cx,e_theta,e_y) =>
                      (if x' > e_x
                        then
@@ -479,13 +514,13 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                        else ()
                                val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
                            in
-                               RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,(h'',err'),
+                               RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
                                            RootFound (i,if h''>0.0 then h''::hs else hs))
                            end
-                       else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootFound (i,hs)))
+                       else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
                    | NONE => (case hs of
-                                  [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootBefore)
-                                | _ => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h',err'),RootStep hs))
+                                  [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootBefore)
+                                | _ => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootStep hs))
              end
            | RootFound (i,hs) =>
              let 
@@ -495,28 +530,32 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          then Printf.printf `"RootFound: x = "R `" e = "R `" y' = "R `"\n" $ x (getindex(e,0)) (getindex(y',0))
                          else ()
              in
-                 RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,(h,err),RootAfter (i,hs))
+                 RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,cst,RootAfter (i,hs))
              end
            | RootAfter (i,[]) =>
              let 
                  val _ = if debug
-                         then Printf.printf `"RootAfter: x = "R `" y = "R `" h = "R `"\n" $ x (getindex(y,0)) h
+                         then Printf.printf `"RootAfter: x = "R `" y = "R `" h = "R `"\n" $ x (getindex(y,0)) (controller_h cst)
                          else ()
-                  val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
+                 val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
+                 val cst' = case cst of Left _ => cst 
+                                     |  Right v => Left v
              in
-                 RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,(h,err),RootBefore)
+                 RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,cst',RootBefore)
              end
            | RootAfter (i,h1::hs) =>
              let 
                  val hev       = Real.*(0.5,evtol)
                  val (x',cx')  = csum (x,cx,hev)
-                 val (y',h',err',w) = fstepper (d,r,ext,extev,hev,x,y,ynext,err)
+                 val (y',_,_,w) = fstepper (d,r,ext,extev,hev,x,y,ynext,cst)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
                  val _ = if debug
-                         then Printf.printf `"RootAfter: x = "R `" y = "R `" x' = "R `" y' = "R `" h = "R `" h1 = "R `" h1-hev = "R `"\n" $ x (getindex(y,0)) x' (getindex(y',0)) h h1 (h1-hev)
+                         then Printf.printf `"RootAfter: x = "R `" y = "R `" x' = "R `" y' = "R  `" h1 = "R `" h1-hev = "R `"\n" $ x (getindex(y,0)) x' (getindex(y',0)) h1 (h1-hev)
                          else ()
+                 val cst' = case cst of Left _ => cst 
+                                     |  Right v => Left v
              in
-                 RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,(h,err),RootStep ((h1*(hev/1.0))::hs))
+                 RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootStep ((h1*(hev/1.0))::hs))
              end
            | _ => raise Fail "integral: invalid arguments to regime stepper")
             
@@ -530,16 +569,17 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
         val fstepper = adaptive_stepper stepper
         val frootval = event_rootval (finterp,fcond)
 
-        fun integral' (EventState(x,cx,y,e,ext,extev,ynext,yrsp,enext,(h,err),root)) =
-          (if not (h > 0.0)
+        fun integral' (EventState(x,cx,y,e,ext,extev,ynext,yrsp,enext,cst,root)) =
+          (if not ((controller_h cst) > 0.0)
            then raise Fail ("Dynamics.integral: EventState: zero time step (root=" ^ (showRoot root) ^ ")")
            else ();
            case root of
                RootBefore =>
                let
                    val e' = fixthr (fcond (x,y,e,ext,extev,enext))
+                   val h  = controller_h cst 
                in
-                   EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,(h,err),RootStep [h])
+                   EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,cst,RootStep [h])
                end
              | RootStep (h::hs) =>
                let
@@ -547,16 +587,16 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                            then Printf.printf `"RootStep: h = "R `" x = "R `" y = "R `" ynext = "R `"\n" $ h x (getindex(y,0)) (getindex(ynext,0))
                            else ()
                    val (x',cx')  = csum (x,cx,h)
-                   val (y',h',err',w) = fstepper (ext,extev,h,x,y,ynext,err)
+                   val (y',h',cst',w) = fstepper (ext,extev,h,x,y,ynext,cst)
                    val e'  = fixthr (fcond (x',y',e,ext,extev,enext))
                    val rootval = frootval (h,w,x,cx,y,e,x',cx',y',e',ext,extev,enext)
 
                in
                  case rootval of
                      SOME (Near i,e_x,e_cx,e_theta,e_y) =>
-                     EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,(h,err),RootFound (i,h::hs))
+                     EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,cst,RootFound (i,h::hs))
                    | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
-                     EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootFound (i,hs))
+                     EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst,RootFound (i,hs))
                    | SOME (Mid i,e_x,e_cx,e_theta,e_y) =>
                      (let
                          val x''  = e_x
@@ -571,13 +611,13 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                  else ()
                          val e''  = fixthr (fcond (x'',y'',e,ext,extev,enext))
                      in
-                         EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,(h'',err'),
+                         EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
                                     RootFound (i,if h''>0.0 then h''::hs else hs))
                      end)
                    | NONE =>
                      (case hs of
-                          [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootBefore)
-                        | _  => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h',err'),RootStep hs))
+                          [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootBefore)
+                        | _  => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootStep hs))
                end
              | RootFound (i,hs) =>
                let
@@ -585,23 +625,29 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                    val _   = if debug
                              then Printf.printf `"RootFound: x = "R `" e = "R `" y' = "R `"\n" $ x (getindex(e,0)) (getindex(y',0))
                              else ()
+                   val cst' = case cst of Left _ => cst 
+                                       |  Right v => Left v
+
                in
-                   EventState(x,cx,y',e,ext,extev,y,ynext,enext,(h,err),RootAfter (i,hs))
+                   EventState(x,cx,y',e,ext,extev,y,ynext,enext,cst',RootAfter (i,hs))
                end
              | RootAfter (i,hs) =>
                let
                    val hev       = Real.*(0.5,evtol)
                    val (x',cx')  = csum (x,cx,hev)
-                   val (y',h',err',w)  = fstepper (ext,extev,hev,x,y,ynext,err)
+                   val (y',_,_,w)  = fstepper (ext,extev,hev,x,y,ynext,cst)
                    val e'  = fixthr (fcond (x',y',e,ext,extev,enext))
                    val _   = if debug
                              then Printf.printf `"RootAfter: x' = "R `" e' = "R
                                                 `" y' = "R `"\n" $ x' (getindex(e',0)) (getindex(y',0))
                              else ()
+                   val cst' = case cst of Left _ => cst 
+                                       |  Right v => Left v
+
                in
                    case hs of
-                       [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h,err),RootBefore)
-                    |  h1::hs => EventState(x',cx',y',e',ext,extev,y,yrsp,e,(h,err),RootStep ((h1*(hev/1.0))::hs))
+                       [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootBefore)
+                    |  h1::hs => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootStep ((h1*(hev/1.0))::hs))
                end
              |  _ => raise Fail "integral: invalid arguments to event stepper")
           | integral' _ =
@@ -614,11 +660,12 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
     let
           val fstepper = adaptive_stepper stepper
     in
-        (fn(ContState(x,cx,y,ext,extev,ynext,(h,err))) => 
-            let val (x',cx')  = csum(x,cx,h)
-                val (y',h',err',w) = fstepper (ext,extev,h,x,y,ynext,err)
+        (fn(ContState(x,cx,y,ext,extev,ynext,cst)) => 
+            let val h = controller_h cst
+                val (x',cx')  = csum(x,cx,h)
+                val (y',h',cst',w) = fstepper (ext,extev,h,x,y,ynext,cst)
             in
-                ContState(x',cx',y',ext,extev,y,(h',err'))
+                ContState(x',cx',y',ext,extev,y,cst')
             end
         | _ => raise Fail "integral: invalid continuous state"
         )
