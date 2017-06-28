@@ -460,12 +460,12 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
          then (if y = ynext then raise Fail ("Dynamics.integral: RegimeState: y and ynext are the same") else ();
                if y = yrsp then raise Fail ("Dynamics.integral: RegimeState: y and yrsp are the same") else ())
          else ();
-         if not ((controller_h cst) > 0.0)
-         then raise Fail ("Dynamics.integral: RegimeState: zero time step (root=" ^ (showRoot root) ^ ")")
-         else ();
          case root of
              RootBefore =>
              let
+                 val _ = if not ((controller_h cst) > 0.0)
+                         then raise Fail ("Dynamics.integral: RegimeState: zero time step (root=" ^ (showRoot root) ^ ")")
+                         else ()
                  val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
                  val _ = if debug
                          then Printf.printf `"RootBefore: x = "R `" e'[0] = "R`"\n" $ x (getindex(e',0))
@@ -576,12 +576,13 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
         val frootval = event_rootval (finterp,fcond)
 
         fun integral' (EventState(x,cx,y,e,ext,extev,ynext,yrsp,enext,cst,root)) =
-          (if not ((controller_h cst) > 0.0)
-           then raise Fail ("Dynamics.integral: EventState: zero time step (root=" ^ (showRoot root) ^ ")")
-           else ();
+          (
            case root of
                RootBefore =>
                let
+                   val _ = if not ((controller_h cst) > 0.0)
+                           then raise Fail ("Dynamics.integral: EventState: zero time step (root=" ^ (showRoot root) ^ ")")
+                           else ()
                    val e' = fixthr (fcond (x,y,e,ext,extev,enext))
                    val h  = controller_h cst 
                in
