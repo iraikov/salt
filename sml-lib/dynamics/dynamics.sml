@@ -84,7 +84,7 @@ fun controller tol (h,ys,prev) =
       val k   = 0.87
       val ki  = 0.08
       val kp  = 0.10
-      val f   = 1.414
+      val f   = 1.207
       val r   = Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys
       val est = r / tol
       val _ = if debug
@@ -232,10 +232,13 @@ fun thr2 (i,v1,v2) =
         val s2 = Real.sign v2
     in
         case (s1,s2) of
-           (~1,1) => SOME (Mid i)
-         | (~1,0) => SOME (Far i)
-         | (0,1)  => SOME (Near i)
-         | _      => NONE
+            (~1,1) =>
+            (SOME (Mid i))
+          | (~1,0) =>
+            SOME (Far i)
+          | (0,1)  =>
+            SOME (Near i)
+          | _      => NONE
     end
 
         
@@ -381,7 +384,7 @@ fun regime_rootval (finterp,fcond) =
                              let
                                  val (e_x,_) = csum(x,cx,theta*h)
                                  val e_y = finterp' theta
-                                 val res = getindex(fcond(e_x,e_y,e,d,r,ext,extev,enext), i)
+                                 val res = fixthr_s (getindex(fcond(e_x,e_y,e,d,r,ext,extev,enext), i))
                                  val _ = if debug
                                          then Printf.printf `"RootStep.evtest: theta = "R
                                                             `" x = "R `" e_x = "R `" e_y = "RA `" res = "R
@@ -421,7 +424,7 @@ fun event_rootval (finterp,fcond) =
                              let
                                  val (e_x,_) = csum(x,cx,theta*h)
                                  val e_y = finterp' theta
-                                 val res = getindex(fcond(e_x,e_y,e,ext,extev,enext), i)
+                                 val res = fixthr_s (getindex(fcond(e_x,e_y,e,ext,extev,enext), i))
                                  val _ = if debug
                                          then Printf.printf `"RootStep.evtest: theta = "R
                                                             `" x = "R `" e_x = "R `" e_y = "RA `" res = "R
@@ -476,7 +479,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          else ()
                  val (x',cx')  = csum (x,cx,h) 
                  val (y',h',cst',w) = fstepper (d,r,ext,extev,h,x,y,ynext,cst)
-                 val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
+                 val e'  = fixthr (fcond (x',finterp (h,w,x,y) 1.0,e,d,r,ext,extev,enext))
                  val _ = if debug
                          then Printf.printf `"RootStep: h' = "R `" x = "R `" y[0] = "R `" x' = "R `" y'[0] = "R `" e[0] = "R `" e'[0] = "R `"\n" $ h' x (getindex(y,0)) x' (getindex(y',0)) (getindex(e,0)) (getindex(e',0))
                          else ()
@@ -588,7 +591,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                            else ()
                    val (x',cx')  = csum (x,cx,h)
                    val (y',h',cst',w) = fstepper (ext,extev,h,x,y,ynext,cst)
-                   val e'  = fixthr (fcond (x',y',e,ext,extev,enext))
+                   val e'  = fixthr (fcond (x',finterp (h,w,x,y) 1.0,e,ext,extev,enext))
                    val rootval = frootval (h,w,x,cx,y,e,x',cx',y',e',ext,extev,enext)
 
                in
