@@ -61,7 +61,7 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val evdelta   = 1E~12
+val evdelta   = 1E~9
 val tol     = ref (SOME (1E~10))
 val maxstep = ref 2.0
     
@@ -76,8 +76,14 @@ fun controller_h (Left (h,_,_)) = h
 fun controller_r_prev (Left (_,_,r)) = r
   | controller_r_prev (Right (_,_,r)) = r
 
-fun controller_update_h (Left (h,cst,r),h') = Left(h',cst,r)
-  | controller_update_h (Right (h,cst,r),h') = Right(h',cst,r)
+fun controller_update_h (Left (h,cst,r),h') =
+  (if h' < evdelta
+   then raise Fail ("controller_update_h: new h = (" ^ (Real.toString h') ^ ") < evdelta")
+   else Left(h',cst,r))
+  | controller_update_h (Right (h,cst,r),h') = 
+    (if h' < evdelta
+     then raise Fail ("controller_update_h: new h (" ^ (Real.toString h') ^ ") < evdelta")
+     else Right(h',cst,r))
 
                                                                     
 (* PID stepsize controller from Gustafsson 1991. *)
@@ -87,12 +93,14 @@ fun controller tol (h,ys,prev) =
       val k   = 0.87
       val ki  = 0.08
       val kp  = 0.10
+      val f   = 1.414
       val r   = Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys
       val est = r / tol
       val _ = if debug
-              then Printf.printf `"controller: est = "R
-                                 `" r = "R `"\n" $ est r
+              then Printf.printf `"controller: tol = "R `" est = "R
+                                 `" r = "R `" h = "R `"\n" $ tol est r h
               else ()
+      val _ = if h <= 0.0 then raise Fail "controller: zero time step" else ()
   in 
       if est <= 1.0
       then (* current step accepted *)
@@ -102,13 +110,19 @@ fun controller tol (h,ys,prev) =
                (let val cst_next =
                         case prev of
                             Left (h_prev, cst_prev, r_prev) => (* if previous step rejected, restart *)
-                            (if h <= (controller_h prev)
+                            (if h > 0.0 andalso h <= (controller_h prev)
                              then h * (h / cst_prev)
                              else h_prev * (h_prev / cst_prev))
                          |  Right (h_prev, cst_prev, r_prev) =>
                             if r > 0.0 andalso r_prev > 0.0
                             then (Math.pow (tol / r, ki)) * (Math.pow (r_prev / r, kp)) * cst_prev
-                            else cst_prev
+                            else f*cst_prev
+                    val _ = if cst_next <= 0.0
+                            then raise Fail ("controller: next state is zero; h = " ^ (Real.toString h) ^
+                                             " prev h = " ^ (Real.toString (controller_h prev)) ^
+                                             " r = " ^ (Real.toString r) ^
+                                             " r_prev = " ^ (Real.toString (controller_r_prev prev)))
+                            else ()
                     val h_next = min(cst_next, !maxstep)
                     val r_prev = r
                 in
@@ -252,7 +266,7 @@ fun fixthr v =
 
         
 fun posdetect (x, e, x', e') =
-  if x' > x
+  if x'-x >= evdelta
   then vfoldi2 (fn(i,v1,v2,lst) =>
                    case thr2 (i,v1,v2) of
                        SOME t => (t,v1,v2)::lst
@@ -460,12 +474,12 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
          then (if y = ynext then raise Fail ("Dynamics.integral: RegimeState: y and ynext are the same") else ();
                if y = yrsp then raise Fail ("Dynamics.integral: RegimeState: y and yrsp are the same") else ())
          else ();
+         if not ((controller_h cst) > 0.0)
+         then raise Fail ("Dynamics.integral: RegimeState: zero time step (root=" ^ (showRoot root) ^ ")")
+         else ();
          case root of
              RootBefore =>
              let
-                 val _ = if not ((controller_h cst) > 0.0)
-                         then raise Fail ("Dynamics.integral: RegimeState: zero time step (root=" ^ (showRoot root) ^ ")")
-                         else ()
                  val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
                  val _ = if debug
                          then Printf.printf `"RootBefore: x = "R `" e'[0] = "R`"\n" $ x (getindex(e',0))
@@ -515,13 +529,14 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                val h''  = (1.0-e_theta)*h
                                val _ = if debug
                                        then Printf.printf `"RootStep: Mid: x' = "R `" x'' = "R 
-                                                          `" h'' = "R `" y'' = "R `" y = "R
-                                                          `"\n" $ x' x'' h'' (getindex(y'',0)) (getindex(y,0))
+                                                          `" h' = "R `" h'' = "R `" y'' = "R `" y = "R
+                                                          `"\n" $ x' x'' h' h'' (getindex(y'',0)) (getindex(y,0))
                                        else ()
                                val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
+                               val cst'' = controller_update_h (cst',e_theta*h) 
                            in
-                               RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
-                                           RootFound (i,if h''>0.0 then h''::hs else hs))
+                               RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst'',
+                                           RootFound (i,if h''>evdelta then h''::hs else hs))
                            end
                        else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
                    | NONE => (case hs of
@@ -550,7 +565,9 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,cst',RootBefore)
              end
            | RootAfter (i,h1::hs) =>
-             let 
+             let
+                 val _ = if h1 <= 0.0 then raise Fail "RootAfter: zero time step" else ()
+
                  val hev       = Real.*(0.5,evdelta)
                  val (x',cx')  = csum (x,cx,hev)
                  val (y',_,_,w) = fstepper (d,r,ext,extev,hev,x,y,ynext,cst)
@@ -576,13 +593,12 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
         val frootval = event_rootval (finterp,fcond)
 
         fun integral' (EventState(x,cx,y,e,ext,extev,ynext,yrsp,enext,cst,root)) =
-          (
+          (if not ((controller_h cst) > 0.0)
+           then raise Fail ("Dynamics.integral: EventState: zero time step (root=" ^ (showRoot root) ^ ")")
+           else ();
            case root of
                RootBefore =>
                let
-                   val _ = if not ((controller_h cst) > 0.0)
-                           then raise Fail ("Dynamics.integral: EventState: zero time step (root=" ^ (showRoot root) ^ ")")
-                           else ()
                    val e' = fixthr (fcond (x,y,e,ext,extev,enext))
                    val h  = controller_h cst 
                in
@@ -618,9 +634,10 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                        `"\n" $ x' x'' h'' (getindex(y'',0))
                                  else ()
                          val e''  = fixthr (fcond (x'',y'',e,ext,extev,enext))
+                         val cst'' = controller_update_h (cst',e_theta*h)
                      in
-                         EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
-                                    RootFound (i,if h''>0.0 then h''::hs else hs))
+                         EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst'',
+                                    RootFound (i,if h''>evdelta then h''::hs else hs))
                      end)
                    | NONE =>
                      (case hs of

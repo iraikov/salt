@@ -231,7 +231,7 @@ fun bk_sum (bs: RCL list) =
                     | NONE => recur (bs, ks, fs, ts)
               end
               | recur ([], ks, [], ts) =
-                raise Fail "RungeLutta.bk_sum: empty list of function evaluations"
+                raise Fail "RungeKutta.bk_sum: empty list of function evaluations"
               | recur ([], ks, fs, ts) = foldl1 (fn(x,y) => sum (x,y,yout)) fs
         in
             recur (bs, ks, [], ts)
