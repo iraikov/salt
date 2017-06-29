@@ -61,7 +61,7 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val evdelta   = 1E~9
+val evdelta = 1E~12
 val tol     = ref (SOME (1E~10))
 val maxstep = ref 2.0
     
@@ -73,8 +73,11 @@ type controller_state = ((real * real * real), (real * real * real)) either
 fun controller_h (Left (h,_,_)) = h
   | controller_h (Right (h,_,_)) = h
 
-fun controller_r_prev (Left (_,_,r)) = r
-  | controller_r_prev (Right (_,_,r)) = r
+fun controller_r (Left (_,_,r)) = r
+  | controller_r (Right (_,_,r)) = r
+
+fun controller_cst (Left (_,cst,_)) = cst
+  | controller_cst (Right (_,cst,_)) = cst
 
 fun controller_update_h (Left (h,cst,r),h') =
   (if h' < evdelta
@@ -94,6 +97,7 @@ fun controller tol (h,ys,prev) =
       val ki  = 0.08
       val kp  = 0.10
       val f   = 1.414
+      val r_mintol = 1E~16
       val r   = Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys
       val est = r / tol
       val _ = if debug
@@ -114,14 +118,15 @@ fun controller tol (h,ys,prev) =
                              then h * (h / cst_prev)
                              else h_prev * (h_prev / cst_prev))
                          |  Right (h_prev, cst_prev, r_prev) =>
-                            if r > 0.0 andalso r_prev > 0.0
+                            if r > r_mintol andalso r_prev > r_mintol
                             then (Math.pow (tol / r, ki)) * (Math.pow (r_prev / r, kp)) * cst_prev
                             else f*cst_prev
-                    val _ = if cst_next <= 0.0
-                            then raise Fail ("controller: next state is zero; h = " ^ (Real.toString h) ^
+                    val _ = if cst_next <= 0.0 orelse (not (Real.isFinite(cst_next)))
+                            then raise Fail ("controller: next state is zero or not finite; h = " ^ (Real.toString h) ^
                                              " prev h = " ^ (Real.toString (controller_h prev)) ^
                                              " r = " ^ (Real.toString r) ^
-                                             " r_prev = " ^ (Real.toString (controller_r_prev prev)))
+                                             " r_prev = " ^ (Real.toString (controller_r prev)) ^
+                                             " cst_prev = " ^ (Real.toString (controller_cst prev)))
                             else ()
                     val h_next = min(cst_next, !maxstep)
                     val r_prev = r
