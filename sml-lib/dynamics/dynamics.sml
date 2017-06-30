@@ -61,7 +61,7 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val evdelta = 1E~12
+val evdelta = 1E~14
 val tol     = ref (SOME (1E~10))
 val maxstep = ref 2.0
     
