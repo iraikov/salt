@@ -61,7 +61,7 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val evdelta = 1E~14
+val evdelta = 1E~15
 val tol     = ref (SOME (1E~10))
 val maxstep = ref 2.0
     
@@ -89,16 +89,16 @@ fun controller_update_h (Left (h,cst,r),h') =
      else Right(h',cst,r))
 
                                                                     
-(* PID stepsize controller from Gustafsson 1991. *)
+(* PI stepsize controller from Gustafsson 1991. *)
 
 fun controller tol (h,ys,prev) =
   let open Real
       val k   = 0.87
       val ki  = 0.08
       val kp  = 0.10
-      val f   = 1.414
-      val r_mintol = 1E~16
-      val r   = Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys
+      val f   = 1.1
+      val r_mintol = 1E~15
+      val r   = (Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys) / h
       val est = r / tol
       val _ = if debug
               then Printf.printf `"controller: tol = "R `" est = "R
