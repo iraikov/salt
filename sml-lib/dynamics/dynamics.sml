@@ -96,7 +96,7 @@ fun controller tol (h,ys,prev) =
       val k   = 0.87
       val ki  = 0.08
       val kp  = 0.10
-      val f   = 1.1
+      val f   = 1.414
       val r_mintol = 1E~15
       val r   = (Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys) / h
       val est = r / tol
