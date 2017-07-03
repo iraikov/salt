@@ -43,6 +43,7 @@ open Real
 open Math
 open SignalMath
 
+val controller_debug = false
 val debug = false
 val trace = false
 
@@ -61,7 +62,7 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val evdelta = 1E~15
+val float_eps = 1E~11
 val tol     = ref (SOME (1E~10))
 val maxstep = ref 2.0
     
@@ -80,12 +81,12 @@ fun controller_cst (Left (_,cst,_)) = cst
   | controller_cst (Right (_,cst,_)) = cst
 
 fun controller_update_h (Left (h,cst,r),h') =
-  (if h' < evdelta
-   then raise Fail ("controller_update_h: new h = (" ^ (Real.toString h') ^ ") < evdelta")
+  (if h' < float_eps
+   then raise Fail ("controller_update_h: new h = (" ^ (Real.toString h') ^ ") < float_eps")
    else Left(h',cst,r))
   | controller_update_h (Right (h,cst,r),h') = 
-    (if h' < evdelta
-     then raise Fail ("controller_update_h: new h (" ^ (Real.toString h') ^ ") < evdelta")
+    (if h' < float_eps
+     then raise Fail ("controller_update_h: new h (" ^ (Real.toString h') ^ ") < float_eps")
      else Right(h',cst,r))
 
                                                                     
@@ -97,10 +98,9 @@ fun controller tol (h,ys,prev) =
       val ki  = 0.08
       val kp  = 0.1
       val f   = 1.2
-      val r_mintol = 1E~15
       val r   = (Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys) / h
       val est = r / tol
-      val _ = if debug
+      val _ = if controller_debug
               then Printf.printf `"controller: tol = "R `" est = "R
                                  `" r = "R `" h = "R `"\n" $ tol est r h
               else ()
@@ -118,10 +118,9 @@ fun controller tol (h,ys,prev) =
                              then h * (h / cst_prev)
                              else h_prev * (h_prev / cst_prev))
                          |  Right (h_prev, cst_prev, r_prev) =>
-                            case (r >= r_mintol, r_prev >= r_mintol) of
-                                (true, true)   => (Math.pow (tol / r, ki)) * (Math.pow (r_prev / r, kp)) * cst_prev
-                              | (true,  false) => (Math.pow (tol / r, ki)) * cst_prev
-                              | (false, _)     => if cst_prev > 0.0 then f*cst_prev else controller_h prev
+                            if (r > float_eps) andalso (r_prev > float_eps)
+                            then (Math.pow (tol / r, ki)) * (Math.pow (r_prev / r, kp)) * cst_prev
+                            else (if cst_prev > 0.0 then f*cst_prev else controller_h prev)
                     val _ = if cst_next <= 0.0 orelse (not (Real.isFinite(cst_next)))
                             then raise Fail ("controller: next state is zero or not finite; cst_next = " ^ (Real.toString cst_next) ^
                                              " h = " ^ (Real.toString h) ^
@@ -131,6 +130,9 @@ fun controller tol (h,ys,prev) =
                                              " cst_prev = " ^ (Real.toString (controller_cst prev)))
                             else ()
                     val h_next = min(cst_next, !maxstep)
+                    val _ = if controller_debug
+                            then Printf.printf `"controller: cst_next = "R `" h_next = "R `" h_prev = "R `"\n" $ cst_next h_next (controller_h prev)
+                            else ()
                     val r_prev = r
                 in
                     Right (h_next, cst_next, r_prev)
@@ -266,14 +268,14 @@ fun thr2 (i,v1,v2) =
 
         
 fun fixthr_s v =
-  if Real.>(Real.abs(v), evdelta) then v else 0.0
+  if Real.>(Real.abs(v), float_eps) then v else 0.0
                                                 
 fun fixthr v =
-    (Array.modify (fn(x) => if Real.>(Real.abs(x), evdelta) then x else 0.0) v; v)
+    (Array.modify (fn(x) => if Real.>(Real.abs(x), float_eps) then x else 0.0) v; v)
 
         
 fun posdetect (x, e, x', e') =
-  if x'-x >= evdelta
+  if x'-x >= float_eps
   then vfoldi2 (fn(i,v1,v2,lst) =>
                    case thr2 (i,v1,v2) of
                        SOME t => (t,v1,v2)::lst
@@ -416,7 +418,7 @@ fun regime_rootval (finterp,fcond) =
                              in
                                  res
                              end
-                           val theta = FindRoot.brent evdelta evtest 0.0 1.0
+                           val theta = FindRoot.brent float_eps evtest 0.0 1.0
                            val (xinterp, cxinterp) = csum(x,cx,theta*h)
                        in
                            case ax of
@@ -456,7 +458,7 @@ fun event_rootval (finterp,fcond) =
                              in
                                  res
                              end
-                           val theta = FindRoot.brent evdelta evtest 0.0 1.0
+                           val theta = FindRoot.brent float_eps evtest 0.0 1.0
                            val (xinterp, cxinterp) = csum(x,cx,theta*h)
                        in
                            case ax of
@@ -543,7 +545,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                val cst'' = controller_update_h (cst',e_theta*h) 
                            in
                                RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst'',
-                                           RootFound (i,if h''>evdelta then h''::hs else hs))
+                                           RootFound (i,if h''>float_eps then h''::hs else hs))
                            end
                        else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
                    | NONE => (case hs of
@@ -575,7 +577,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
              let
                  val _ = if h1 <= 0.0 then raise Fail "RootAfter: zero time step" else ()
 
-                 val hev       = Real.*(0.5,evdelta)
+                 val hev       = Real.*(0.5,float_eps)
                  val (x',cx')  = csum (x,cx,hev)
                  val (y',_,_,w) = fstepper (d,r,ext,extev,hev,x,y,ynext,cst)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
@@ -644,7 +646,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          val cst'' = controller_update_h (cst',e_theta*h)
                      in
                          EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst'',
-                                    RootFound (i,if h''>evdelta then h''::hs else hs))
+                                    RootFound (i,if h''>float_eps then h''::hs else hs))
                      end)
                    | NONE =>
                      (case hs of
@@ -665,7 +667,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                end
              | RootAfter (i,hs) =>
                let
-                   val hev       = Real.*(0.5,evdelta)
+                   val hev       = Real.*(0.5,float_eps)
                    val (x',cx')  = csum (x,cx,hev)
                    val (y',_,_,w)  = fstepper (ext,extev,hev,x,y,ynext,cst)
                    val e'  = fixthr (fcond (x',y',e,ext,extev,enext))

@@ -124,7 +124,7 @@ val _ = if is_help then exitHelp (CommandLine.name()) else ()
 val _ = case is_tol of SOME tol => D.tol := (SOME tol)
                      | NONE => ()
                                                                
-val h0     = case is_timestep of SOME dt => dt | NONE => 0.01
+val h0     = case is_timestep of SOME dt => dt | NONE => 0.001
 val tstop = case is_time of SOME t => t | NONE => 150.0
                                                       
 

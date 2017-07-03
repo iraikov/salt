@@ -220,7 +220,9 @@ int Dormand_Prince_5_4_hinterp(int n, double theta,
       vector_sum (n, t6, t7, yout);
     }
   else
-    vector_copy (n, y, yout);
+    {
+      vector_copy (n, y, yout);
+    }
 
   return 0;
 }
