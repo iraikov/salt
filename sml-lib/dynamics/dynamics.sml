@@ -62,7 +62,7 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val float_eps = 1E~11
+val float_eps = 1E~12
 val tol     = ref (SOME (1E~10))
 val maxstep = ref 2.0
     
