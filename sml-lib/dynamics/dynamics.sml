@@ -121,9 +121,10 @@ fun controller tol (h,ys,prev) =
                             case (r >= r_mintol, r_prev >= r_mintol) of
                                 (true, true)   => (Math.pow (tol / r, ki)) * (Math.pow (r_prev / r, kp)) * cst_prev
                               | (true,  false) => (Math.pow (tol / r, ki)) * cst_prev
-                              | (false, _)     => f*cst_prev
+                              | (false, _)     => if cst_prev > 0.0 then f*cst_prev else controller_h prev
                     val _ = if cst_next <= 0.0 orelse (not (Real.isFinite(cst_next)))
-                            then raise Fail ("controller: next state is zero or not finite; h = " ^ (Real.toString h) ^
+                            then raise Fail ("controller: next state is zero or not finite; cst_next = " ^ (Real.toString cst_next) ^
+                                             " h = " ^ (Real.toString h) ^
                                              " prev h = " ^ (Real.toString (controller_h prev)) ^
                                              " r = " ^ (Real.toString r) ^
                                              " r_prev = " ^ (Real.toString (controller_r prev)) ^
