@@ -89,14 +89,14 @@ fun controller_update_h (Left (h,cst,r),h') =
      else Right(h',cst,r))
 
                                                                     
-(* PI stepsize controller from Gustafsson 1991. *)
+(* Stepsize controller from Gustafsson 1991. *)
 
 fun controller tol (h,ys,prev) =
   let open Real
       val k   = 0.87
       val ki  = 0.08
-      val kp  = 0.10
-      val f   = 1.414
+      val kp  = 0.1
+      val f   = 1.2
       val r_mintol = 1E~15
       val r   = (Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys) / h
       val est = r / tol
@@ -118,9 +118,10 @@ fun controller tol (h,ys,prev) =
                              then h * (h / cst_prev)
                              else h_prev * (h_prev / cst_prev))
                          |  Right (h_prev, cst_prev, r_prev) =>
-                            if r > r_mintol andalso r_prev > r_mintol
-                            then (Math.pow (tol / r, ki)) * (Math.pow (r_prev / r, kp)) * cst_prev
-                            else f*cst_prev
+                            case (r >= r_mintol, r_prev >= r_mintol) of
+                                (true, true)   => (Math.pow (tol / r, ki)) * (Math.pow (r_prev / r, kp)) * cst_prev
+                              | (true,  false) => (Math.pow (tol / r, ki)) * cst_prev
+                              | (false, _)     => f*cst_prev
                     val _ = if cst_next <= 0.0 orelse (not (Real.isFinite(cst_next)))
                             then raise Fail ("controller: next state is zero or not finite; h = " ^ (Real.toString h) ^
                                              " prev h = " ^ (Real.toString (controller_h prev)) ^
