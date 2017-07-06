@@ -88,8 +88,7 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,void **),
   h2 = 0.2 * h;
   h3 = 0.3 * h;
   h4 = 0.8 * h;
-  h5 = 0.888888888889 * h;
-
+  h5 = 0.8888888888888888 * h;
   //printf("c: h = %g\n", h);
   //printf("c: y[0] = %g\n", y[0]);
   (*f)(x0, y, k1, clos);

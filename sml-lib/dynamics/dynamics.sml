@@ -62,8 +62,8 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val float_eps = 1E~12
-val tol     = ref (SOME (1E~10))
+val float_eps = 1E~15
+val tol     = ref (SOME (1E~8))
 val maxstep = ref 2.0
     
 datatype ('a, 'b) either = Left of 'a | Right of 'b
@@ -88,67 +88,7 @@ fun controller_update_h (Left (h,cst,r),h') =
     (if h' < float_eps
      then raise Fail ("controller_update_h: new h (" ^ (Real.toString h') ^ ") < float_eps")
      else Right(h',cst,r))
-
-                                                                    
-(* Stepsize controller from Gustafsson 1991. *)
-
-fun controller tol (h,ys,prev) =
-  let open Real
-      val k   = 0.87
-      val ki  = 0.08
-      val kp  = 0.1
-      val f   = 1.2
-      val r   = (Array.foldl (fn (y,ax) => (abs y) + ax) 0.0 ys) / h
-      val est = r / tol
-      val _ = if controller_debug
-              then Printf.printf `"controller: tol = "R `" est = "R
-                                 `" r = "R `" h = "R `"\n" $ tol est r h
-              else ()
-      val _ = if h <= 0.0 then raise Fail "controller: zero time step" else ()
-  in 
-      if est <= 1.0
-      then (* current step accepted *)
-          (if h < (controller_h prev) 
-           then prev
-           else 
-               (let val cst_next =
-                        case prev of
-                            Left (h_prev, cst_prev, r_prev) => (* if previous step rejected, restart *)
-                            (if h > 0.0 andalso h <= (controller_h prev)
-                             then h * (h / cst_prev)
-                             else h_prev * (h_prev / cst_prev))
-                         |  Right (h_prev, cst_prev, r_prev) =>
-                            if (r > float_eps) andalso (r_prev > float_eps)
-                            then (Math.pow (tol / r, ki)) * (Math.pow (r_prev / r, kp)) * cst_prev
-                            else (if cst_prev > 0.0 then f*cst_prev else controller_h prev)
-                    val _ = if cst_next <= 0.0 orelse (not (Real.isFinite(cst_next)))
-                            then raise Fail ("controller: next state is zero or not finite; cst_next = " ^ (Real.toString cst_next) ^
-                                             " h = " ^ (Real.toString h) ^
-                                             " prev h = " ^ (Real.toString (controller_h prev)) ^
-                                             " r = " ^ (Real.toString r) ^
-                                             " r_prev = " ^ (Real.toString (controller_r prev)) ^
-                                             " cst_prev = " ^ (Real.toString (controller_cst prev)))
-                            else ()
-                    val h_next = min(cst_next, !maxstep)
-                    val _ = if controller_debug
-                            then Printf.printf `"controller: cst_next = "R `" h_next = "R `" h_prev = "R `"\n" $ cst_next h_next (controller_h prev)
-                            else ()
-                    val r_prev = r
-                in
-                    Right (h_next, cst_next, r_prev)
-                end))
-      else (* step rejected *)
-          (let
-              val (cst_prev, h_prev) =
-                  case prev of
-                      Left (h_prev, cst_prev, r_prev)  => (cst_prev, h_prev)
-                   |  Right (h_prev, cst_prev, r_prev) => (cst_prev, h_prev)
-                                                                               
-              val h_next = (Math.pow (tol / r, 1.0 / k)) * h_prev
-          in
-              Left (h_next, cst_prev, r)
-          end)
-  end
+        
 
 
 exception ConvergenceError
@@ -238,7 +178,67 @@ fun vfoldi2 f init (v1,v2) =
       recur (0, init)
     end 
 
-  
+
+fun error_estimate (h, ys, es) =
+  let
+      val eta = 0.1
+      val ec = Math.sqrt (vfoldi2 (fn(i,e,y,ax) => let val v = abs (e/(eta + y)) in (v*v)+ax end) 0.0 (es,ys))
+  in
+      ec
+  end
+
+fun error_estimate (h, ys, es) =
+  Array.foldl (fn (e,ax) => (abs e) + ax) 0.0 es
+                                                         
+
+fun controller tol (h,ys,es,prev) =
+  let
+      val safety = 0.9
+      val p0     = ~0.25
+      val p1     = ~0.2
+      val k      = 1.89E~4
+      val maxf   = 5.0
+      val minf   = 0.1
+      val r         = error_estimate (h, ys, es) 
+      val cerr      = r / tol
+      val (cst_prev, h_prev, r_prev) =
+          case prev of
+              Left (h_prev, cst_prev, r_prev)  => (cst_prev, h_prev, r_prev)
+           |  Right (h_prev, cst_prev, r_prev) => (cst_prev, h_prev, r_prev)
+  in
+      if cerr > 1.0
+      then
+          let (* step rejected *)
+              val cst_next  = safety * Math.pow(cerr, p0)
+              val ratio     = if h_prev > float_eps
+                              then max(cst_next, minf)
+                              else min(cst_next, minf)
+              val h_next    = min(ratio * h_prev, (!maxstep))
+              val cerr_prev = cerr
+                                  
+              val _ = if controller_debug
+                      then Printf.printf `"controller: step rejected: r = "R `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ r cerr ratio h_next
+                      else ()
+          in
+              Left (h_next, cerr_prev, r)
+          end
+      else 
+          (* step accepted *)
+          (let
+              val ratio  = if cerr > k then safety * Math.pow(cerr, p1) else maxf
+              val h_next = min(ratio * h_prev, (!maxstep))
+              val cerr_prev = cerr
+
+              val _ = if controller_debug
+                      then Printf.printf `"controller: step accepted: r = "R `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ r cerr ratio h_next
+                      else ()
+          in
+              Right (h_next, cerr_prev, r)
+          end)
+  end
+
+
+      
 (* Compensated summation *)
 fun csum (x, cx, h) =
   let
@@ -337,8 +337,8 @@ fun evresponse (fpos,fneg) =
       | _ => raise Fail "evresponse: unsupported event response configuration"
                    
 
-fun adaptive_regime_stepper stepper  =
-  let open Real
+fun adaptive_regime_stepper stepper =
+  let 
         fun f iter (d,r,ext,extev,h,x,ys,yout,cst) =
             if Int.<(iter,maxiter)
             then
@@ -348,7 +348,7 @@ fun adaptive_regime_stepper stepper  =
                     case !tol of
                         SOME tolv =>
                         let
-                            val cst' = controller tolv (h,err,cst)
+                            val cst' = controller tolv (h,ys',err,cst)
                         in
                             case cst' of
                                 Right (h',_,_) => 
@@ -365,7 +365,7 @@ fun adaptive_regime_stepper stepper  =
 
         
 fun adaptive_stepper stepper =
-    let open Real
+    let
         fun f iter (ext,extev,h,x,ys,yout,cst) =
             if Int.<(iter,maxiter)
             then 
@@ -375,7 +375,7 @@ fun adaptive_stepper stepper =
                     case !tol of
                         SOME tolv =>
                         let
-                            val cst' = controller tolv (h,err,cst)
+                            val cst' = controller tolv (h,ys',err,cst)
                         in
                             case cst' of
                                 Right (h',_,_) => 

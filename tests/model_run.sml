@@ -132,9 +132,5 @@ val f = D.integral(Model.odefun (p, fld),Model.interpfun,optApply Model.condfun 
                    optApply Model.posfun (p, fld),optApply Model.negfun (p, fld),
                    optApply Model.dposfun (p, fld),Model.regfun)
 
-val err0 = case (!(D.tol)) of
-               SOME tol => tol 
-            |  NONE => 0.0
-                                        
-val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial(),extevinitial(),tstop,h0,ynext,rsp,err0,evnext)
+val _ = start (f,initial,evinitial,dinitial,rinitial,extinitial(),extevinitial(),tstop,h0,ynext,rsp,0.0,evnext)
 
