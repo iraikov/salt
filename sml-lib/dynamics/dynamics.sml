@@ -542,7 +542,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                           `"\n" $ x' x'' h' h'' (getindex(y'',0)) (getindex(y,0))
                                        else ()
                                val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
-                               val cst'' = controller_update_h (cst',e_theta*h) 
+                               val cst'' = controller_update_h (cst',max(e_theta*h, float_eps))
                            in
                                RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst'',
                                            RootFound (i,if h''>float_eps then h''::hs else hs))
@@ -643,7 +643,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                        `"\n" $ x' x'' h'' (getindex(y'',0))
                                  else ()
                          val e''  = fixthr (fcond (x'',y'',e,ext,extev,enext))
-                         val cst'' = controller_update_h (cst',e_theta*h)
+                         val cst'' = controller_update_h (cst',max(e_theta*h, float_eps))
                      in
                          EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst'',
                                     RootFound (i,if h''>float_eps then h''::hs else hs))
