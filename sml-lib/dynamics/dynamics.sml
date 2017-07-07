@@ -197,8 +197,8 @@ fun controller tol (h,ys,es,prev) =
       val p0     = ~0.25
       val p1     = ~0.2
       val k      = 1.89E~4
-      val maxf   = 5.0
-      val minf   = 0.1
+      val fmax   = 5.0
+      val fmin   = 0.1
       val r         = error_estimate (h, ys, es) 
       val cerr      = r / tol
       val (cst_prev, h_prev, r_prev) =
@@ -211,9 +211,9 @@ fun controller tol (h,ys,es,prev) =
           let (* step rejected *)
               val cst_next  = safety * Math.pow(cerr, p0)
               val ratio     = if h_prev > float_eps
-                              then max(cst_next, minf)
-                              else min(cst_next, minf)
-              val h_next    = min(ratio * h_prev, (!maxstep))
+                              then max(cst_next, fmin)
+                              else min(cst_next, fmin)
+              val h_next    = max(min(ratio * h_prev, (!maxstep)), float_eps)
               val cerr_prev = cerr
                                   
               val _ = if controller_debug
@@ -225,7 +225,7 @@ fun controller tol (h,ys,es,prev) =
       else 
           (* step accepted *)
           (let
-              val ratio  = if cerr > k then safety * Math.pow(cerr, p1) else maxf
+              val ratio  = if cerr > k then safety * Math.pow(cerr, p1) else fmax
               val h_next = min(ratio * h_prev, (!maxstep))
               val cerr_prev = cerr
 
