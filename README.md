@@ -200,6 +200,7 @@ Equations serve to define differential and algebraic equations.
 
 ## Version history
 
+- 0.21 : Added step size controller
 - 0.20 : Support for precise event time interpolation and adaptive solvers
 - 0.5 : Support for using assigned quantities in external init equations 
 - 0.1 : Initial release
