@@ -180,14 +180,6 @@ fun vfoldi2 f init (v1,v2) =
 
 
 fun error_estimate (h, ys, es) =
-  let
-      val eta = 0.1
-      val ec = Math.sqrt (vfoldi2 (fn(i,e,y,ax) => let val v = abs (e/(eta + y)) in (v*v)+ax end) 0.0 (es,ys))
-  in
-      ec
-  end
-
-fun error_estimate (h, ys, es) =
   Array.foldl (fn (e,ax) => (abs e) + ax) 0.0 es
                                                          
 
@@ -196,7 +188,7 @@ fun controller tol (h,ys,es,prev) =
       val safety = 0.9
       val p0     = ~0.25
       val p1     = ~0.2
-      val k      = 1.89E~4
+      val k      = 1.89E~4 (* Math.pow (5.0 / safety, 1.0 / p1) *)
       val fmax   = 5.0
       val fmin   = 0.1
       val r         = error_estimate (h, ys, es) 
@@ -258,7 +250,8 @@ fun thr2 (i,v1,v2) =
     in
         case (s1,s2) of
             (~1,1) =>
-            (SOME (Mid i))
+            if Real.>(Real.abs(v1), float_eps)
+            then (SOME (Mid i)) else SOME (Near i)
           | (~1,0) =>
             SOME (Far i)
           | (0,1)  =>
@@ -545,7 +538,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                val cst'' = controller_update_h (cst',max(e_theta*h, float_eps))
                            in
                                RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst'',
-                                           RootFound (i,if h''>float_eps then h''::hs else hs))
+                                           RootFound (i,if h''>=float_eps then h''::hs else hs))
                            end
                        else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
                    | NONE => (case hs of
@@ -646,7 +639,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          val cst'' = controller_update_h (cst',max(e_theta*h, float_eps))
                      in
                          EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst'',
-                                    RootFound (i,if h''>float_eps then h''::hs else hs))
+                                    RootFound (i,if h''>=float_eps then h''::hs else hs))
                      end)
                    | NONE =>
                      (case hs of
