@@ -245,7 +245,7 @@
              (('signal.primop op . args)
               (fold recur ax args))
              (('getindex 'y index)
-              (if (member index asgn-idxs)
+              (if (member `(y ,index) asgn-idxs)
                   (cons `(y ,index) ax) ax))
              (('getindex 'yext index)
               (cons `(ext ,index) ax))
@@ -297,11 +297,14 @@
                                       '() blocks))))
               
               (let ((order1 (if (null? order) '()
-                                (filter-map (lambda (x) 
-                                              (and (pair? (cdr x)) 
-                                                   (not (member (car x) order))
-                                                   (member (cadr x) order) (car x)))
-                                            asgn-dag))))
+                                (concatenate
+                                 (map
+                                  (lambda (e)
+                                    (if (member (last e) order)
+                                        (filter-map (lambda (v) (and (not (member v order)) v)) (drop-right e 1))
+                                        '()))
+                                  asgn-dag)))))
+
                 (if (null? order1) 
                     order
                     (recur (append order1 order)))
@@ -323,7 +326,8 @@
                  (let ((ns-asgns1 (list-tabulate (length asgns1) (lambda (i) (+ i n)))))
                    (list (+ n (length asgns1)) (append (map cons ns-asgns1 asgns1) lst))))]
               [((and index ('ext _)) (n lst))
-               (let ((asgns1 (filter-assoc index asgns)))
+               (let ((asgns1 (append (filter-assoc index asgns)
+                                     (filter-assoc index ext-defs))))
                  (let ((ns-asgns1 (list-tabulate (length asgns1) (lambda (i) (+ i n)))))
                    (list (+ n (length asgns1)) (append (map cons ns-asgns1 asgns1) lst))))]
               )
@@ -347,10 +351,11 @@
           (eq-order (topological-sort eq-dag eq?))
           )
 
-      (append
-       (filter-map (lambda (kv) (assoc (car kv) asgn-defs)) eq-node-map)
-       (filter-map (lambda (kv) (assoc (car kv) ext-defs)) eq-node-map)
-       (map (lambda (eqid) (cdr (assoc eqid eq-nodes))) (reverse eq-order)))
+      (delete-duplicates
+       (append
+        (filter-map (lambda (kv) (assoc (car kv) asgn-defs)) eq-node-map)
+        (filter-map (lambda (kv) (assoc (car kv) ext-defs))  eq-node-map)
+        (map (lambda (eqid) (cdr (assoc eqid eq-nodes))) eq-order)))
       
     ))
 
@@ -427,6 +432,7 @@
 
 
         (trstmt (trace 'codegen-ODE "eqblock: ~A~%" eqblock))
+        (trstmt (trace 'codegen-ODE "externals: ~A~%" externals))
 
         (ode-inds 
          (sort
@@ -557,6 +563,8 @@
            (ext-defs (map (match-lambda [(index . name) 
                                          `((ext ,index) ,name (getindex ext ,index))])
                           invextindexmap))
+           
+           (trstmt (trace 'codegen-ODE "ext-defs: ~A~%" ext-defs))
 
            (asgn-idxs (delete-duplicates
                        (append
@@ -564,11 +572,13 @@
                         (filter-map
                          (match-lambda [('setindex 'dy_out index val) #f]
                                        [(or ('setindex 'y_out index val)
-                                            ('reduceindex 'y_out index val)) index]
+                                            ('reduceindex 'y_out index val)) `(y ,index)]
                                        [('reduceindex 'yext_out index val) #f]
                                        [eq (error 'codegen "unknown equation type" eq)])
                          eqblock))
                        ))
+
+           (trstmt (trace 'codegen-ODE "asgn-idxs: ~A~%" asgn-idxs))
 
            (asgn-dag (fold (match-lambda* 
                             [(('setindex 'dy_out index val) dag) dag]
@@ -585,6 +595,8 @@
                                                         (cons src `(y ,index))]
                                                        [src (error 'codegen "unknown node type" src)])
                                                       (fold-asgns asgn-idxs val))))
+                               (trace 'codegen-ODE "asgn-dag: reduceindex y_out ~A: val = ~A asgns: ~A~%"
+                                      index val (fold-asgns asgn-idxs val))
                                (if (null? edges) (cons `((y ,index)) dag)
                                    (fold (lambda (e dag) (update-edge e dag))
                                          dag edges)))]
@@ -606,6 +618,7 @@
 
            (asgn-order (topological-sort asgn-dag eq?))
 
+           (trstmt (trace 'codegen-ODE "asgn-order: ~A~%" asgn-order))
            
            (asgns 
             (delete-duplicates
@@ -779,6 +792,7 @@
                             libs))
                           ))
                    )
+
               (if has-regimes?
                   (V:Op 'make_regime_stepper (list rhsfun))
                   (V:Op 'make_stepper (list rhsfun))))
