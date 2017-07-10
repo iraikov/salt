@@ -79,7 +79,7 @@
         
 	(require-extension matchable datatype lalr-driver mathh unitconv with-units fmt fmt-c)
 	(require-library data-structures extras srfi-1 srfi-4 srfi-13)
-	(import (only srfi-1 zip fold fold-right filter filter-map list-tabulate every delete-duplicates)
+	(import (only srfi-1 first last zip fold fold-right filter filter-map list-tabulate concatenate every delete-duplicates drop-right)
                 (only srfi-4 list->s32vector)
                 (only srfi-13 string-null? string-concatenate string-map string<)
 		(only data-structures ->string alist-ref conc intersperse compose sort topological-sort)
@@ -559,6 +559,8 @@
          (regime-variable-name x))
         ((reduce-variable? x)   
          (variable-identity (reduce-variable-parent x)))
+        ((external? x)   
+         (external-name x))
         (else (error 'variable-identity "invalid argument" x))
         ))
 
