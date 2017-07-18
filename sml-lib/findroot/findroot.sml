@@ -96,7 +96,8 @@ fun brent delta f a b =
       val fb = f b
   in
       if fa * fb >= 0.0
-      then error_bracket ("RootFind.brent", a, fa, b, fb)
+      then (if Real.sign(a) = 0 andalso Real.sign(b) = 1
+      	   then 0.0 else error_bracket ("RootFind.brent", a, fa, b, fb))
            (* xdelta = ydelta = delta *)
       else brent_int_swap delta delta f a fa b fb a fa true 0.0 1
   end
