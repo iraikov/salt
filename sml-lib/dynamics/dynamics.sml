@@ -546,7 +546,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                 | _ => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootStep hs))
              end
            | RootFound (i,hs) =>
-             let 
+             let
                  val (y',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
                                                     (i,x,y,e,d,r,ext,extev,yrsp)
                  val _ = if debug
@@ -563,6 +563,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
                  val cst' = case cst of Left _ => cst 
                                      |  Right v => Left v
+                                                        
              in
                  RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,cst',RootBefore)
              end
@@ -579,8 +580,45 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          else ()
                  val cst' = case cst of Left _ => cst 
                                      |  Right v => Left v
+                 val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext)
              in
-                 RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootStep (((~ hev)+h1)::hs))
+                 case rootval of
+                     NONE => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootStep (((~ hev)+h1)::hs))
+                   | SOME (Near i,e_x,e_cx,e_theta,e_y) =>
+                     (if debug
+                      then Printf.printf `"RootAfter: Near: " `" x = "R 
+                                         `" y' = "R
+                                         `"\n" $ x (getindex(y',0))
+                      else ();
+                      RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,cst,RootFound (i,h1::hs)))
+                   | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
+                     (if debug
+                      then Printf.printf `"RootAfter Far: x = "R 
+                                         `" y' = "R
+                                         `"\n" $ x (getindex(y',0))
+                      else ();
+                      RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
+                   | SOME (Mid i,e_x,e_cx,e_theta,e_y) =>
+                     (if x' > e_x
+                       then
+                           let
+                               val x''  = e_x
+                               val cx'' = e_cx
+                               val y''  = y'
+                               val _    = Array.copy {src=e_y, dst=y'', di=0}
+                               val h''  = (1.0-e_theta)*hev
+                               val _ = if debug
+                                       then Printf.printf `"RootAfter: Mid: x' = "R `" x'' = "R 
+                                                          `" h'' = "R `" y'' = "R `" y = "R
+                                                          `"\n" $ x' x'' h'' (getindex(y'',0)) (getindex(y,0))
+                                       else ()
+                               val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
+                               val cst'' = controller_update_h (cst',max(e_theta*hev, float_eps))
+                           in
+                               RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst'',
+                                           RootFound (i,if h''>=float_eps then h''::hs else hs))
+                           end
+                       else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
              end
            | _ => raise Fail "integral: invalid arguments to regime stepper")
             
@@ -668,13 +706,38 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                              then Printf.printf `"RootAfter: x' = "R `" e' = "R
                                                 `" y' = "R `"\n" $ x' (getindex(e',0)) (getindex(y',0))
                              else ()
+                   val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,enext)
                    val cst' = case cst of Left _ => cst 
                                        |  Right v => Left v
 
                in
-                   case hs of
-                       [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootBefore)
-                    |  h1::hs => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootStep (((~ hev)+h1)::hs))
+                   case rootval of
+                     SOME (Near i,e_x,e_cx,e_theta,e_y) =>
+                     EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,cst',RootFound (i,hs))
+                   | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
+                     EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootFound (i,hs))
+                   | SOME (Mid i,e_x,e_cx,e_theta,e_y) =>
+                     (let
+                         val x''  = e_x
+                         val cx'' = e_cx
+                         val y''  = y'
+                         val _    = Array.copy {src=e_y, dst=y'', di=0}
+                         val h''  = (1.0-e_theta)*hev
+                         val _ = if debug
+                                 then Printf.printf `"RootStep: rootval: x' = "R `" x'' = "R 
+                                                    `" h'' = "R `" y'' = "R
+                                                       `"\n" $ x' x'' h'' (getindex(y'',0))
+                                 else ()
+                         val e''  = fixthr (fcond (x'',y'',e,ext,extev,enext))
+                         val cst'' = controller_update_h (cst',max(e_theta*hev, float_eps))
+                     in
+                         EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst'',
+                                    RootFound (i,if h''>=float_eps then h''::hs else hs))
+                     end)
+                   | NONE =>
+                     (case hs of
+                          [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootBefore)
+                       |  h1::hs => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootStep (((~ hev)+h1)::hs)))
                end
              |  _ => raise Fail "integral: invalid arguments to event stepper")
           | integral' _ =
