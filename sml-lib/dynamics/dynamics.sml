@@ -63,8 +63,8 @@ type externalev_state = real array
 
 val maxiter = 10
 val float_eps = 1E~15
-val tol     = ref (SOME (1E~8))
-val maxstep = ref 2.0
+val tol     = ref (SOME (1E~6))
+val maxstep = ref 0.5
     
 datatype ('a, 'b) either = Left of 'a | Right of 'b
 datatype ('a, 'b, 'c) ternary = Near of 'a | Mid of 'b | Far of 'c
@@ -88,6 +88,21 @@ fun controller_update_h (Left (h,cst,r),h') =
     (if h' < float_eps
      then raise Fail ("controller_update_h: new h (" ^ (Real.toString h') ^ ") < float_eps")
      else Right(h',cst,r))
+
+fun controller_scale_h (Left (h,cst,r),x) =
+  let val h' = h*x
+  in
+      if h' > float_eps
+      then Left(h',cst,r)
+      else Left(h,cst,r)
+  end
+  | controller_scale_h (Right (h,cst,r),x) =
+    let val h' = h*x
+    in
+        if h' > float_eps
+        then Right(h',cst,r)
+        else Right(h,cst,r)
+    end
         
 
 
@@ -209,7 +224,7 @@ fun controller tol (h,ys,es,prev) =
               val cerr_prev = cerr
                                   
               val _ = if controller_debug
-                      then Printf.printf `"controller: step rejected: r = "R `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ r cerr ratio h_next
+                      then Printf.printf `"controller: step rejected: r = "R  `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ r cerr ratio h_next
                       else ()
           in
               Left (h_next, cerr_prev, r)
@@ -222,7 +237,7 @@ fun controller tol (h,ys,es,prev) =
               val cerr_prev = cerr
 
               val _ = if controller_debug
-                      then Printf.printf `"controller: step accepted: r = "R `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ r cerr ratio h_next
+                      then Printf.printf `"controller: step accepted: r = "R `" tol = "R `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ r tol cerr ratio h_next
                       else ()
           in
               Right (h_next, cerr_prev, r)
@@ -552,73 +567,73 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val _ = if debug
                          then Printf.printf `"RootFound: x = "R `" e = "R `" y' = "R `"\n" $ x (getindex(e,0)) (getindex(y',0))
                          else ()
-             in
-                 RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,cst,RootAfter (i,hs))
-             end
-           | RootAfter (i,[]) =>
-             let 
-                 val _ = if debug
-                         then Printf.printf `"RootAfter: x = "R `" y = "R `" h = "R `"\n" $ x (getindex(y,0)) (controller_h cst)
-                         else ()
-                 val e'  = fixthr (fcond (x,y,e,d,r,ext,extev,enext))
                  val cst' = case cst of Left _ => cst 
                                      |  Right v => Left v
-                                                        
              in
-                 RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,cst',RootBefore)
+                 RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,cst',RootAfter (i,hs))
              end
-           | RootAfter (i,h1::hs) =>
+           | RootAfter (i,hs) =>
              let
-                 val _ = if h1 <= 0.0 then raise Fail "RootAfter: zero time step" else ()
-
                  val hev       = Real.*(0.5,float_eps)
                  val (x',cx')  = csum (x,cx,hev)
                  val (y',_,_,w) = fstepper (d,r,ext,extev,hev,x,y,ynext,cst)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
                  val _ = if debug
-                         then Printf.printf `"RootAfter: x = "R `" y = "R `" x' = "R `" y' = "R  `" h1 = "R `" h1-hev = "R `"\n" $ x (getindex(y,0)) x' (getindex(y',0)) h1 (h1-hev)
+                         then Printf.printf `"RootAfter: x = "R `" y = "R `" x' = "R `" y' = "R  `"\n" $ x (getindex(y,0)) x' (getindex(y',0))
                          else ()
-                 val cst' = case cst of Left _ => cst 
-                                     |  Right v => Left v
                  val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext)
+                 val cst' = controller_scale_h (cst, 0.5)
              in
                  case rootval of
-                     NONE => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootStep (((~ hev)+h1)::hs))
+                     NONE =>
+                     (case hs of
+                          h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootStep (((~ hev)+h1)::hs))
+                        | [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootBefore))
                    | SOME (Near i,e_x,e_cx,e_theta,e_y) =>
                      (if debug
                       then Printf.printf `"RootAfter: Near: " `" x = "R 
                                          `" y' = "R
                                          `"\n" $ x (getindex(y',0))
                       else ();
-                      RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,cst,RootFound (i,h1::hs)))
+                      RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,cst',RootFound (i,hs)))
                    | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
                      (if debug
                       then Printf.printf `"RootAfter Far: x = "R 
                                          `" y' = "R
                                          `"\n" $ x (getindex(y',0))
                       else ();
-                      RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
+                      (case hs of
+                           h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,((~ hev)+h1)::hs))
+                         | [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootBefore)))
                    | SOME (Mid i,e_x,e_cx,e_theta,e_y) =>
                      (if x' > e_x
-                       then
-                           let
-                               val x''  = e_x
-                               val cx'' = e_cx
-                               val y''  = y'
-                               val _    = Array.copy {src=e_y, dst=y'', di=0}
-                               val h''  = (1.0-e_theta)*hev
-                               val _ = if debug
-                                       then Printf.printf `"RootAfter: Mid: x' = "R `" x'' = "R 
-                                                          `" h'' = "R `" y'' = "R `" y = "R
-                                                          `"\n" $ x' x'' h'' (getindex(y'',0)) (getindex(y,0))
-                                       else ()
-                               val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
-                               val cst'' = controller_update_h (cst',max(e_theta*hev, float_eps))
-                           in
-                               RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst'',
-                                           RootFound (i,if h''>=float_eps then h''::hs else hs))
-                           end
-                       else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
+                      then
+                          let
+                              val x''  = e_x
+                              val cx'' = e_cx
+                              val y''  = y'
+                              val _    = Array.copy {src=e_y, dst=y'', di=0}
+                              val h''  = (1.0-e_theta)*hev
+                              val _ = if debug
+                                      then Printf.printf `"RootAfter: Mid: x' = "R `" x'' = "R 
+                                                         `" h'' = "R `" y'' = "R `" y = "R
+                                                         `"\n" $ x' x'' h'' (getindex(y'',0)) (getindex(y,0))
+                                      else ()
+                              val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
+                          in
+                              case hs of
+                                  h1::hs => 
+                                  RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
+                                              RootFound (i,((~ h'')+h1)::hs))
+                                | [] =>
+                                  RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
+                                              RootBefore)
+                                             
+                          end
+                      else (case hs of
+                                h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,((~ hev)+h1)::hs))
+                             | [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootBefore)))
+                                                     
              end
            | _ => raise Fail "integral: invalid arguments to regime stepper")
             
@@ -707,15 +722,17 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                 `" y' = "R `"\n" $ x' (getindex(e',0)) (getindex(y',0))
                              else ()
                    val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,enext)
-                   val cst' = case cst of Left _ => cst 
-                                       |  Right v => Left v
-
+                   val cst' = controller_scale_h (cst, 0.5)
                in
                    case rootval of
                      SOME (Near i,e_x,e_cx,e_theta,e_y) =>
                      EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,cst',RootFound (i,hs))
-                   | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
-                     EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootFound (i,hs))
+                    | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
+                      (case hs of
+                           h1::_ =>
+                           EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootFound (i,((~ hev)+h1)::hs))
+                         | [] =>
+                           EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootFound (i,[])))
                    | SOME (Mid i,e_x,e_cx,e_theta,e_y) =>
                      (let
                          val x''  = e_x
@@ -729,15 +746,20 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                        `"\n" $ x' x'' h'' (getindex(y'',0))
                                  else ()
                          val e''  = fixthr (fcond (x'',y'',e,ext,extev,enext))
-                         val cst'' = controller_update_h (cst',max(e_theta*hev, float_eps))
                      in
-                         EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst'',
-                                    RootFound (i,if h''>=float_eps then h''::hs else hs))
+                         case hs of
+                             h1::_ =>
+                             EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
+                                        RootFound (i,((~ h'')+h1)::hs))
+                          |  [] =>
+                             EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
+                                        RootFound (i,[]))
                      end)
                    | NONE =>
-                     (case hs of
-                          [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootBefore)
-                       |  h1::hs => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootStep (((~ hev)+h1)::hs)))
+                     case hs of
+                         h1::_ => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootStep (((~ hev)+h1)::hs))
+                      |  [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootBefore)
+                                            
                end
              |  _ => raise Fail "integral: invalid arguments to event stepper")
           | integral' _ =
