@@ -405,7 +405,9 @@ fun regime_rootval (finterp,fcond) =
                        Near i => (* threshold crossing is at first time point *)
                        SOME (t, x, cx, 0.0, y)
                      | Far i =>  (* threshold crossing is at second time point *)
-                       SOME (t, x', cx', 1.0, y')
+                       (case ax of
+                            NONE   => SOME (t, x', cx', 1.0, y')
+                          | SOME _ => ax)
                      | Mid i => 
                        (let
                            val finterp' = finterp (h,w,x,y)
@@ -445,7 +447,9 @@ fun event_rootval (finterp,fcond) =
                        Near i => (* threshold crossing is at first time point *)
                        SOME (t, x, cx, 0.0, y)
                      | Far i =>  (* threshold crossing is at second time point *)
-                       SOME (t, x', cx', 1.0, y')
+                       (case ax of
+                            NONE   => SOME (t, x', cx', 1.0, y')
+                          | SOME _ => ax)
                      | Mid i => 
                        (let
                            val finterp' = finterp (h,w,x,y)
@@ -485,7 +489,6 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
   let
       val fstepper = adaptive_regime_stepper stepper
       val frootval = regime_rootval (finterp,fcond)
-                                    
                                     
       fun integral' (RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,cst,root)) =
         (if debug
@@ -575,15 +578,15 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
              end
            | RootAfter (i,hs) =>
              let
-                 val hev       = Real.*(0.5,float_eps)
-                 val (x',cx')  = csum (x,cx,hev)
+                 val hev        = Real.*(0.5,float_eps)
+                 val (x',cx')   = csum (x,cx,hev)
                  val (y',_,_,w) = fstepper (d,r,ext,extev,hev,x,y,ynext,cst)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
                  val _ = if debug
                          then Printf.printf `"RootAfter: x = "R `" y = "R `" x' = "R `" y' = "R  `"\n" $ x (getindex(y,0)) x' (getindex(y',0))
                          else ()
                  val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext)
-                 val cst' = controller_scale_h (cst, 0.5)
+                 val cst'    = controller_scale_h (cst, 0.5)
              in
                  case rootval of
                      NONE =>
