@@ -90,18 +90,14 @@ fun controller_update_h (Left (h,cst,r),h') =
      else Right(h',cst,r))
 
 fun controller_scale_h (Left (h,cst,r),x) =
-  let val h' = h*x
+  let val h' = max(h*x, float_eps)
   in
-      if h' > float_eps
-      then Left(h',cst,r)
-      else Left(h,cst,r)
+      Left(h',cst,r)
   end
   | controller_scale_h (Right (h,cst,r),x) =
-    let val h' = h*x
+    let val h' = max(h*x, float_eps)
     in
-        if h' > float_eps
-        then Right(h',cst,r)
-        else Right(h,cst,r)
+        Right(h',cst,r)
     end
         
 
@@ -480,18 +476,23 @@ fun event_rootval (finterp,fcond) =
 
 
                    
+fun subtract_h (h, h1::hs) =
+  if h1>h then ((~ h)+h1)::hs else subtract_h ((~ h1)+h, hs)
+  | subtract_h (h, hs) = hs
+  
 fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),                          
               fpos,fneg,fdiscrete,SOME fregime) =
   let
       val fstepper = adaptive_regime_stepper stepper
       val frootval = regime_rootval (finterp,fcond)
-                                             
+                                    
+                                    
       fun integral' (RegimeState (x,cx,y,e,d,r,ext,extev,ynext,yrsp,enext,cst,root)) =
         (if debug
          then (if y = ynext then raise Fail ("Dynamics.integral: RegimeState: y and ynext are the same") else ();
                if y = yrsp then raise Fail ("Dynamics.integral: RegimeState: y and yrsp are the same") else ())
          else ();
-         if not ((controller_h cst) > 0.0)
+         if ((controller_h cst) < float_eps)
          then raise Fail ("Dynamics.integral: RegimeState: zero time step (root=" ^ (showRoot root) ^ ")")
          else ();
          case root of
@@ -587,7 +588,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  case rootval of
                      NONE =>
                      (case hs of
-                          h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootStep (((~ hev)+h1)::hs))
+                          h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootStep (subtract_h (hev, h1::hs)))
                         | [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootBefore))
                    | SOME (Near i,e_x,e_cx,e_theta,e_y) =>
                      (if debug
@@ -603,7 +604,8 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                          `"\n" $ x (getindex(y',0))
                       else ();
                       (case hs of
-                           h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,((~ hev)+h1)::hs))
+                           h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',
+                                                 RootFound (i,subtract_h (hev, h1::hs)))
                          | [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootBefore)))
                    | SOME (Mid i,e_x,e_cx,e_theta,e_y) =>
                      (if x' > e_x
@@ -624,14 +626,15 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                               case hs of
                                   h1::hs => 
                                   RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
-                                              RootFound (i,((~ h'')+h1)::hs))
+                                              RootFound (i,if h''>=float_eps then h''::hs else hs))
                                 | [] =>
                                   RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
                                               RootBefore)
                                              
                           end
                       else (case hs of
-                                h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,((~ hev)+h1)::hs))
+                                h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',
+                                                      RootFound (i,subtract_h (hev, h1::hs)))
                              | [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootBefore)))
                                                      
              end
@@ -730,7 +733,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                     | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
                       (case hs of
                            h1::_ =>
-                           EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootFound (i,((~ hev)+h1)::hs))
+                           EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootFound (i,subtract_h (hev, h1::hs)))
                          | [] =>
                            EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootFound (i,[])))
                    | SOME (Mid i,e_x,e_cx,e_theta,e_y) =>
@@ -750,14 +753,15 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          case hs of
                              h1::_ =>
                              EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
-                                        RootFound (i,((~ h'')+h1)::hs))
+                                        RootFound (i,if h''>=float_eps then h''::hs else hs))
                           |  [] =>
                              EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
                                         RootFound (i,[]))
                      end)
                    | NONE =>
                      case hs of
-                         h1::_ => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootStep (((~ hev)+h1)::hs))
+                         h1::_ => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',
+                                             RootStep (subtract_h (hev, h1::hs)))
                       |  [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootBefore)
                                             
                end
