@@ -481,7 +481,7 @@ fun event_rootval (finterp,fcond) =
 
                    
 fun subtract_h (h, h1::hs) =
-  if h1>h then ((~ h)+h1)::hs else subtract_h ((~ h1)+h, hs)
+  if h1>h then (max((~ h)+h1,float_eps)::hs) else subtract_h ((~ h1)+h, hs)
   | subtract_h (h, hs) = hs
   
 fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),                          
@@ -629,7 +629,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                               case hs of
                                   h1::hs => 
                                   RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
-                                              RootFound (i,if h''>=float_eps then h''::hs else hs))
+                                              RootFound (i,if h''>float_eps then h''::hs else hs))
                                 | [] =>
                                   RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
                                               RootBefore)
@@ -654,8 +654,8 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
         val frootval = event_rootval (finterp,fcond)
 
         fun integral' (EventState(x,cx,y,e,ext,extev,ynext,yrsp,enext,cst,root)) =
-          (if not ((controller_h cst) > 0.0)
-           then raise Fail ("Dynamics.integral: EventState: zero time step (root=" ^ (showRoot root) ^ ")")
+          (if ((controller_h cst) < float_eps)
+           then raise Fail ("Dynamics.integral: EventState: time step too small (root=" ^ (showRoot root) ^ ")")
            else ();
            case root of
                RootBefore =>
@@ -756,7 +756,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          case hs of
                              h1::_ =>
                              EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
-                                        RootFound (i,if h''>=float_eps then h''::hs else hs))
+                                        RootFound (i,if h''>float_eps then h''::hs else hs))
                           |  [] =>
                              EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
                                         RootFound (i,[]))
