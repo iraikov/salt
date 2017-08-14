@@ -229,7 +229,7 @@ fun controller tol (h,ys,es,prev) =
           (* step accepted *)
           (let
               val ratio  = if cerr > k then safety * Math.pow(cerr, p1) else fmax
-              val h_next = min(ratio * h_prev, (!maxstep))
+              val h_next = max(min(ratio * h_prev, (!maxstep)), float_eps)
               val cerr_prev = cerr
 
               val _ = if controller_debug
