@@ -556,7 +556,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
                            in
                                RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
-                                           RootFound (i,subtract_h (h'', h1::hs)))
+                                           RootFound (i,subtract_h (h'', h::hs)))
                            end
                        else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
                    | NONE => (case hs of
