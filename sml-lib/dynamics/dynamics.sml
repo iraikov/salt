@@ -547,7 +547,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                val cx'' = e_cx
                                val y''  = y'
                                val _    = Array.copy {src=e_y, dst=y'', di=0}
-                               val h''  = (1.0-e_theta)*h
+                               val h''  = e_theta*h
                                val _ = if debug
                                        then Printf.printf `"RootStep: Mid: x' = "R `" x'' = "R 
                                                           `" h' = "R `" h'' = "R `" y'' = "R `" y = "R
@@ -556,7 +556,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
                            in
                                RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
-                                           RootFound (i,if h''>=float_eps then h''::hs else hs))
+                                           RootFound (i,subtract_h (h'', h1::hs)))
                            end
                        else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
                    | NONE => (case hs of
