@@ -554,9 +554,8 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                           `"\n" $ x' x'' h' h'' (getindex(y'',0)) (getindex(y,0))
                                        else ()
                                val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
-                               val cst'' = controller_update_h (cst',max(e_theta*h, float_eps))
                            in
-                               RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst'',
+                               RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
                                            RootFound (i,if h''>=float_eps then h''::hs else hs))
                            end
                        else RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,hs)))
@@ -618,7 +617,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                               val cx'' = e_cx
                               val y''  = y'
                               val _    = Array.copy {src=e_y, dst=y'', di=0}
-                              val h''  = (1.0-e_theta)*hev
+                              val h''  = e_theta*hev
                               val _ = if debug
                                       then Printf.printf `"RootAfter: Mid: x' = "R `" x'' = "R 
                                                          `" h'' = "R `" y'' = "R `" y = "R
@@ -629,7 +628,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                               case hs of
                                   h1::hs => 
                                   RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
-                                              RootFound (i,if h''>float_eps then h''::hs else hs))
+                                              RootFound (i,subtract_h (h'', h1::hs)))
                                 | [] =>
                                   RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
                                               RootBefore)
@@ -688,17 +687,16 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          val cx'' = e_cx
                          val y''  = y'
                          val _    = Array.copy {src=e_y, dst=y'', di=0}
-                         val h''  = (1.0-e_theta)*h
+                         val h''  = e_theta*h
                          val _ = if debug
                                  then Printf.printf `"RootStep: rootval: x' = "R `" x'' = "R 
                                                     `" h'' = "R `" y'' = "R
                                                        `"\n" $ x' x'' h'' (getindex(y'',0))
                                  else ()
                          val e''  = fixthr (fcond (x'',y'',e,ext,extev,enext))
-                         val cst'' = controller_update_h (cst',max(e_theta*h, float_eps))
                      in
-                         EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst'',
-                                    RootFound (i,if h''>=float_eps then h''::hs else hs))
+                         EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
+                                    RootFound (i,subtract_h (h'', h::hs)))
                      end)
                    | NONE =>
                      (case hs of
@@ -745,7 +743,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          val cx'' = e_cx
                          val y''  = y'
                          val _    = Array.copy {src=e_y, dst=y'', di=0}
-                         val h''  = (1.0-e_theta)*hev
+                         val h''  = e_theta*hev
                          val _ = if debug
                                  then Printf.printf `"RootStep: rootval: x' = "R `" x'' = "R 
                                                     `" h'' = "R `" y'' = "R
@@ -754,9 +752,9 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          val e''  = fixthr (fcond (x'',y'',e,ext,extev,enext))
                      in
                          case hs of
-                             h1::_ =>
+                             h1::hs =>
                              EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
-                                        RootFound (i,if h''>float_eps then h''::hs else hs))
+                                        RootFound (i,subtract_h (h'', h1::hs)))
                           |  [] =>
                              EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
                                         RootFound (i,[]))
