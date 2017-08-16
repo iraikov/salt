@@ -7,9 +7,32 @@ struct
 
 open Real
 open Math
+         
+val float_eps = 1E~14
+
+fun fpeq (a, b, epsilon) =
+  let val a_abs = abs a
+      val b_abs = abs b
+  in
+      abs(a - b) <= (if a_abs > b_abs then b_abs else a_abs) * epsilon
+  end
+
+fun fpgt (a, b, epsilon) =
+  let val a_abs = abs a
+      val b_abs = abs b
+  in
+      (a - b) > (if a_abs < b_abs then b_abs else a_abs) * epsilon
+  end
+
+fun fplt (a, b, epsilon) =
+  let val a_abs = abs a
+      val b_abs = abs b
+  in
+      (b - a) > (if a_abs < b_abs then b_abs else a_abs) * epsilon
+  end
 
 val signal_sign = sign
-val signal_eqnum = (op ==)
+val signal_eqnum = fpeq
 val signal_neg = (op ~)
 val signal_add = (op +)
 val signal_sub = (op -)
@@ -26,10 +49,10 @@ val signal_exp = exp
                       
 val signal_max = max
 val signal_min = min
-val signal_gt = (op >)
-val signal_gte = (op >=)
-val signal_lt = (op <)
-val signal_lte = (op <=)
+fun signal_gt (a, b)  = fpgt(a, b, float_eps)
+fun signal_gte (a, b) = fpeq(a, b, float_eps) orelse fpgt(a, b, float_eps)
+fun signal_lt (a, b)  = fplt(a, b, float_eps)
+fun signal_lte (a, b) = fpeq(a, b, float_eps) orelse fplt(a, b, float_eps)
 
 fun signal_heaviside (x) = 
     if x < 0.0 then 0.0 else 1.0
@@ -62,7 +85,6 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val float_eps = 1E~15
 val tol     = ref (SOME (1E~6))
 val maxstep = ref 0.5
     
@@ -90,12 +112,12 @@ fun controller_update_h (Left (h,cst,r),h') =
      else Right(h',cst,r))
 
 fun controller_scale_h (Left (h,cst,r),x) =
-  let val h' = max(h*x, float_eps)
+  let val h' = max(h*x, 2.0*float_eps)
   in
       Left(h',cst,r)
   end
   | controller_scale_h (Right (h,cst,r),x) =
-    let val h' = max(h*x, float_eps)
+    let val h' = max(h*x, 2.0*float_eps)
     in
         Right(h',cst,r)
     end
@@ -279,7 +301,7 @@ fun fixthr v =
 
         
 fun posdetect (x, e, x', e') =
-  if x'-x >= float_eps
+  if fpgt(x', x, float_eps)
   then vfoldi2 (fn(i,v1,v2,lst) =>
                    case thr2 (i,v1,v2) of
                        SOME t => (t,v1,v2)::lst
@@ -575,7 +597,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
              in
                  RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,cst',RootAfter (i,hs))
              end
-           | RootAfter (i,hs) =>
+           | RootAfter (_,hs) =>
              let
                  val hev        = Real.*(0.5,float_eps)
                  val (x',cx')   = csum (x,cx,hev)
@@ -585,7 +607,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          then Printf.printf `"RootAfter: x = "R `" y = "R `" x' = "R `" y' = "R  `"\n" $ x (getindex(y,0)) x' (getindex(y',0))
                          else ()
                  val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext)
-                 val cst'    = controller_scale_h (cst, 0.5)
+                 val cst' = controller_scale_h (cst, 0.9)
              in
                  case rootval of
                      NONE =>
@@ -598,7 +620,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                          `" y' = "R
                                          `"\n" $ x (getindex(y',0))
                       else ();
-                      RegimeState(x,cx,y,e',d,r,ext,extev,ynext,yrsp,e,cst',RootFound (i,hs)))
+                      RegimeState(x',cx',y',e',d,r,ext,extev,ynext,yrsp,e,cst',RootFound (i,subtract_h (hev, hs))))
                    | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
                      (if debug
                       then Printf.printf `"RootAfter Far: x = "R 
@@ -715,7 +737,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                in
                    EventState(x,cx,y',e,ext,extev,y,ynext,enext,cst',RootAfter (i,hs))
                end
-             | RootAfter (i,hs) =>
+             | RootAfter (_,hs) =>
                let
                    val hev       = Real.*(0.5,float_eps)
                    val (x',cx')  = csum (x,cx,hev)
@@ -726,11 +748,11 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                 `" y' = "R `"\n" $ x' (getindex(e',0)) (getindex(y',0))
                              else ()
                    val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,enext)
-                   val cst' = controller_scale_h (cst, 0.5)
+                   val cst' = controller_scale_h (cst, 0.9)
                in
                    case rootval of
                      SOME (Near i,e_x,e_cx,e_theta,e_y) =>
-                     EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,cst',RootFound (i,hs))
+                     EventState(x',cx',y',e',ext,extev,ynext,yrsp,e,cst',RootFound (i,subtract_h (hev, hs)))
                     | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
                       (case hs of
                            h1::_ =>
