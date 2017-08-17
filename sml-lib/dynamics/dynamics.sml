@@ -8,7 +8,7 @@ struct
 open Real
 open Math
          
-val float_eps = 1E~14
+val float_eps = 1E~15
 
 fun fpeq (a, b, epsilon) =
   let val a_abs = abs a
