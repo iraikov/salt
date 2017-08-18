@@ -607,7 +607,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          then Printf.printf `"RootAfter: x = "R `" y = "R `" x' = "R `" y' = "R  `"\n" $ x (getindex(y,0)) x' (getindex(y',0))
                          else ()
                  val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext)
-                 val cst' = controller_scale_h (cst, 0.9)
+                 val cst' = controller_scale_h (cst, 0.5)
              in
                  case rootval of
                      NONE =>
@@ -748,7 +748,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                 `" y' = "R `"\n" $ x' (getindex(e',0)) (getindex(y',0))
                              else ()
                    val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,enext)
-                   val cst' = controller_scale_h (cst, 0.9)
+                   val cst' = controller_scale_h (cst, 0.5)
                in
                    case rootval of
                      SOME (Near i,e_x,e_cx,e_theta,e_y) =>
