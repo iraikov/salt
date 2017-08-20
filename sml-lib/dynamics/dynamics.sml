@@ -1,6 +1,15 @@
-(*
- * Definitions for numerical simulations of functional hybrid dynamical systems.
+(* 
+
+Definitions for numerical simulations of functional hybrid dynamical
+systems.  modeling and simulation of systems that can be described by
+ordinary differential equations (ODEs) or differential-algebraic
+equations (DAEs) with discontinuities that are represented as
+conditional equations.
+
 *)
+
+structure FunctionalHybridDynamics =
+struct
 
 structure SignalMath =
 struct
@@ -33,11 +42,11 @@ fun fplt (a, b, epsilon) =
 
 val signal_sign = sign
 val signal_eqnum = fpeq
-val signal_neg = (op ~)
-val signal_add = (op +)
-val signal_sub = (op -)
-val signal_mul = (op *)
-val signal_div = (op /)
+val signal_neg = op ~
+val signal_add = op +
+val signal_sub = op -
+val signal_mul = op *
+val signal_div = op /
 val signal_pow = pow
 
 val signal_sin = sin
@@ -58,9 +67,6 @@ fun signal_heaviside (x) =
     if x < 0.0 then 0.0 else 1.0
 
 end
-
-structure FunctionalHybridDynamics =
-struct
 
 open Real
 open Math
