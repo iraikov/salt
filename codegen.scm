@@ -313,8 +313,6 @@
                 ))
             )
 
-           (dd (print "fold-used-asgns: order = " order))
-           
           (eq-nodes
            (cadr
             (fold
