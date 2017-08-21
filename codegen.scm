@@ -292,9 +292,10 @@
     (let* (
            (order
             (let recur ((order (delete-duplicates
-                                (fold (lambda (expr ax) 
-                                        (append (fold-asgns asgn-idxs expr) ax))
-                                      '() blocks))))
+                                (fold-right
+                                 (lambda (expr ax) 
+                                   (append (reverse (fold-asgns asgn-idxs expr)) ax))
+                                 '() blocks))))
               
               (let ((order1 (if (null? order) '()
                                 (concatenate
@@ -305,18 +306,15 @@
                                         '()))
                                   asgn-dag)))))
 
+
                 (if (null? order1) 
                     order
                     (recur (append order1 order)))
                 ))
             )
 
-;(let ((def (assoc index asgn-defs)))
-;  (if def (list (+ n 1) (cons (cons n def) lst)) (list n lst)))
-
-;(let ((def (assoc index ext-defs)))
-;  (if def (cons (cons n def) lst) (list (+ n 1) lst)))
-
+           (dd (print "fold-used-asgns: order = " order))
+           
           (eq-nodes
            (cadr
             (fold
@@ -335,17 +333,22 @@
              order
              )))
 
+
           (eq-node-map
-           (map (match-lambda
-                 ((eqid index name rhs)
-                  (cons index eqid)))
-                eq-nodes))
+            (map (match-lambda
+                  ((eqid index name rhs)
+                   (cons index eqid)))
+                 (sort
+                  eq-nodes
+                  (lambda (x y) (< (car x) (car y))))
+                 ))
+          
 
           (eq-dag 
            (map
             (match-lambda
              ((eqid index name rhs)
-              (cons eqid (fold-eqids eqid index eq-node-map rhs))))
+              (append (fold-eqids eqid index eq-node-map rhs) (list eqid))))
             eq-nodes))
 
           (eq-order (topological-sort eq-dag eq?))
@@ -353,8 +356,7 @@
 
       (delete-duplicates
        (append
-        (filter-map (lambda (kv) (assoc (car kv) asgn-defs)) eq-node-map)
-        (filter-map (lambda (kv) (assoc (car kv) ext-defs))  eq-node-map)
+        (filter-map (lambda (kv) (or (assoc (car kv) asgn-defs) (assoc (car kv) ext-defs))) eq-node-map)
         (map (lambda (eqid) (cdr (assoc eqid eq-nodes))) eq-order)))
       
     ))
@@ -624,27 +626,28 @@
             (delete-duplicates
              (fold-right
               (lambda (ordtindex ax)
-                (append 
-                 (filter-map
-                  (match ordtindex
-                         [('y ordindex)
-                          (match-lambda [('setindex 'dy_out index val) #f] 
-                                        [(or ('setindex 'y_out index val)  
-                                             ('reduceindex 'y_out index val))
-                                         (and (= index ordindex) 
-                                              (list ordtindex (cdr (assv index invcindexmap)) val))]
-                                        [('reduceindex 'yext_out index val) #f]
-                                        [eq (error 'codegen "unknown equation type" eq)])]
-                         [('ext ordindex)
-                          (match-lambda [('setindex 'dy_out index val) #f] 
-                                        [(or ('setindex 'y_out index val)  
-                                             ('reduceindex 'y_out index val)) #f]
-                                        [('reduceindex 'yext_out index val) 
-                                         (and (= index ordindex) 
-                                              (list ordtindex (cdr (assv index invextindexmap)) val))]
-                                        [eq (error 'codegen "unknown equation type" eq)])]
-                         [else (error 'codegen "unknown index type" ordtindex)])
-                  eqblock) ax))
+                (append
+                 (reverse
+                  (filter-map
+                   (match ordtindex
+                          [('y ordindex)
+                           (match-lambda [('setindex 'dy_out index val) #f] 
+                                         [(or ('setindex 'y_out index val)  
+                                              ('reduceindex 'y_out index val))
+                                          (and (= index ordindex) 
+                                               (list ordtindex (cdr (assv index invcindexmap)) val))]
+                                         [('reduceindex 'yext_out index val) #f]
+                                         [eq (error 'codegen "unknown equation type" eq)])]
+                          [('ext ordindex)
+                           (match-lambda [('setindex 'dy_out index val) #f] 
+                                         [(or ('setindex 'y_out index val)  
+                                              ('reduceindex 'y_out index val)) #f]
+                                         [('reduceindex 'yext_out index val) 
+                                          (and (= index ordindex) 
+                                               (list ordtindex (cdr (assv index invextindexmap)) val))]
+                                         [eq (error 'codegen "unknown equation type" eq)])]
+                          [else (error 'codegen "unknown index type" ordtindex)])
+                   eqblock)) ax))
               '() asgn-order)
              equal?))
 
