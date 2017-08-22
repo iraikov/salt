@@ -687,8 +687,8 @@
                                       (E:Begin stmts)
                                       (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
                                                   asgn-defs)
-                                             (E:Begin stmts))))
-                            ) libs))
+                                             (E:Begin stmts)))))
+                     libs))
               ))
 
            (dinitfun  
@@ -697,13 +697,16 @@
                   (V:C 'NONE)
                   (V:Op 'SOME
                         (list 
-                         (V:Fn '(p fld)
-                               (E:Ret (V:Fn '(d_out)
-                                            (if (null? asgn-defs)
-                                                (E:Begin stmts)
-                                                (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
-                                                            asgn-defs)
-                                                       (E:Begin stmts))))))
+                         (V:Fn (let ((args0 '(p fld)))
+                                 (random-args args0 libs))
+                               (random-decls
+                                (E:Ret (V:Fn '(d_out)
+                                             (if (null? asgn-defs)
+                                                 (E:Begin stmts)
+                                                 (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                             asgn-defs)
+                                                        (E:Begin stmts)))))
+                                libs))
                          ))
                   ))
             )
