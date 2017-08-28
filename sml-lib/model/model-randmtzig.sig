@@ -35,7 +35,7 @@ sig
                                
     val initextevfun: cont_state * cont_state -> unit -> externalev_state
                                
-    val dinitfun: (cont_state * cont_state -> dsc_state -> dsc_state) option
+    val dinitfun: (cont_state * cont_state * RandomMTZig.state * RandomMTZig.zt -> dsc_state -> dsc_state) option
                                
     val initcondfun: (event_state -> event_state) option
                                
