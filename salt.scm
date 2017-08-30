@@ -498,6 +498,17 @@
   (pos event-pos)
   (neg event-neg))
 
+(define-record-printer (event x out)
+  (fprintf out "#")
+  (pp
+   `(event
+    (name=,(event-name x))
+    (condition=,(event-condition x))
+    (pos=,(event-pos x))
+    (neg=,(event-neg x))
+    ))
+   out)
+
 
 (define-record-type evcondition
   (make-evcondition name expr)
@@ -505,12 +516,29 @@
   (name evcondition-name)
   (expr evcondition-expr))
 
+(define-record-printer (evcondition x out)
+  (fprintf out "#")
+  (pp
+   `(evcondition
+    (name=,(evcondition-name x))
+    (expr=,(evcondition-expr x))
+    ))
+   out)
 
 (define-record-type evresponse
   (make-evresponse name expr)
   evresponse?
   (name evresponse-name)
   (expr evresponse-expr))
+
+(define-record-printer (evresponse x out)
+  (fprintf out "#")
+  (pp
+   `(evresponse
+    (name=,(evresponse-name x))
+    (expr=,(evresponse-expr x))
+    ))
+   out)
 
 
 (define-record-type transition 

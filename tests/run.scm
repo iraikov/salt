@@ -213,6 +213,24 @@
      (define C    = parameter 1.0)
      (define vreset = parameter -65.0)
 
+     ((der(v)) = ( ((- gL) * (v - vL))) / C)
+
+     (event (v - theta)
+            ((v := vreset))
+            )
+
+     )
+   ))
+
+
+(define iaf1
+  (parse
+   `(
+     (define gL   = parameter 0.2)
+     (define vL   = parameter -70.0)
+     (define C    = parameter 1.0)
+     (define vreset = parameter -65.0)
+
      ((der(v)) = ( ((- gL) * (v - vL)) + Isyn) / C)
 
      (event (v - theta)
@@ -267,8 +285,40 @@
 ))
 
 
+;; Delta function synapse
+(define deltasyn 
+  (parse
+  `(
+
+     (define w  = parameter 0.2)
+
+     (define grid_input = external 0.0)
+     (define grid_ev = external-event 0.0)
+
+     (event (grid_ev)
+            (
+             (v := v + grid_input * w)
+            )
+            )
+     )
+))
+
+
+;; Integrate and fire neuron with delta synapse
+(define iafdelta
+  (parse
+   `(
+     (define theta = parameter 25.0)
+     
+     (define v     = unknown -35.0)
+     
+     ,iaf0
+     ,deltasyn
+     ))
+  )
+
 ;; Integrate and fire neuron with alpha synapse
-(define iafsyn
+(define iafalpha
   (parse
    `(
      (define theta = parameter 25.0)
@@ -276,7 +326,7 @@
      
      (define v     = unknown -35.0)
      
-     ,iaf0
+     ,iaf1
      ,alphasyn
      ,alphasyn
      ))
@@ -446,7 +496,6 @@
     ))
   )
 
-
 (test-model 'vdp vdp compile: #t)
 
 (test-model 'ml ml compile: #t)
@@ -463,7 +512,9 @@
 
 (test-model 'wb wb compile: #t)
 
-(test-model 'iafsyn iafsyn)
+(test-model 'iafalpha iafalpha)
+
+(test-model 'iafdelta iafdelta)
 
 (test-model/c 'vdp vdp)
 
