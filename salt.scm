@@ -506,8 +506,8 @@
     (condition=,(event-condition x))
     (pos=,(event-pos x))
     (neg=,(event-neg x))
-    ))
-   out)
+    )
+   out))
 
 
 (define-record-type evcondition
@@ -522,8 +522,8 @@
    `(evcondition
     (name=,(evcondition-name x))
     (expr=,(evcondition-expr x))
-    ))
-   out)
+    )
+   out))
 
 (define-record-type evresponse
   (make-evresponse name expr)
@@ -537,8 +537,8 @@
    `(evresponse
     (name=,(evresponse-name x))
     (expr=,(evresponse-expr x))
-    ))
-   out)
+    )
+   out))
 
 
 (define-record-type transition 
@@ -1385,6 +1385,7 @@
                      (($ structural-event name label regime ($ transition event target condition pos))
                       (let (
                             (condition-index (length conditions))
+                            (regime-index (env-size regimemap))
                             )
                         (trace 'elaborate "structural-event: name = ~A label = ~A event = ~A ~%" name label event)
                         (trace 'elaborate "structural-event: target = ~A~%" target)
@@ -1407,7 +1408,7 @@
                                neg-responses
                                functions 
                                nodemap
-                               (extend-env-with-binding regimemap (gen-binding name condition-index))
+                               (extend-env-with-binding regimemap (gen-binding name (list regime-index condition-index)))
                                dimenv
                                ))
                       )
@@ -1795,7 +1796,7 @@
                  (let ((yindex (env-lookup (regime-variable-name y) rindexmap)))
                    (if (not yindex)
                        (error 'reduce-expr "regime variable not in index" y)
-                       `(getindex r ,(cdr yindex)))
+                       `(getindex r ,(car (cdr yindex))))
                    ))
                 (else 
                  (error 'reduce-expr "unknown left variable type" expr))
@@ -1839,7 +1840,7 @@
           (let ((rindex (env-lookup name rindexmap)))
             (if (not rindex)
                 (error 'reduce-expr "regime variable not in index" name)
-                `(getindex r ,(cdr rindex)))
+                `(getindex r ,(car (cdr rindex))))
             ))
 
          (($ parameter name label value dim)
@@ -2113,7 +2114,7 @@
                   (if (not rindex)
                       (error 'reduce-eq "regime variable not in index" y)
                       (let ((expr (reduce-expr rhs indexmaps)))
-                        `(setindex r_out ,(cdr rindex) ,expr)
+                        `(setindex r_out ,(car (cdr rindex)) ,expr)
                         ))
                   ))
                (else (error 'reduce-eq "unknown variable type in reinit equation" eq))
@@ -2255,7 +2256,7 @@
                           (recur (cdr nodelst) indexmap index)))))
              ))
           
-
+         
          (indexmaps `((cindexmap  . ,cindexmap)
                       (pindexmap  . ,pindexmap)
                       (fldindexmap  . ,fldindexmap)

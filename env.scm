@@ -20,6 +20,7 @@
 ;; env-lookup: Key x Env -> (Binding + False)
 ;; env->list: Env -> Binding*
 ;; env-show: Env -> Symbol*
+;; env-size: Env -> Int
 
 ;; Environments stacks are lists of environments, the first element in
 ;; the list being the current environment.  The lookup operation
@@ -120,6 +121,16 @@
          (Env (first rest)
               (cons (binding-show first) (env-show rest)))
          (EmptyEnv () '())))
+
+
+(define (env-size e)
+  ; returns the number of items in the environment
+  (let recur ((e e) (n 0))
+    (cases env e
+           (Env (first rest)
+                (recur rest (+ n 1)))
+           (EmptyEnv () n))
+    ))
 
 
 ; stacks of environments
