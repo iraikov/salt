@@ -74,7 +74,6 @@ open SignalMath
 
 val controller_debug = false
 val debug = false
-val trace = false
 
 val B = Printf.B       
 val I = Printf.I
@@ -306,14 +305,25 @@ fun fixthr v =
     (Array.modify (fn(x) => if Real.>(Real.abs(x), float_eps) then x else 0.0) v; v)
 
         
-fun posdetect (x, e, x', e') =
-  if fpgt(x', x, float_eps)
-  then vfoldi2 (fn(i,v1,v2,lst) =>
-                   case thr2 (i,v1,v2) of
-                       SOME t => (t,v1,v2)::lst
-                     | NONE   => lst) []
-               (e, e')
-  else []
+fun posdetect (x, e, x', e', excl) =
+  case excl of
+      NONE => 
+      if fpgt(x', x, float_eps)
+      then vfoldi2 (fn(i,v1,v2,lst) =>
+                       case thr2 (i,v1,v2) of
+                           SOME t => (t,v1,v2)::lst
+                         | NONE   => lst) []
+                   (e, e')
+      else []
+    | SOME iexcl =>
+      vfoldi2 (fn(i,v1,v2,lst) =>
+                  if not (i=iexcl)
+                  then (case thr2 (i,v1,v2) of
+                            SOME t => (t,v1,v2)::lst
+                          | NONE   => lst)
+                  else lst) 
+              [] (e, e')
+                
 
          
       
@@ -424,8 +434,8 @@ fun adaptive_stepper stepper =
     end
         
 fun regime_rootval (finterp,fcond) =
-  fn (h,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext) =>
-     case posdetect (x,e,x',e') of
+  fn (h,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext,excl) =>
+     case posdetect (x,e,x',e',excl) of
         [] => NONE
       | lst =>
         foldl (fn((t,_,_),ax) =>
@@ -466,8 +476,8 @@ fun regime_rootval (finterp,fcond) =
 
         
 fun event_rootval (finterp,fcond) =
-  fn (h,w,x,cx,y,e,x',cx',y',e',ext,extev,enext) =>
-     case posdetect (x,e,x',e') of
+  fn (h,w,x,cx,y,e,x',cx',y',e',ext,extev,enext,excl) =>
+     case posdetect (x,e,x',e',excl) of
         [] => NONE
       | lst =>
         foldl (fn((t,_,_),ax) =>
@@ -549,7 +559,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val _ = if debug
                          then Printf.printf `"RootStep: h' = "R `" x = "R `" y[0] = "R `" x' = "R `" y'[0] = "R `" e[0] = "R `" e'[0] = "R `"\n" $ h' x (getindex(y,0)) x' (getindex(y',0)) (getindex(e,0)) (getindex(e',0))
                          else ()
-                 val rootval = frootval (h,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext)
+                 val rootval = frootval (h,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext,NONE)
                      
              in
                  case rootval of
@@ -596,28 +606,31 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val (y',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
                                                     (i,x,y,e,d,r,ext,extev,yrsp)
                  val _ = if debug
-                         then Printf.printf `"RootFound: x = "R `" e = "R `" y' = "R `"\n" $ x (getindex(e,0)) (getindex(y',0))
+                         then Printf.printf `"RootFound: x = "R `" e = "R `" y = "R` " y' = "R `"\n" $ x (getindex(e,0)) (getindex(y,0)) (getindex(y',0))
                          else ()
                  val cst' = case cst of Left _ => cst 
                                      |  Right v => Left v
              in
                  RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,cst',RootAfter (i,hs))
              end
-           | RootAfter (_,hs) =>
+           | RootAfter (ei,hs) =>
              let
                  val hev        = Real.*(0.5,float_eps)
                  val (x',cx')   = csum (x,cx,hev)
                  val (y',_,_,w) = fstepper (d,r,ext,extev,hev,x,y,ynext,cst)
                  val e'  = fixthr (fcond (x',y',e,d,r,ext,extev,enext))
                  val _ = if debug
-                         then Printf.printf `"RootAfter: x = "R `" y = "R `" x' = "R `" y' = "R  `"\n" $ x (getindex(y,0)) x' (getindex(y',0))
+                         then Printf.printf `"RootAfter: x = "R `" y = "R `" e = "R `" x' = "R `" y' = "R  `" e' = "R `"\n" $ x (getindex(y,0)) (getindex(e,0)) x' (getindex(y',0)) (getindex(e',0))
                          else ()
-                 val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext)
+                 val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext,SOME ei)
                  val cst' = controller_scale_h (cst, 0.5)
              in
                  case rootval of
                      NONE =>
-                     (case hs of
+                     (if debug
+                      then Printf.printf `"RootAfter: rootval is none: x = "R `"\n" $ x
+                      else ();
+                      case hs of
                           h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootStep (subtract_h (hev, h1::hs)))
                         | [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootBefore))
                    | SOME (Near i,e_x,e_cx,e_theta,e_y) =>
@@ -651,7 +664,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                          `" h'' = "R `" y'' = "R `" y = "R
                                                          `"\n" $ x' x'' h'' (getindex(y'',0)) (getindex(y,0))
                                       else ()
-                              val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
+                              val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))                              
                           in
                               case hs of
                                   h1::hs => 
@@ -659,7 +672,17 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                               RootFound (i,subtract_h (h'', h1::hs)))
                                 | [] =>
                                   RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
-                                              RootBefore)
+                                              RootFound (i,[]))
+                                             (*
+                                  let
+                                      val (y''',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
+                                                                           (i,x'',y'',e',d,r,ext,extev,yrsp)
+
+                                  in
+                                      RegimeState(x'',cx'',y''',e',d',r',ext,extev,y,y'',e,cst',
+                                                  RootBefore)
+                                  end
+                                              *)
                                              
                           end
                       else (case hs of
@@ -701,7 +724,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                    val (y',h',cst',w) = fstepper (ext,extev,h,x,y,ynext,cst)
                    val e'  = fixthr (fcond (x',finterp (h,w,x,y) 1.0,e,ext,extev,enext))
                    (*val e'  = fixthr (fcond (x',y',e,ext,extev,enext))*)
-                   val rootval = frootval (h,w,x,cx,y,e,x',cx',y',e',ext,extev,enext)
+                   val rootval = frootval (h,w,x,cx,y,e,x',cx',y',e',ext,extev,enext,NONE)
 
                in
                  case rootval of
@@ -743,7 +766,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                in
                    EventState(x,cx,y',e,ext,extev,y,ynext,enext,cst',RootAfter (i,hs))
                end
-             | RootAfter (_,hs) =>
+             | RootAfter (ei,hs) =>
                let
                    val hev       = Real.*(0.5,float_eps)
                    val (x',cx')  = csum (x,cx,hev)
@@ -753,7 +776,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                              then Printf.printf `"RootAfter: x' = "R `" e' = "R
                                                 `" y' = "R `"\n" $ x' (getindex(e',0)) (getindex(y',0))
                              else ()
-                   val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,enext)
+                   val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,enext,SOME ei)
                    val cst' = controller_scale_h (cst, 0.5)
                in
                    case rootval of
