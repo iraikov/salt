@@ -738,6 +738,20 @@
               ))
 
 
+           (linkextevfun  
+            (let ((stmts (codegen-set-stmts codegen-expr1 externalevs 'extev_out)))
+              (V:Fn '(p fld)
+                    (E:Ret (V:Op 'make_ext (list (V:C (length externalevs)) 
+                                                 (V:Fn '(extev_out) 
+                                                       (if (null? asgn-defs)
+                                                           (E:Begin stmts)
+                                                           (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
+                                                                       asgn-defs)
+                                                                  (E:Begin stmts))))))
+                           ))
+              ))
+
+
            (rhsfun
             (let ((rhs-args  '((double . t) ((%pointer double) . y) ((%pointer double) . dy_out) ((%pointer (%pointer void)) . clos))))
               (V:Fn rhs-args

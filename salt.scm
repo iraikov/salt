@@ -334,21 +334,23 @@
 
 
 (define-record-type external
-  (external name label initial dim)
+  (external name label initial dim order)
   external?
   (name external-name)
   (label external-label)
   (initial external-initial)
   (dim external-dim)
+  (order external-order)
   )
 
 
 (define-record-printer (external x out)
-  (fprintf out "#(external ~S (~A) [~A] = ~A)"
+  (fprintf out "#(external ~S (~A) [~A] = ~A order: )"
 	   (external-name x)
 	   (external-dim x)
 	   (external-label x)
 	   (external-initial x)
+	   (or (external-order x) "none")
            ))
 
 
@@ -359,15 +361,19 @@
   (label externalev-label)
   (initial externalev-initial)
   (dim externalev-dim)
+  (order externalev-order)
+  (link externalev-link)
   )
 
 
 (define-record-printer (externalev x out)
-  (fprintf out "#(externalev ~S (~A) [~A] = ~A)"
+  (fprintf out "#(externalev ~S (~A) [~A] = ~A order: ~A link: ~A)"
 	   (externalev-name x)
 	   (externalev-label x)
 	   (externalev-dim x)
 	   (externalev-initial x)
+	   (externalev-order x)
+	   (or (externalev-link x) "none")
            ))
 
 
@@ -540,6 +546,22 @@
     )
    out))
 
+
+(define-record-type extevlink
+  (make-extevlink src dst)
+  extevlink?
+  (src extevlink-src)
+  (dst extevlink-dst))
+
+
+(define-record-printer (extevlink x out)
+  (fprintf out "#")
+  (pp
+   `(extevlink
+    (src=,(extevlink-src x))
+    (dst=,(extevlink-dst x))
+    )
+   out))
 
 (define-record-type transition 
   (make-transition event target condition response)
@@ -756,7 +778,7 @@
 ;; runtime representation of a simulation object
 (define-record-type simruntime
   (make-simruntime eqset cindexmap dindexmap evindexmap rindexmap extindexmap extevindexmap
-                   parameters fields defs discrete-defs external-defs externalev-defs 
+                   parameters fields defs discrete-defs external-defs externalev-defs externalev-links
                    eqblock condblock posresp negresp)
   simruntime?
   (eqset simruntime-eqset)
@@ -772,6 +794,7 @@
   (discrete-defs simruntime-discrete-definitions)
   (external-defs simruntime-external-definitions)
   (externalev-defs simruntime-externalev-definitions)
+  (externalev-links simruntime-externalev-links)
   (eqblock simruntime-eqblock)
   (condblock simruntime-condblock)
   (posresp simruntime-posresp)
@@ -792,6 +815,7 @@
           (defs=,(simruntime-definitions x))
           (external-defs=,(simruntime-external-definitions x))
           (externalev-defs=,(simruntime-externalev-definitions x))
+          (externalev-links=,(simruntime-externalev-links x))
           (eqblock=,(simruntime-eqblock x))
           (evblock=,(simruntime-condblock x))
           (posresp=,(simruntime-posresp x))
@@ -941,8 +965,9 @@
                        (let ((resval1 (resolve resval env-stack)))
                          (if (equal? resval resval1) resval
                              (recur resval1)))))
-            (dim     (external-dim e)))
-        (external name label initial dim)))
+            (dim     (external-dim e))
+            (order   (external-order e)))
+        (external name label initial dim order)))
 
      ((externalev? e)
       (let ((name    (externalev-name e))
@@ -951,8 +976,11 @@
                        (let ((resval1 (resolve resval env-stack)))
                          (if (equal? resval resval1) resval
                              (recur resval1)))))
-            (dim     (externalev-dim e)))
-        (externalev name label initial dim)))
+            (dim     (externalev-dim e))
+            (order   (externalev-order e))
+            (link    (externalev-link e))
+            )
+        (externalev name label initial dim order link)))
 
      ((pair-arg? e)
       (make-pair-arg (recur (pair-arg-fst e))
@@ -1100,11 +1128,11 @@
                        (($ field name label value dim)
                         (let ((decl1 (field (gensym 'fld) label value dim)))
                           (recur (cdr decls) (cons decl1 ax))))
-                       (($ external name label initial dim)
-                        (let ((decl1 (external (gensym 'ext) label initial dim)))
+                       (($ external name label initial dim order)
+                        (let ((decl1 (external (gensym 'ext) label initial dim order)))
                           (recur (cdr decls) (cons decl1 ax))))
-                       (($ externalev name label initial dim)
-                        (let ((decl1 (externalev (gensym 'extev) label initial dim)))
+                       (($ externalev name label initial dim order link)
+                        (let ((decl1 (externalev (gensym 'extev) label initial dim order link)))
                           (recur (cdr decls) (cons decl1 ax))))
                        (($ function name formals expr)
                         (recur (cdr decls) (cons decl ax)))
@@ -1153,11 +1181,11 @@
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
-                       (($ external name label initial dim)
+                       (($ external name label initial dim order)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
-                       (($ externalev name label initial dim)
+                       (($ externalev name label initial dim order link)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
@@ -1332,10 +1360,10 @@
                                )
                         ))
 
-                     (($ external name label initial-value dim)
+                     (($ external name label initial-value dim order)
                       (trace 'elaborate "external: label = ~A initial-value = ~A~%" label initial-value)
                       (let* ((resolved-initial (resolve initial-value env-stack))
-                             (en1 (external name label resolved-initial dim)))
+                             (en1 (external name label resolved-initial dim order)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
                                parameters fields (cons (cons name resolved-initial) externals) externalevs
@@ -1347,10 +1375,10 @@
                                )
                         ))
 
-                     (($ externalev name label initial-value dim)
+                     (($ externalev name label initial-value dim order link)
                       (trace 'elaborate "externalevs: label = ~A initial-value = ~A~%" label initial-value)
                       (let* ((resolved-initial (resolve initial-value env-stack))
-                             (en1 (externalev name label resolved-initial dim)))
+                             (en1 (externalev name label resolved-initial dim order link)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
                                parameters fields externals (cons (cons name resolved-initial) externalevs)
@@ -1859,7 +1887,7 @@
                 `(getindex fld ,(cdr yindex)))
             ))
 
-         (($ external name label initial dim)
+         (($ external name label initial dim order)
           (let ((yindex (env-lookup name extindexmap)))
             (trace 'reduce-expr "extindexmap = ~A~%" extindexmap)
             (if (not yindex)
@@ -1867,7 +1895,7 @@
                 `(getindex yext ,(cdr yindex)))
             ))
 
-         (($ externalev name label initial dim)
+         (($ externalev name label initial dim order link)
           (let ((yindex (env-lookup name extevindexmap)))
             (trace 'reduce-expr "extevindexmap = ~A~%" (env->list extevindexmap))
             (if (not yindex)
@@ -2061,6 +2089,20 @@
              (else
               (error 'reduce-eq "unsupported reduce variable type" y))
              ))
+
+           
+           (($ extevlink src dst)
+            (let ((src-index (env-lookup (external-name src) extevindexmap))
+                  (dst-index (env-lookup (external-name dst) extevindexmap)))
+                (if (not src-index)
+                    (error 'reduce-eq "event not in external event index" src))
+                (if (not dst-index)
+                    (error 'reduce-eq "event not in external event index" dst))
+                `(setindex ext_out ,dst-index
+                           `(signal.reinit ,(getindex extev ,src-index)
+                                           ,(getindex extev ,src-index)
+                                           ,(getindex extev ,dst-index)))
+                ))
            
            (($ evcondition name rhs)
             (let ((evindex (env-lookup name evindexmap))
@@ -2073,6 +2115,7 @@
                   `(setindex c_out ,(cdr evindex) ,expr)
                   (error 'reduce-eq "dimension mismatch in condition" expr))
               ))
+
            
            (($ evresponse name rhs)
             (trace 'reduce-eq "evresponse name = ~A rhs = ~A~%" name rhs)
@@ -2127,6 +2170,11 @@
 
 (define (simcreate eqset)
 
+  (define (next-index index iset)
+    (if (member index iset)
+        (next-index (+ 1 index) iset)
+        index))
+  
   (let* ((nodemap    (equation-set-nodemap eqset))
          (regimemap  (equation-set-regimemap eqset))
          (dimenv     (equation-set-dimenv eqset))
@@ -2225,37 +2273,83 @@
              ))
 
          (extindexmap 
-           (let recur ((nodelst nodelst)
-                       (indexmap  empty-env)
-                       (index     0))
-             (if (null? nodelst)
-                 indexmap
-                 (let ((node (car nodelst)))
-                   (cond ((external? (cdr node))
-                          (recur (cdr nodelst)
-                                 (extend-env-with-binding indexmap (gen-binding (car node) index))
-                                 (+ 1 index)))
+          (let ((initial-env+iset
+                 (fold (lambda (node env+iset)
+                         (cond ((external? (cdr node))
+                                (let ((env (car env+iset))
+                                      (iset (cdr env+iset))
+                                      (ord (external-order (cdr node))))
+                                  (if ord
+                                      (if (member ord iset)
+                                          (error 'simcreate "the same order of external quantity is specified more than once"
+                                                 (car node) ord)
+                                          (cons
+                                           (extend-env-with-binding env (gen-binding (car node) ord))
+                                           (lset-union iset (list ord)))
+                                          )
+                                      env+iset)))
+                               (else env)))
+                       (cons empty-env '())
+                       nodelst)))
+            
+            (let ((initial-env (car initial-env+iset))
+                  (iset (cdr initial-env+iset)))
+              
+              (let recur ((nodelst nodelst)
+                          (indexmap  initial-env)
+                          (index     0))
+                (if (null? nodelst)
+                    indexmap
+                    (let ((node (car nodelst)))
+                      (cond ((external? (cdr node))
+                             (let ((index1 (next-index index iset)))
+                               (recur (cdr nodelst)
+                                      (extend-env-with-binding indexmap (gen-binding (car node) index1))
+                                      (+ 1 index1))))
+                            (else
+                             (recur (cdr nodelst) indexmap index)))))
+                ))
+            ))
 
-                         (else
-                          (recur (cdr nodelst) indexmap index)))))
-             ))
           
-         (extevindexmap 
-           (let recur ((nodelst nodelst)
-                       (indexmap  empty-env)
-                       (index     0))
-             (if (null? nodelst)
-                 indexmap
-                 (let ((node (car nodelst)))
-                   (cond ((externalev? (cdr node))
-                          (recur (cdr nodelst)
-                                 (extend-env-with-binding indexmap (gen-binding (car node) index))
-                                 (+ 1 index)))
-
-                         (else
-                          (recur (cdr nodelst) indexmap index)))))
-             ))
-          
+         (extevindexmap
+          (let ((initial-env+iset
+                 (fold (lambda (node env+iset)
+                         (cond ((externalev? (cdr node))
+                                (let ((env (car env+iset))
+                                      (iset (cdr env+iset))
+                                      (ord (externalev-order (cdr node))))
+                                  (if ord
+                                      (if (member ord iset)
+                                          (error 'simcreate "the same order of external event is specified more than once"
+                                                 (car node) ord)
+                                          (cons
+                                           (extend-env-with-binding env (gen-binding (car node) ord))
+                                           (lset-union iset (list ord)))
+                                          )
+                                      env+iset)))
+                               (else env)))
+                       (cons empty-env '())
+                       nodelst)))
+            
+            (let ((initial-env (car initial-env+iset))
+                  (iset (cdr initial-env+iset)))
+              
+              (let recur ((nodelst nodelst)
+                          (indexmap  initial-env)
+                          (index     0))
+                (if (null? nodelst)
+                    indexmap
+                    (let ((node (car nodelst)))
+                      (cond ((externalev? (cdr node))
+                             (let ((index1 (next-index index iset)))
+                               (recur (cdr nodelst)
+                                      (extend-env-with-binding indexmap (gen-binding (car node) index1))
+                                      (+ 1 index1))))
+                            (else
+                             (recur (cdr nodelst) indexmap index)))))
+                ))
+            ))
          
          (indexmaps `((cindexmap  . ,cindexmap)
                       (pindexmap  . ,pindexmap)
@@ -2291,6 +2385,13 @@
           (map (lambda (x) (reduce-expr (cdr x) indexmaps))
                (equation-set-externalevs eqset)))
 
+         (externalev-link-block
+          (filter-map (lambda (x)
+                        (let ((link (externalev-link (cdr x))))
+                          (and link
+                               (reduce-eq link indexmaps unit-env))))
+               (equation-set-externalevs eqset)))
+
          (eq-block
           (map (lambda (x) (reduce-eq x indexmaps unit-env)) 
                (equation-set-equations eqset)))
@@ -2320,6 +2421,7 @@
      discrete-init-block
      external-init-block
      externalev-init-block
+     externalev-link-block
      eq-block 
      cond-block
      pos-responses

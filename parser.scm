@@ -574,7 +574,60 @@
          (else
           (salt:error 'parse-define-unit "Not a valid unit definition: " rhs))
          ))
-  
+
+
+(define (parse-external pattern rhs env)
+  (let recur ((rhs rhs) (dim #f) (order #f))
+    (match rhs
+           ((('dim u) . rst)
+            (let ((dim-val (parse-dim pattern u)))
+              (recur rst dim-val order)))
+           
+           ((('order (and (? integer?) num)) . rst)
+            (recur rst dim num))
+           
+           (else
+            (external
+             (gensym 'ext)
+             (free-variable-name 
+              (parse-variable env pattern))
+             (parse-expression env (parse-sym-infix-expr rhs))
+             (or dim Unity)
+             order
+             ))
+           ))
+  )
+
+(define (parse-external-event pattern rhs env)
+  (let recur ((rhs rhs) (dim #f) (order #f) (link #f))
+    (match rhs
+           ((('dim u) . rst)
+            (let ((dim-val (parse-dim pattern u)))
+              (recur rst dim-val order link)))
+           
+           ((('order (and (? integer?) num)) . rst)
+            (recur rst dim num link))
+           
+           ((('link (and (? symbol?) sym)) . rst)
+            (recur rst dim order sym))
+           
+           (else
+            (externalev
+             (gensym 'extev)
+             (free-variable-name 
+              (parse-variable env pattern))
+             (parse-expression env (parse-sym-infix-expr rhs))
+             (or dim Unity)
+             order
+             (or (not link)
+                 (extevlink
+                  (free-variable-name 
+                   (parse-variable env pattern))
+                  (free-variable-name 
+                   (parse-variable env link))))
+             ))
+           ))
+  )
 
 (define (parse-definition env args)
 
@@ -637,40 +690,10 @@
                    (parse-expression env (parse-sym-infix-expr expr))
                    Unity
                    ))
-                 (('= 'external ('dim u) . expr)
-                  (let ((dim-val (parse-dim pattern u)))
-                    (external
-                     (gensym 'ext)
-                     (free-variable-name 
-                      (parse-variable env pattern))
-                     (parse-expression env (parse-sym-infix-expr expr))
-                     dim-val)
-                    ))
                  (('= 'external . expr)
-                  (external
-                   (gensym 'ext)
-                   (free-variable-name 
-                    (parse-variable env pattern))
-                   (parse-expression env (parse-sym-infix-expr expr))
-                   Unity
-                   ))
-                 (('= 'external-event ('dim u) . expr)
-                  (let ((dim-val (parse-dim pattern u)))
-                    (externalev
-                     (gensym 'ext)
-                     (free-variable-name 
-                      (parse-variable env pattern))
-                     (parse-expression env (parse-sym-infix-expr expr))
-                     dim-val)
-                    ))
-                 (('= 'external-event . expr)
-                  (externalev
-                   (gensym 'ext)
-                   (free-variable-name 
-                    (parse-variable env pattern))
-                   (parse-expression env (parse-sym-infix-expr expr))
-                   Unity
-                   ))
+                  (parse-external pattern rhs env))
+                 (('= 'external-event . rhs)
+                  (parse-external-event pattern rhs env))
                  (('= 'constant ('unit u) . expr)
                   (let ((unit-assoc (assv u (model-units)))
                         (cvalue (parse-expression env (parse-sym-infix-expr expr))))
