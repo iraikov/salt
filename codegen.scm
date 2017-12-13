@@ -194,6 +194,7 @@
   (define (update-edge e dag)
     (update-bucket (car e) (cdr e) dag))
 
+  
   (define (fold-reinits lst)
     (let recur ((lst (cdr lst)) (expr (car lst)))
       (if (null? lst) expr
@@ -203,7 +204,7 @@
                  (else (error 'fold-reinits "unknown reinit equation" (car lst)))))
       ))
 
-
+  
   (define (fold-reinit-blocks ode-inds blocks)
     (sort
      (filter-map
@@ -212,7 +213,7 @@
                (filter-map 
                 (match-lambda
                  [('setindex 'y_out index val) (and (member index ode-inds) val)]
-                 [('setindex 'd_out index val) val]
+                 [('setindex out index val) val]
                  [else #f])
                 (cdr x))))
           (and (pair? reinits) (cons (car x) (fold-reinits reinits)))))
@@ -368,6 +369,15 @@
           ))
     )
 
+  (define (codegen-set-stmts/index codegen-expr exprs is out)
+    (let recur ((is is) (exprs exprs) (stmts '()))
+      (if (null? exprs)
+          (append stmts (list (E:Ret (V:Var out))))
+          (recur (cdr is) (cdr exprs)
+                 (cons (E:Set (V:Var out) (car is) (codegen-expr (car exprs))) stmts))
+          ))
+    )
+
   (define (codegen-set-stmts* codegen-expr exprs out)
     (let recur ((i 0) (exprs exprs) (stmts '()))
       (if (null? exprs)
@@ -428,6 +438,7 @@
         (fields         (simruntime-fields sim))
         (externals      (simruntime-external-definitions sim))
         (externalevs    (simruntime-externalev-definitions sim))
+        (extevlinks     (simruntime-externalev-links sim))
         (eqblock        (simruntime-eqblock sim))
 
 
@@ -524,6 +535,15 @@
                            (simruntime-posresp sim))))
                      bucket-eqs))
         (trstmt (trace 'codegen-ODE "regblocks: ~A~%" regblocks))
+        
+        (extevlink-blocks (let ((bucket-eqs 
+                                 (bucket 
+                                  (match-lambda*
+                                   [((and eq ('setindex 'ext_out index ('signal.reinit ev y rhs))))
+                                    index]
+                                   [else #f])
+                                  extevlinks)))
+                            bucket-eqs))
 
         (regime-n (length regblocks))
 
@@ -739,17 +759,14 @@
 
 
            (linkextevfun  
-            (let ((stmts (codegen-set-stmts codegen-expr1 externalevs 'extev_out)))
+            (let* ((blocks (fold-reinit-blocks ode-inds extevlink-blocks))
+                   (stmts  (codegen-set-stmts/index (compose codegen-expr1 cdr) blocks (map car blocks) 'extev_out)))
               (V:Fn '(p fld)
-                    (E:Ret (V:Op 'make_ext (list (V:C (length externalevs)) 
-                                                 (V:Fn '(extev_out) 
-                                                       (if (null? asgn-defs)
-                                                           (E:Begin stmts)
-                                                           (E:Let (map (match-lambda ((_ name rhs) (B:Val name (codegen-expr1 rhs))))
-                                                                       asgn-defs)
-                                                                  (E:Begin stmts))))))
-                           ))
-              ))
+                    (E:Ret (V:Fn '(extev extev_out) 
+                                 (E:Begin stmts)
+                                 ))
+                    ))
+            )
 
 
            (rhsfun
@@ -1098,6 +1115,7 @@
         (initcondfun . ,initcondfun)
         (initextfun  . ,initextfun)
         (initextevfun  . ,initextevfun)
+        (linkextevfun  . ,linkextevfun)
         (condfun . ,condfun)
         (condrhsfun . ,condrhsfun)
         (posfun  . ,posfun)

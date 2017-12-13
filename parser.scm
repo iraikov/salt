@@ -576,6 +576,14 @@
          ))
 
 
+(define (parse-dim pattern u)
+  (let ((dim-assoc (assv u (model-quantities))))
+    (if (not dim-assoc)
+        (salt:error 'parse-definition "unknown dimension in definition"
+                    pattern u))
+    (cdr dim-assoc)
+    ))
+
 (define (parse-external pattern rhs env)
   (let recur ((rhs rhs) (dim #f) (order #f))
     (match rhs
@@ -583,7 +591,7 @@
             (let ((dim-val (parse-dim pattern u)))
               (recur rst dim-val order)))
            
-           ((('order (and (? integer?) num)) . rst)
+           ((('order (and num (? integer?))) . rst)
             (recur rst dim num))
            
            (else
@@ -605,10 +613,10 @@
             (let ((dim-val (parse-dim pattern u)))
               (recur rst dim-val order link)))
            
-           ((('order (and (? integer?) num)) . rst)
+           ((('order (and num (? integer?))) . rst)
             (recur rst dim num link))
            
-           ((('link (and (? symbol?) sym)) . rst)
+           ((('link (and sym (? symbol?))) . rst)
             (recur rst dim order sym))
            
            (else
@@ -619,25 +627,15 @@
              (parse-expression env (parse-sym-infix-expr rhs))
              (or dim Unity)
              order
-             (or (not link)
-                 (extevlink
-                  (free-variable-name 
-                   (parse-variable env pattern))
-                  (free-variable-name 
-                   (parse-variable env link))))
+             (if (not link) #f
+                 (make-extevlink
+                  (parse-variable env pattern)
+                  (parse-variable env link)))
              ))
            ))
   )
 
 (define (parse-definition env args)
-
-  (define (parse-dim pattern u)
-    (let ((dim-assoc (assv u (model-quantities))))
-      (if (not dim-assoc)
-          (salt:error 'parse-definition "unknown dimension in definition"
-                      pattern u))
-      (cdr dim-assoc)
-      ))
   
   (if (pair? args)
       (let ((pattern (car args))
@@ -690,7 +688,7 @@
                    (parse-expression env (parse-sym-infix-expr expr))
                    Unity
                    ))
-                 (('= 'external . expr)
+                 (('= 'external . rhs)
                   (parse-external pattern rhs env))
                  (('= 'external-event . rhs)
                   (parse-external-event pattern rhs env))

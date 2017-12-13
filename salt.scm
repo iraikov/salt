@@ -79,7 +79,7 @@
         
 	(require-extension matchable datatype lalr-driver mathh unitconv with-units fmt fmt-c)
 	(require-library data-structures extras srfi-1 srfi-4 srfi-13)
-	(import (only srfi-1 first last zip fold fold-right filter filter-map list-tabulate concatenate every delete-duplicates drop-right)
+	(import (only srfi-1 first last zip fold fold-right filter filter-map list-tabulate concatenate every delete-duplicates drop-right lset-union)
                 (only srfi-4 list->s32vector)
                 (only srfi-13 string-null? string-concatenate string-map string<)
 		(only data-structures ->string alist-ref conc intersperse compose sort topological-sort)
@@ -345,7 +345,7 @@
 
 
 (define-record-printer (external x out)
-  (fprintf out "#(external ~S (~A) [~A] = ~A order: )"
+  (fprintf out "#(external ~S (~A) [~A] = ~A order: ~A)"
 	   (external-name x)
 	   (external-dim x)
 	   (external-label x)
@@ -355,7 +355,7 @@
 
 
 (define-record-type externalev
-  (externalev name label initial dim)
+  (externalev name label initial dim order link)
   externalev?
   (name externalev-name)
   (label externalev-label)
@@ -1376,9 +1376,12 @@
                         ))
 
                      (($ externalev name label initial-value dim order link)
-                      (trace 'elaborate "externalevs: label = ~A initial-value = ~A~%" label initial-value)
+                      (trace 'elaborate "externalev: label = ~A initial-value = ~A~%" label initial-value)
                       (let* ((resolved-initial (resolve initial-value env-stack))
-                             (en1 (externalev name label resolved-initial dim order link)))
+                             (resolved-link (if (not link) #f
+                                                (make-extevlink (resolve (extevlink-src link) env-stack)
+                                                                (resolve (extevlink-dst link) env-stack))))
+                             (en1 (externalev name label resolved-initial dim order resolved-link)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
                                parameters fields externals (cons (cons name resolved-initial) externalevs)
@@ -2092,16 +2095,17 @@
 
            
            (($ extevlink src dst)
-            (let ((src-index (env-lookup (external-name src) extevindexmap))
-                  (dst-index (env-lookup (external-name dst) extevindexmap)))
+            (let ((src-index (env-lookup (externalev-name src) extevindexmap))
+                  (dst-index (env-lookup (externalev-name dst) extevindexmap)))
                 (if (not src-index)
                     (error 'reduce-eq "event not in external event index" src))
                 (if (not dst-index)
                     (error 'reduce-eq "event not in external event index" dst))
-                `(setindex ext_out ,dst-index
-                           `(signal.reinit ,(getindex extev ,src-index)
-                                           ,(getindex extev ,src-index)
-                                           ,(getindex extev ,dst-index)))
+                `(setindex ext_out ,(cdr dst-index)
+                           (signal.reinit (getindex extev ,(cdr src-index))
+                                          (getindex extev ,(cdr dst-index))
+                                          (getindex extev ,(cdr src-index))
+                                          ))
                 ))
            
            (($ evcondition name rhs)
@@ -2285,10 +2289,10 @@
                                                  (car node) ord)
                                           (cons
                                            (extend-env-with-binding env (gen-binding (car node) ord))
-                                           (lset-union iset (list ord)))
+                                           (lset-union eq? iset (list ord)))
                                           )
                                       env+iset)))
-                               (else env)))
+                               (else env+iset)))
                        (cons empty-env '())
                        nodelst)))
             
@@ -2301,7 +2305,8 @@
                 (if (null? nodelst)
                     indexmap
                     (let ((node (car nodelst)))
-                      (cond ((external? (cdr node))
+                      (cond ((and (external? (cdr node))
+                                  (not (env-lookup (car node) indexmap)))
                              (let ((index1 (next-index index iset)))
                                (recur (cdr nodelst)
                                       (extend-env-with-binding indexmap (gen-binding (car node) index1))
@@ -2325,10 +2330,10 @@
                                                  (car node) ord)
                                           (cons
                                            (extend-env-with-binding env (gen-binding (car node) ord))
-                                           (lset-union iset (list ord)))
+                                           (lset-union eq? iset (list ord)))
                                           )
                                       env+iset)))
-                               (else env)))
+                               (else env+iset)))
                        (cons empty-env '())
                        nodelst)))
             
@@ -2341,7 +2346,8 @@
                 (if (null? nodelst)
                     indexmap
                     (let ((node (car nodelst)))
-                      (cond ((externalev? (cdr node))
+                      (cond ((and (externalev? (cdr node))
+                                  (not (env-lookup (car node) indexmap)))
                              (let ((index1 (next-index index iset)))
                                (recur (cdr nodelst)
                                       (extend-env-with-binding indexmap (gen-binding (car node) index1))
@@ -2386,11 +2392,12 @@
                (equation-set-externalevs eqset)))
 
          (externalev-link-block
-          (filter-map (lambda (x)
-                        (let ((link (externalev-link (cdr x))))
-                          (and link
-                               (reduce-eq link indexmaps unit-env))))
-               (equation-set-externalevs eqset)))
+          (filter-map (lambda (node)
+                        (and (externalev? (cdr node))
+                             (let ((link (externalev-link (cdr node))))
+                               (and link
+                                    (reduce-eq link indexmaps unit-env)))))
+                      nodelst))
 
          (eq-block
           (map (lambda (x) (reduce-eq x indexmaps unit-env)) 
