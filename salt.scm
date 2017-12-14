@@ -2103,7 +2103,7 @@
                     (error 'reduce-eq "event not in external event index" dst))
                 `(setindex ext_out ,(cdr dst-index)
                            (signal.reinit (getindex extev ,(cdr src-index))
-                                          (getindex extev ,(cdr dst-index))
+                                          ,(constant 'number -1.0 'unitbottom)
                                           (getindex extev ,(cdr src-index))
                                           ))
                 ))

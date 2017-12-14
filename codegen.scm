@@ -199,7 +199,7 @@
     (let recur ((lst (cdr lst)) (expr (car lst)))
       (if (null? lst) expr
           (match (car lst)
-                 (('signal.reinit ev ('getindex vect index) rhs)
+                 (('signal.reinit ev lhs rhs)
                   (recur (cdr lst) `(signal.reinit ,ev ,expr ,rhs)))
                  (else (error 'fold-reinits "unknown reinit equation" (car lst)))))
       ))
@@ -761,13 +761,10 @@
            (linkextevfun  
             (let* ((blocks (fold-reinit-blocks ode-inds extevlink-blocks))
                    (stmts  (codegen-set-stmts/index (compose codegen-expr1 cdr) blocks (map car blocks) 'extev_out)))
-              (V:Fn '(p fld)
-                    (E:Ret (V:Fn '(extev extev_out) 
-                                 (E:Begin stmts)
-                                 ))
+              (V:Fn '(extev extev_out) 
+                    (E:Begin stmts)
                     ))
             )
-
 
            (rhsfun
             (let ((rhs-args  '((double . t) ((%pointer double) . y) ((%pointer double) . dy_out) ((%pointer (%pointer void)) . clos))))
