@@ -160,7 +160,7 @@ datatype model_condition =
          | SCondition of (real * cont_state * event_state * external_state * externalev_state * event_state) -> event_state
 
 datatype model_response = 
-         RegimeResponse of (real * cont_state * event_state * dsc_state * external_state * externalev_state * cont_state) -> cont_state
+         RegimeResponse of (real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * cont_state) -> cont_state
          | SResponse of (real * cont_state * event_state * external_state * externalev_state * cont_state) -> cont_state
 
 val getindex = Unsafe.Array.sub
@@ -348,12 +348,12 @@ fun evresponse_regime (fpos,fneg,fdiscrete,fregime) =
      let
          val y'  = case fpos of 
                        SOME (RegimeResponse f) =>
-                       f (x,y,e,d,ext,extev,yrsp)
+                       f (x,y,e,d,r,ext,extev,yrsp)
                      | NONE => (Array.copy {src=y, dst=yrsp, di=0}; yrsp)
                      | _ => raise Fail "evresponse_regime: RegimeState integral response"
          val y'' = case fneg of 
                        NONE => y'
-                     | SOME (RegimeResponse f) => f (x,y',e,d,ext,extev,yrsp)
+                     | SOME (RegimeResponse f) => f (x,y',e,d,r,ext,extev,yrsp)
                      | _ => raise Fail "evresponse_regime: RegimeState integral response"
          val d'  =  (case fdiscrete of 
                          SOME f => f (x,y,e,d)
@@ -606,7 +606,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val (y',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
                                                     (i,x,y,e,d,r,ext,extev,yrsp)
                  val _ = if debug
-                         then Printf.printf `"RootFound: x = "R `" e = "R `" y = "R` " y' = "R `"\n" $ x (getindex(e,0)) (getindex(y,0)) (getindex(y',0))
+                         then Printf.printf `"RootFound: x = "R `" e = "R `" y = "R` " y' = "R `" d = "R` " d' = "R `" r = "B` " r' = "B `"\n" $ x (getindex(e,0)) (getindex(y,0)) (getindex(y',0)) (getindex(d,0)) (getindex(d',0)) (getindex(r,0)) (getindex(r',0))
                          else ()
                  val cst' = case cst of Left _ => cst 
                                      |  Right v => Left v
@@ -688,7 +688,8 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                       else (case hs of
                                 h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',
                                                       RootFound (i,subtract_h (hev, h1::hs)))
-                             | [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootBefore)))
+                              | [] => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',
+                                                  RootFound(i,[]))))
                                                      
              end
            | _ => raise Fail "integral: invalid arguments to regime stepper")
@@ -814,7 +815,8 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                      case hs of
                          h1::_ => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',
                                              RootStep (subtract_h (hev, h1::hs)))
-                      |  [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',RootBefore)
+                      |  [] => EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst',
+                                          RootBefore)
                                             
                end
              |  _ => raise Fail "integral: invalid arguments to event stepper")

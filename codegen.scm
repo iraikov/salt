@@ -974,7 +974,7 @@
                        (let* (
                               (blocks (fold-reinit-blocks ode-inds posblocks))
                               (used-asgns (fold-used-asgns (map cdr blocks) asgn-idxs asgn-defs asgns asgn-dag ext-defs))
-                              (rhs-args (if has-regimes? '(t y c d ext extev y_out) '(t y c ext extev y_out)))
+                              (rhs-args (if has-regimes? '(t y c d r ext extev y_out) '(t y c ext extev y_out)))
                               
                               (fnval (V:Fn rhs-args
                                            (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'y_out)))
@@ -1005,7 +1005,7 @@
                        (let* (
                               (blocks (fold-reinit-blocks ode-inds negblocks))
                               (used-asgns (fold-used-asgns (map cdr blocks) asgn-idxs asgn-defs asgns asgn-dag ext-defs))
-                              (rhs-args (if has-regimes? '(t y c d ext extev y_out) '(t y c ext extev y_out)))
+                              (rhs-args (if has-regimes? '(t y c d r ext extev y_out) '(t y c ext extev y_out)))
 
                               (fnval (V:Fn rhs-args
                                            (let ((stmts (codegen-set-stmts (compose codegen-expr1 cdr) blocks 'y_out)))
