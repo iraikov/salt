@@ -43,9 +43,8 @@
     (close-output-port sml-port)
     (if compile
         (run (mlton 
-                                        ;-profile alloc
-              -codegen c
-              -const "'Exn.keepHistory true'"
+              -profile alloc
+              ;-const "'Exn.keepHistory true'"
               -default-ann "'allowFFI true'"
               -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
               -mlb-path-var "'SALT_LIB $(SALT_HOME)/sml-lib'"

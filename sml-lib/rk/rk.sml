@@ -193,19 +193,23 @@ fun k_sum (h, (d,ns), ks, (t1, t2, t3)) =
 
 (* Helper function to generate a list of K_i *)
 
-fun gen_ks (der_fn: real * state * state -> state,
-	    h,(tn,yn),ks,[],[],[],[],_) = ks
-
-  | gen_ks (der_fn,h,old as (tn,yn),ks,(c::cs),(a::ar),(t1::ts1),(t2::ts2),ts3) =
-    let
-	val yn1 = if (FunQueue.empty ks) then yn else sum (yn, k_sum (h,a,ks,ts3), t1)
-        val k1  = der_fn (tn + c*h, yn1, t2)
-    in
-        gen_ks (der_fn, h, old, FunQueue.enque(ks,k1), cs, ar, ts1, ts2, ts3)
-    end
-
-  | gen_ks (der_fn,h,(tn,yn),ks,_,_,_,_,_) =
-    raise Fail "RungeKutta.k_sum: insufficient arguments"
+fun gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3) =
+  let
+      fun fder (tn,c,h,y,v) = der_fn (tn + c*h, y, v)
+                                     
+      fun gen_ks0 (ks,[],[],[],[],_) = ks
+        | gen_ks0 (ks,(c::cs),(a::ar),(t1::ts1),(t2::ts2),ts3) =
+          let
+	      val yn1 = if (FunQueue.empty ks) then yn else sum (yn, k_sum (h,a,ks,ts3), t1)
+              val k1  = fder (tn,c,h,yn1,t2)
+          in
+              gen_ks0 (FunQueue.enque(ks,k1), cs, ar, ts1, ts2, ts3)
+          end
+        | gen_ks0 (ks,_,_,_,_,_) =
+          raise Fail "RungeKutta.k_sum: insufficient arguments"
+  in
+      gen_ks0 (FunQueue.new(), cl, al, ts1, ts2, ts3)
+  end
     
 
 (* Helper function to sum a list of b_i (theta) K_i *)
@@ -301,7 +305,7 @@ fun core1 (cl: real list, al: RCL list, bl: RCL) =
 	 fn (h: real) =>
 	    fn (old as (tn,yn: state,yout: state)) =>
                   let
-                      val ks  = gen_ks (der_fn, h, (tn,yn), FunQueue.new(), cl, al, ts1, ts2, ts3)
+                      val ks  = gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3)
                   in
                       sum (yn, k_sum (h, bl, ks, tys), yout)
                   end
@@ -331,7 +335,7 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
          fn (h: real) =>
             fn (old as (tn,yn: state, yout: state)) =>
                let
-                   val ks = gen_ks (der_fn, h, (tn,yn), FunQueue.new(), cl, al, ts1, ts2, ts3)
+                   val ks = gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3)
                in
                    (sum (yn, k_sum (h, bl, ks, tys), yout),
                     k_sum (h, dl, ks, (err,te1,te2)))
@@ -361,8 +365,7 @@ fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) =
 	 fn (h: real) =>
 	    fn (old as (tn,yn: state,yout: state)) =>
                let
-                   val ks   = gen_ks (der_fn, h, (tn,yn), 
-                                      FunQueue.new(), cl, al, ts1, ts2, ts3)
+                   val ks   = gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3)
                in
                    (sum (yn, k_sum (h, bl, ks, tys), yout),
                     k_sum (h, dl, ks, (err,te1,te2)),

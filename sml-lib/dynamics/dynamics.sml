@@ -304,6 +304,8 @@ fun fixthr_s v =
 fun fixthr v =
     (Array.modify (fn(x) => if Real.>(Real.abs(x), float_eps) then x else 0.0) v; v)
 
+fun resthr (v, i) = (Array.update (v, i, 0.0); v)
+
         
 fun posdetect (x, e, x', e', excl) =
   case excl of
@@ -453,7 +455,7 @@ fun regime_rootval (finterp,fcond) =
                              let
                                  val (e_x,_) = csum(x,cx,theta*h)
                                  val e_y = finterp' theta
-                                 val res = fixthr_s (getindex(fcond(e_x,e_y,e,d,r,ext,extev,enext), i))
+                                 val res = getindex(fcond(e_x,e_y,e,d,r,ext,extev,enext), i)
                                  val _ = if debug
                                          then Printf.printf `"RootStep.evtest: theta = "R
                                                             `" x = "R `" e_x = "R `" e_y = "RA `" res = "R
@@ -495,7 +497,7 @@ fun event_rootval (finterp,fcond) =
                              let
                                  val (e_x,_) = csum(x,cx,theta*h)
                                  val e_y = finterp' theta
-                                 val res = fixthr_s (getindex(fcond(e_x,e_y,e,ext,extev,enext), i))
+                                 val res = getindex(fcond(e_x,e_y,e,ext,extev,enext), i)
                                  val _ = if debug
                                          then Printf.printf `"RootStep.evtest: theta = "R
                                                             `" x = "R `" e_x = "R `" e_y = "RA `" res = "R
@@ -505,7 +507,7 @@ fun event_rootval (finterp,fcond) =
                                  res
                              end
                            val theta = FindRoot.brent float_eps evtest 0.0 1.0
-                           val (xinterp, cxinterp) = csum(x,cx,theta*h)
+                           val (xinterp, cxinterp) = csum(x,cx,theta*h + float_eps)
                        in
                            case ax of
                                NONE => SOME (t, xinterp, cxinterp, theta, finterp' theta)
@@ -586,12 +588,12 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                val y''  = y'
                                val _    = Array.copy {src=e_y, dst=y'', di=0}
                                val h''  = e_theta*h
+                               val e''  = resthr (fcond (x'',y'',e,d,r,ext,extev,enext),i)
                                val _ = if debug
                                        then Printf.printf `"RootStep: Mid: x' = "R `" x'' = "R 
-                                                          `" h' = "R `" h'' = "R `" y'' = "R `" y = "R
-                                                          `"\n" $ x' x'' h' h'' (getindex(y'',0)) (getindex(y,0))
+                                                          `" h' = "R `" h'' = "R `" y'' = "R `" y = "R `" e'' = "R 
+                                                          `"\n" $ x' x'' h' h'' (getindex(y'',0)) (getindex(y,0)) (getindex(e'',0))
                                        else ()
-                               val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))
                            in
                                RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
                                            RootFound (i,subtract_h (h'', h::hs)))
@@ -659,12 +661,12 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                               val y''  = y'
                               val _    = Array.copy {src=e_y, dst=y'', di=0}
                               val h''  = e_theta*hev
+                              val e''  = resthr (fcond (x'',y'',e,d,r,ext,extev,enext),i)                              
                               val _ = if debug
                                       then Printf.printf `"RootAfter: Mid: x' = "R `" x'' = "R 
-                                                         `" h'' = "R `" y'' = "R `" y = "R
-                                                         `"\n" $ x' x'' h'' (getindex(y'',0)) (getindex(y,0))
+                                                         `" h'' = "R `" y'' = "R `" y = "R `" e'' = "R 
+                                                         `"\n" $ x' x'' h'' (getindex(y'',0)) (getindex(y,0)) (getindex(e'',0))
                                       else ()
-                              val e''  = fixthr (fcond (x'',y'',e,d,r,ext,extev,enext))                              
                           in
                               case hs of
                                   h1::hs => 
@@ -673,17 +675,6 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                 | [] =>
                                   RegimeState(x'',cx'',y'',e'',d,r,ext,extev,y,yrsp,e,cst',
                                               RootFound (i,[]))
-                                             (*
-                                  let
-                                      val (y''',d',r') = evresponse_regime (fpos,fneg,fdiscrete,fregime) 
-                                                                           (i,x'',y'',e',d,r,ext,extev,yrsp)
-
-                                  in
-                                      RegimeState(x'',cx'',y''',e',d',r',ext,extev,y,y'',e,cst',
-                                                  RootBefore)
-                                  end
-                                              *)
-                                             
                           end
                       else (case hs of
                                 h1::hs => RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',
@@ -740,12 +731,12 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          val y''  = y'
                          val _    = Array.copy {src=e_y, dst=y'', di=0}
                          val h''  = e_theta*h
+                         val e''  = resthr (fcond (x'',y'',e,ext,extev,enext),i)
                          val _ = if debug
                                  then Printf.printf `"RootStep: rootval: x' = "R `" x'' = "R 
-                                                    `" h'' = "R `" y'' = "R
-                                                       `"\n" $ x' x'' h'' (getindex(y'',0))
+                                                    `" h'' = "R `" y'' = "R `" e'' = "R 
+                                                       `"\n" $ x' x'' h'' (getindex(y'',0)) (getindex(e'',0))
                                  else ()
-                         val e''  = fixthr (fcond (x'',y'',e,ext,extev,enext))
                      in
                          EventState(x'',cx'',y'',e'',ext,extev,y,yrsp,e,cst',
                                     RootFound (i,subtract_h (h'', h::hs)))
@@ -796,12 +787,12 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          val y''  = y'
                          val _    = Array.copy {src=e_y, dst=y'', di=0}
                          val h''  = e_theta*hev
+                         val e''  = resthr (fcond (x'',y'',e,ext,extev,enext),i)
                          val _ = if debug
                                  then Printf.printf `"RootStep: rootval: x' = "R `" x'' = "R 
                                                     `" h'' = "R `" y'' = "R
                                                        `"\n" $ x' x'' h'' (getindex(y'',0))
                                  else ()
-                         val e''  = fixthr (fcond (x'',y'',e,ext,extev,enext))
                      in
                          case hs of
                              h1::hs =>

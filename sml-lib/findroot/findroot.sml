@@ -25,7 +25,60 @@ val R = Printf.R
 val ` = Printf.`
 val $ = Printf.$
 
-                
+              
+
+fun error_bracket (loc, a, fa, b, fb) =
+  raise Fail (loc ^ ": root must be bracketed:" ^
+              " f(" ^ (Real.toString a) ^ ") = " ^ (Real.toString fa) ^
+              " sign(f(" ^ (Real.toString a) ^ ")) = " ^ (Int.toString (Real.sign fa)) ^	
+              " f(" ^ (Real.toString b) ^ ") = " ^ (Real.toString fb) ^
+              " sign(f(" ^ (Real.toString b) ^ ")) = " ^ (Int.toString (Real.sign fb)) ^	
+              " fa * fb = " ^ (Real.toString (fa * fb)))
+
+        
+fun bisect_int delta f a fa b fb =
+  let val m = (a + b) * 0.5 
+      val fm = f m
+  in
+      if Real.abs fm < delta orelse (b-a) * 0.5 < delta then m
+      else
+          (if fa * fm < 0.0 then 
+               bisect_int delta f a fa m fm
+           else
+               bisect_int delta f m fm b fb)
+  end
+
+fun bisection delta f a b =
+  let val fa = f a 
+      val fb = f b
+  in
+      if fa * fb >= 0.0
+      then error_bracket ("RootFind.bisection", a, fa, b, fb)
+      else bisect_int delta f a fa b fb
+  end
+
+fun secant_int delta f a fa b fb =
+  let val m = b - fb * (b - a) / (fb - fa) 
+      val fm = f m
+      val _ = if trace then Printf.printf `"m: "R `" fm = "R `"\n" $ m fm else ();
+  in
+      if Real.abs fm < delta orelse (b-a) * 0.5 < delta
+      then m
+      else (if fa * fm < 0.0 then 
+                bisect_int delta f a fa m fm
+            else
+                bisect_int delta f m fm b fb)
+  end
+
+fun secant delta f a b =
+  let val fa = f a 
+      val fb = f b
+  in
+      if fa * fb >= 0.0
+      then error_bracket ("RootFind.secant", a, fa, fa, fb)
+      else secant_int delta f a fa b fb
+  end
+
 (* Internal function for brent's method *)
 fun brent_int xdelta ydelta f a fa b fb c fc mflag d i =
   (if debug 
@@ -57,10 +110,11 @@ fun brent_int xdelta ydelta f a fa b fb c fc mflag d i =
                    if c1 orelse c2 orelse c3 orelse c4 orelse c5 then ((a + b) / 2.0, true)
                    else (s, false)
            in
-               let val fs = f s 
+               let val fs = f s
+                   val p  = Real.abs fs < ydelta
                    val _ = if trace then Printf.printf `"p_"I `":"R `" f(p_"I `")="R `"\n" $ i s i fs else ();
                    in
-                       if Real.abs fs < ydelta
+                       if p
                        then s
                        else
                            if fa * fs < 0.0 then 
@@ -72,24 +126,22 @@ fun brent_int xdelta ydelta f a fa b fb c fc mflag d i =
        end
    end)
 
-(* helper for a-b swapping and xdelts checks *)
+(* helper for a-b swapping and xdelta checks *)
 and brent_int_swap xdelta ydelta f a fa b fb c fc mflag d i =
-  (* finish rootfinding if our range is smaller than xdelta *)
-  if Real.abs (b-a) < xdelta then b
-  else
-  (* ensure that fb is the best estimate so far by swapping b with a *)
-    if Real.abs fa < Real.abs fb then 
-      brent_int xdelta ydelta f b fb a fa c fc mflag d i
-    else
-      brent_int xdelta ydelta f a fa b fb c fc mflag d i
-
-fun error_bracket (loc, a, fa, b, fb) =
-  raise Fail (loc ^ ": root must be bracketed:" ^
-              " f(" ^ (Real.toString a) ^ ") = " ^ (Real.toString fa) ^
-              " sign(f(" ^ (Real.toString a) ^ ")) = " ^ (Int.toString (Real.sign fa)) ^	
-              " f(" ^ (Real.toString b) ^ ") = " ^ (Real.toString fb) ^
-              " sign(f(" ^ (Real.toString b) ^ ")) = " ^ (Int.toString (Real.sign fb)) ^	
-              " fa * fb = " ^ (Real.toString (fa * fb)))
+    let
+        val p = Real.abs (b-a) < xdelta
+        val _ = if trace then Printf.printf `"Real.abs(b-a) < xdelta:"B `"\n" $ p else ();
+    in
+        (* fall back to secant method if range is smaller than xdelta *)
+        if p
+        then (if Real.abs fb < ydelta then b else secant ydelta f a b)
+        else
+            (* ensure that fb is the best estimate so far by swapping b with a *)
+            if Real.abs fa < Real.abs fb then
+                brent_int xdelta ydelta f b fb a fa c fc mflag d i
+            else
+                brent_int xdelta ydelta f a fa b fb c fc mflag d i
+    end
         
 fun brent delta f a b =
   let val fa = f a 
@@ -100,48 +152,6 @@ fun brent delta f a b =
       	   then 0.0 else error_bracket ("RootFind.brent", a, fa, b, fb))
            (* xdelta = ydelta = delta *)
       else brent_int_swap delta delta f a fa b fb a fa true 0.0 1
-  end
-
-fun bisect_int delta f a fa b fb =
-  let val m = (a + b) * 0.5 
-      val fm = f m
-  in
-      if Real.abs fm < delta orelse (b-a) * 0.5 < delta then m
-      else
-          (if fa * fm < 0.0 then 
-               bisect_int delta f a fa m fm
-           else
-               bisect_int delta f m fm b fb)
-  end
-
-fun bisection delta f a b =
-  let val fa = f a 
-      val fb = f b
-  in
-      if fa * fb >= 0.0
-      then error_bracket ("RootFind.bisection", a, fa, b, fb)
-      else bisect_int delta f a fa b fb
-  end
-
-fun secant_int delta f a fa b fb =
-  let val m = b - fb * (b - a) / (fb - fa) 
-      val fm = f m
-  in
-      if Real.abs fm < delta orelse (b-a) * 0.5 < delta
-      then m
-      else (if fa * fm < 0.0 then 
-                bisect_int delta f a fa m fm
-            else
-                bisect_int delta f m fm b fb)
-  end
-
-fun secant delta f a b =
-  let val fa = f a 
-      val fb = f b
-  in
-      if fa * fb >= 0.0
-      then error_bracket ("RootFind.secant", a, fa, fa, fb)
-      else secant_int delta f a fa b fb
   end
 
 fun f x = 4.0 * x * x * x - 16.0 * x * x + 17.0 * x - 4.0
