@@ -2102,10 +2102,9 @@
                 (if (not dst-index)
                     (error 'reduce-eq "event not in external event index" dst))
                 `(setindex ext_out ,(cdr dst-index)
-                           (signal.reinit (getindex extev ,(cdr src-index))
-                                          ,(constant 'number +inf.0 'unitbottom)
-                                          (getindex extev ,(cdr src-index))
-                                          ))
+                           (signal.reinitPriority (getindex extev ,(cdr src-index))
+                                                  (getindex extev ,(cdr src-index))
+                                                  ))
                 ))
            
            (($ evcondition name rhs)

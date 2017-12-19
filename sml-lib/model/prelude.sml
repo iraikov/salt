@@ -47,5 +47,8 @@ fun make_stepper_rkoz4 deriv =
 fun make_stepper_rkoz3 deriv =
   fn (clos: 'a, h, x, y, yout) => (cerkoz3 (deriv clos)) h (x,y,yout) 
 
+val prioq_insert      = SignalQueue.insert                                                         
+val prioq_empty       = SignalQueue.empty                                                         
+val prioq_findMinDflt = SignalQueue.findMinDflt
                    
 end

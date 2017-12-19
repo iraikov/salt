@@ -70,6 +70,10 @@
 (copy-file-to-salt-dir "sml-lib/queue/fun-queue.sml")
 (copy-file-to-salt-dir "sml-lib/queue/fun-queue.mlb")
 
+(copy-file-to-salt-dir "sml-lib/prioq/SkewBinomialHeap.sml")
+(copy-file-to-salt-dir "sml-lib/prioq/prioq.sml")
+(copy-file-to-salt-dir "sml-lib/prioq/prioq.mlb")
+
 (copy-file-to-salt-dir "sml-lib/lininterp/lininterp.sml")
 (copy-file-to-salt-dir "sml-lib/lininterp/lininterp.mlb")
 

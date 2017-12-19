@@ -137,6 +137,12 @@
               (V:Ifv (V:Op 'signal.gte (list (recur test) (V:C 0.0)))
                      (recur upd)
                      (recur dflt)))
+             (('prioq.findMinDflt q dflt)
+              (V:Op 'prioq.findMinDflt (list (recur q) (recur dflt))))
+             (('prioq.insert key val q)
+              (V:Op 'prioq.insert (list (recur key) (recur val) (recur q))))
+             (('prioq.empty)
+              (V:Op 'prioq.empty '()))
              (else expr))
       )))
 
@@ -217,6 +223,39 @@
                  [else #f])
                 (cdr x))))
           (and (pair? reinits) (cons (car x) (fold-reinits reinits)))))
+      blocks)
+     (lambda (x y) (< (car x) (car y))))
+    )
+
+  
+  (define (fold-reinits/priority lst dflt)
+    (let recur ((lst (cdr lst))
+                (expr (match (car lst)
+                             (('signal.reinitPriority ev rhs)
+                              `(prioq.insert ,ev ,rhs prioq.empty))
+                             (else (error 'fold-reinits "unknown reinit equation" (car lst))))))
+                                             
+      (if (null? lst)
+          `(prioq.findMinDflt ,expr ,dflt)
+          (match (car lst)
+                 (('signal.reinitPriority ev rhs)
+                  (recur (cdr lst) `(prioq.insert ,ev ,rhs ,expr)))
+                 (else (error 'fold-reinits "unknown reinit equation" (car lst)))))
+      ))
+  
+    
+  (define (fold-reinit-blocks/priority ode-inds blocks dflt)
+    (sort
+     (filter-map
+      (lambda (x) 
+        (let ((reinits 
+               (filter-map 
+                (match-lambda
+                 [('setindex 'y_out index val) (and (member index ode-inds) val)]
+                 [('setindex out index val) val]
+                 [else #f])
+                (cdr x))))
+          (and (pair? reinits) (cons (car x) (fold-reinits/priority reinits dflt)))))
       blocks)
      (lambda (x y) (< (car x) (car y))))
     )
@@ -539,7 +578,7 @@
         (extevlink-blocks (let ((bucket-eqs 
                                  (bucket 
                                   (match-lambda*
-                                   [((and eq ('setindex 'ext_out index ('signal.reinit ev y rhs))))
+                                   [((and eq ('setindex 'ext_out index ('signal.reinitPriority ev rhs))))
                                     index]
                                    [else #f])
                                   extevlinks)))
@@ -759,7 +798,8 @@
 
 
            (linkextevfun  
-            (let* ((blocks (fold-reinit-blocks ode-inds extevlink-blocks))
+            (let* ((dflt   (constant 'number +inf.0 'unitbottom))
+                   (blocks (fold-reinit-blocks/priority ode-inds extevlink-blocks dflt))
                    (stmts  (codegen-set-stmts/index (compose codegen-expr1 cdr) blocks (map car blocks) 'extev_out)))
               (V:Fn '(extev extev_out) 
                     (E:Begin stmts)

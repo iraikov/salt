@@ -5,6 +5,7 @@ $(SML_LIB)/basis/unsafe.mlb
 $(RK_LIB)/rk.mlb
 $(RK_LIB)/crk.mlb
 $(DYNAMICS_LIB)/dynamics.mlb
+$(PRIOQ_LIB)/prioq.mlb
 
 structure Dynamics = FunctionalHybridDynamics
 
