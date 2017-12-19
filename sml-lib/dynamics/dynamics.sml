@@ -507,7 +507,7 @@ fun event_rootval (finterp,fcond) =
                                  res
                              end
                            val theta = FindRoot.brent float_eps evtest 0.0 1.0
-                           val (xinterp, cxinterp) = csum(x,cx,theta*h + float_eps)
+                           val (xinterp, cxinterp) = csum(x,cx,theta*h)
                        in
                            case ax of
                                NONE => SOME (t, xinterp, cxinterp, theta, finterp' theta)
@@ -641,7 +641,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                          `" y' = "R
                                          `"\n" $ x (getindex(y',0))
                       else ();
-                      RegimeState(x',cx',y',e',d,r,ext,extev,ynext,yrsp,e,cst',RootFound (i,subtract_h (hev, hs))))
+                      RegimeState(x',cx',y',e',d,r,ext,extev,y,yrsp,e,cst',RootFound (i,subtract_h (hev, hs))))
                    | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
                      (if debug
                       then Printf.printf `"RootAfter Far: x = "R 
@@ -721,7 +721,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                in
                  case rootval of
                      SOME (Near i,e_x,e_cx,e_theta,e_y) =>
-                     EventState(x,cx,y,e',ext,extev,ynext,yrsp,e,cst,RootFound (i,h::hs))
+                     EventState(x,cx,y,e',ext,extev,y,yrsp,e,cst,RootFound (i,h::hs))
                    | SOME (Far i,e_x,e_cx,e_theta,e_y) =>
                      EventState(x',cx',y',e',ext,extev,y,yrsp,e,cst,RootFound (i,hs))
                    | SOME (Mid i,e_x,e_cx,e_theta,e_y) =>
