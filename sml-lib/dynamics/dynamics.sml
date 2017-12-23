@@ -149,11 +149,11 @@ datatype model_state =
 datatype model_stepper = 
          RegimeStepper of dsc_state * regime_state * external_state * externalev_state *
                           real * real * cont_state * cont_state -> 
-                          (cont_state * cont_state * (real array) FunQueue.t)
+                          (cont_state * cont_state * (real array) list)
          | EventStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> 
-                           (cont_state * cont_state * (real array) FunQueue.t)
+                           (cont_state * cont_state * (real array) list)
          | ContStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> 
-                          (cont_state * cont_state * (real array) FunQueue.t)
+                          (cont_state * cont_state * (real array) list)
 
 datatype model_condition = 
          RegimeCondition of (real * cont_state * event_state * dsc_state * regime_state * external_state * externalev_state * event_state) -> event_state
@@ -382,27 +382,28 @@ fun evresponse (fpos,fneg) =
                    
 
 fun adaptive_regime_stepper stepper =
-  let 
-        fun f iter (d,r,ext,extev,h,x,ys,yout,cst) =
-            if Int.<(iter,maxiter)
-            then
-                (let
-                    val (ys',err,w) = stepper (d,r,ext,extev,h,x,ys,yout)
-                in
-                    case !tol of
-                        SOME tolv =>
-                        let
-                            val cst' = controller tolv (h,ys',err,cst)
-                        in
-                            case cst' of
-                                Right (h',_,_) => 
-                                (ys',h',cst',w)
-                              | Left (h',_,_)  => 
-                                f (Int.+(iter,1)) (d,r,ext,extev,h',x,ys,yout,cst')
-                        end
-                     | NONE => (ys',h,cst,w)
+  let
+      val tiny = 1.0E~30
+      fun f iter (d,r,ext,extev,h,x,ys,yout,cst) =
+        if Int.<(iter,maxiter)
+        then
+            (let
+                val (ys',err,w) = stepper (d,r,ext,extev,h,x,ys,yout)
+            in
+                case !tol of
+                    SOME tolv =>
+                    let
+                        val cst' = controller tolv (h,ys',err,cst)
+                    in
+                        case cst' of
+                            Right (h',_,_) => 
+                            (ys',h',cst',w)
+                          | Left (h',_,_)  => 
+                            f (Int.+(iter,1)) (d,r,ext,extev,h',x,ys,yout,cst')
+                    end
+                  | NONE => (ys',h,cst,w)
                 end)
-            else raise Fail "convergence error in adaptive regime stepper"
+        else raise Fail "convergence error in adaptive regime stepper"
     in
         f 0
     end

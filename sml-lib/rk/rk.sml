@@ -38,6 +38,9 @@ sig
   val copy  : state * state -> state 
   val scale : real * state * state -> state 
   val sum   : state * state * state -> state
+  val mul   : state * state * state -> state
+  val apply : (real -> real) * state * state -> state
+  val show : state -> string
 end
 
 functor RungeKuttaFn (structure S: RKSTATE) =
@@ -174,7 +177,7 @@ fun k_sum (h, (d,ns), ks, (t1, t2, t3)) =
     let
         fun recur f g (n::ns, ks, ax) =
             let
-                val (k, ks) = valOf (FunQueue.deque ks)
+                val (k, ks) = (List.hd ks, List.tl ks)
             in
                 case f (n,k,t1) of
                     NONE => recur f g (ns, ks, ax)
@@ -197,18 +200,18 @@ fun gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3) =
   let
       fun fder (tn,c,h,y,v) = der_fn (tn + c*h, y, v)
                                      
-      fun gen_ks0 (ks,[],[],[],[],_) = ks
+      fun gen_ks0 (ks,[],[],[],[],_) = List.rev ks
         | gen_ks0 (ks,(c::cs),(a::ar),(t1::ts1),(t2::ts2),ts3) =
           let
-	      val yn1 = if (FunQueue.empty ks) then yn else sum (yn, k_sum (h,a,ks,ts3), t1)
+	      val yn1 = if (List.null ks) then yn else sum (yn, k_sum (h,a,ks,ts3), t1)
               val k1  = fder (tn,c,h,yn1,t2)
           in
-              gen_ks0 (FunQueue.enque(ks,k1), cs, ar, ts1, ts2, ts3)
+              gen_ks0 (k1::ks, cs, ar, ts1, ts2, ts3)
           end
         | gen_ks0 (ks,_,_,_,_,_) =
           raise Fail "RungeKutta.k_sum: insufficient arguments"
   in
-      gen_ks0 (FunQueue.new(), cl, al, ts1, ts2, ts3)
+      gen_ks0 ([], cl, al, ts1, ts2, ts3)
   end
     
 
@@ -227,7 +230,7 @@ fun bk_sum (bs: RCL list) =
                   val (bsum,_) = foldl (fn (n,(sum,thetas)) =>
                                            (((n*(List.hd thetas))+sum,List.tl thetas)))
                                        (0.0,thetas) ns
-                  val (k, ks) = valOf (FunQueue.deque ks)
+                  val (k, ks) = (List.hd ks, List.tl ks)
                   val t = hd ts
               in
                   case m_scale scale (bsum, k, t) of 
@@ -244,7 +247,7 @@ fun bk_sum (bs: RCL list) =
         
 (* Hermite interpolation routine for continuous explicit RK (CERK) methods *)
 
-type hinterp = (real * state FunQueue.t * real * state) ->
+type hinterp = (real * state list * real * state) ->
                real -> state
                    
 fun hinterp (ws: RCL list) =
@@ -330,15 +333,26 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
       val te1  = state()
       val te2  = state()
       val err  = state()
+      val yscal = state()
+      val tysc  = (state(),state(),state())
   in
       fn (der_fn: real * state * state -> state) =>
          fn (h: real) =>
             fn (old as (tn,yn: state, yout: state)) =>
                let
-                   val ks = gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3)
+                   val ks    = gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3)
+                   val yn1   = sum (yn, k_sum (h, bl, ks, tys), yout)
+                   val yp1   = List.last ks
+                   val yscal = apply(fn(x) => 1.0/(x+1.0E~30),
+                                     sum (apply(Real.abs, yn1, #1(tysc)),
+                                          scale(h, apply(Real.abs, yp1, #2(tysc)), #3(tysc)),
+                                          yscal),
+                                     yscal)
+
+                   val err1 = mul(k_sum (h, dl, ks, (err,te1,te2)), yscal, err)
+                                   
                in
-                   (sum (yn, k_sum (h, bl, ks, tys), yout),
-                    k_sum (h, dl, ks, (err,te1,te2)))
+                   (yn1, err1)
                end
   end
 
@@ -348,28 +362,38 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
 
 type stepper3 = (real * state * state -> state) -> 
 		real -> (real * state * state) ->
-                (state * state * state FunQueue.t)
+                (state * state * state list)
 
 fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) =
   let
-      val ts1  = List.tabulate (List.length cl, fn (i) => state())
-      val ts2  = List.tabulate (List.length cl, fn (i) => state())
-      val ts3  = (state(),state(),state())
-      val tys  = (state(),state(),state())
-      val te1  = state()
-      val te2  = state()
-      val ti   = state()
-      val err  = state()
+      val ts1   = List.tabulate (List.length cl, fn (i) => state())
+      val ts2   = List.tabulate (List.length cl, fn (i) => state())
+      val ts3   = (state(),state(),state())
+      val tys   = (state(),state(),state())
+      val te1   = state()
+      val te2   = state()
+      val ti    = state()
+      val err   = state()
+      val yscal = state()
+      val tysc  = (state(),state(),state())
   in
       fn (der_fn: real * state * state -> state) =>
 	 fn (h: real) =>
 	    fn (old as (tn,yn: state,yout: state)) =>
                let
-                   val ks   = gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3)
+                   val ks    = gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3)
+                   val yn1   = sum (yn, k_sum (h, bl, ks, tys), yout)
+                   val yp1   = List.last ks
+                   val yscal = apply(fn(x) => 1.0/(x+1.0E~30),
+                                     sum (apply(Real.abs, yn1, #1(tysc)),
+                                          scale(h, apply(Real.abs, yp1, #2(tysc)), #3(tysc)),
+                                          yscal),
+                                     yscal)
+                   (*val _ = putStrLn("## yscal = " ^ (show yscal) ^ " yn1 = " ^ (show yn1) ^ " yp1 = " ^ (show yp1))*)
+                                                                       
+                   val err1 = mul(k_sum (h, dl, ks, (err,te1,te2)), yscal, err)
                in
-                   (sum (yn, k_sum (h, bl, ks, tys), yout),
-                    k_sum (h, dl, ks, (err,te1,te2)),
-                    ks)
+                   (yn1, err1, ks)
                end
   end
 

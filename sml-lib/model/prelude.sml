@@ -10,11 +10,13 @@ structure RKArrayState =
 struct
 
 type state = RealArrayState.state
-fun state () = RealArrayState.state n
-fun sum (a,b,y) = RealArrayState.binop Real.+ a b y 
-fun scale (a,b,y) = RealArrayState.unop (fn(x) => Real.* (a, x)) b y
 fun copy (x,y) = RealArrayState.unop (fn(x) => x) x y
-
+fun state () = RealArrayState.state n
+fun scale (a,b,y) = RealArrayState.unop (fn(x) => Real.* (a, x)) b y
+fun sum (a,b,y) = RealArrayState.binop Real.+ a b y 
+fun mul (a,b,y) = RealArrayState.binop Real.* a b y 
+fun apply (f,x,y) = RealArrayState.unop f x y
+val show = RealArrayState.show
 end
 
 fun make_real_state n = RealArrayState.state n

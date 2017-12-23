@@ -495,9 +495,9 @@
     ))
   )
 
-(test-model 'vdp vdp compile: #t)
+;(test-model 'vdp vdp compile: #t)
 
-(test-model 'ml ml compile: #t)
+;(test-model 'ml ml compile: #t)
 
 (test-model 'izhfs izhfs compile: #t)
 
@@ -507,20 +507,20 @@
 
 (test-model 'adex adex compile: #t);
 
-(test-model 'hr hr compile: #t)
+;(test-model 'hr hr compile: #t)
 
-(test-model 'wb wb compile: #t)
+;(test-model 'wb wb compile: #t)
 
-(test-model 'iafalpha iafalpha)
+;(test-model 'iafalpha iafalpha)
 
-(test-model 'iafdelta iafdelta)
+;(test-model 'iafdelta iafdelta)
 
-(test-model/c 'vdp vdp)
+;(test-model/c 'vdp vdp)
 
-(test-model/c 'ml ml)
+;(test-model/c 'ml ml)
 
-(test-model/c 'iaf iaf)
+;(test-model/c 'iaf iaf)
 
-(test-model/c 'iafrefr iafrefr)
+;(test-model/c 'iafrefr iafrefr)
 
-(test-model/c 'izhfs izhfs)
+;(test-model/c 'izhfs izhfs)
