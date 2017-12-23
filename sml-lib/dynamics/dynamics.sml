@@ -626,7 +626,11 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          then Printf.printf `"RootAfter: x = "R `" y = "R `" e = "R `" x' = "R `" y' = "R  `" e' = "R `"\n" $ x (getindex(y,0)) (getindex(e,0)) x' (getindex(y',0)) (getindex(e',0))
                          else ()
                  val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext,SOME ei)
-                 val cst' = controller_scale_h (cst, 0.5)
+                 val tol' = case (!tol) of
+                                SOME v => v
+                             |  NONE => 1E~6
+                 val cst' = controller_scale_h (cst, max(0.1, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))
+                 (*val _ = Printf.printf `"RootAfter: r = "R `" scale factor = "R  `"\n" $ (Math.pow(tol'/(controller_r cst), ~0.25)) (max(0.1, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))*)
              in
                  case rootval of
                      NONE =>
@@ -770,7 +774,10 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                 `" y' = "R `"\n" $ x' (getindex(e',0)) (getindex(y',0))
                              else ()
                    val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,enext,SOME ei)
-                   val cst' = controller_scale_h (cst, 0.5)
+                   val tol' = case (!tol) of
+                                SOME v => v
+                             |  NONE => 1E~6
+                   val cst' = controller_scale_h (cst, max(0.1, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))
                in
                    case rootval of
                      SOME (Near i,e_x,e_cx,e_theta,e_y) =>
