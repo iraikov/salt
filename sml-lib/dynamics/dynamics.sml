@@ -629,7 +629,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val tol' = case (!tol) of
                                 SOME v => v
                              |  NONE => 1E~6
-                 val cst' = controller_scale_h (cst, max(0.1, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))
+                 val cst' = controller_scale_h (cst, max(0.01, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))
                  (*val _ = Printf.printf `"RootAfter: r = "R `" scale factor = "R  `"\n" $ (Math.pow(tol'/(controller_r cst), ~0.25)) (max(0.1, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))*)
              in
                  case rootval of
@@ -777,7 +777,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                    val tol' = case (!tol) of
                                 SOME v => v
                              |  NONE => 1E~6
-                   val cst' = controller_scale_h (cst, max(0.1, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))
+                   val cst' = controller_scale_h (cst, max(0.01, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))
                in
                    case rootval of
                      SOME (Near i,e_x,e_cx,e_theta,e_y) =>
