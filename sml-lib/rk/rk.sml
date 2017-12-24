@@ -322,7 +322,7 @@ fun core1 (cl: real list, al: RCL list, bl: RCL) =
 *)
 
 type stepper2 =  (real * state * state -> state) ->
-		 real -> (real * state * state) -> (state * state)
+		 real * real -> (real * state * state) -> (state * state)
 
 fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
   let
@@ -337,7 +337,7 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
       val tysc  = (state(),state(),state())
   in
       fn (der_fn: real * state * state -> state) =>
-         fn (h: real) =>
+         fn (eps: real, h: real) =>
             fn (old as (tn,yn: state, yout: state)) =>
                let
                    val ks    = gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3)
@@ -361,7 +361,7 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
    coefficients for this timestep. *)
 
 type stepper3 = (real * state * state -> state) -> 
-		real -> (real * state * state) ->
+		real * real -> (real * state * state) ->
                 (state * state * state list)
 
 fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) =
@@ -375,19 +375,22 @@ fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) =
       val ti    = state()
       val err   = state()
       val yscal = state()
-      val tysc  = (state(),state(),state())
+      val tysc  = state()
   in
       fn (der_fn: real * state * state -> state) =>
-	 fn (h: real) =>
+	 fn (eps: real, h: real) =>
 	    fn (old as (tn,yn: state,yout: state)) =>
                let
                    val ks    = gen_ks (der_fn, h, (tn,yn), cl, al, ts1, ts2, ts3)
                    val yn1   = sum (yn, k_sum (h, bl, ks, tys), yout)
                    val yp1   = List.last ks
-                   val yscal = apply(fn(x) => 1.0/(x+1.0E~30),
+                   (*val yscal = apply(fn(x) => 1.0/(x+1.0E~30),
                                      sum (apply(Real.abs, yn1, #1(tysc)),
                                           scale(h, apply(Real.abs, yp1, #2(tysc)), #3(tysc)),
                                           yscal),
+                                     yscal)*)
+                   val yscal = apply(fn(x) => 1.0/(x+1.0E~30),
+                                     scale(eps*h, apply(Real.abs, yp1, tysc), yscal),
                                      yscal)
                    (*val _ = putStrLn("## yscal = " ^ (show yscal) ^ " yn1 = " ^ (show yn1) ^ " yp1 = " ^ (show yp1))*)
                                                                        

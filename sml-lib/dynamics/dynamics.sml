@@ -90,7 +90,8 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 10
-val tol     = ref (SOME (1E~6))
+val abstol  = ref (SOME (1E~3))
+val reltol  = ref (SOME (1E~3))
 val maxstep = ref 0.5
     
 datatype ('a, 'b) either = Left of 'a | Right of 'b
@@ -148,11 +149,11 @@ datatype model_state =
 
 datatype model_stepper = 
          RegimeStepper of dsc_state * regime_state * external_state * externalev_state *
-                          real * real * cont_state * cont_state -> 
+                          real * real * real * cont_state * cont_state -> 
                           (cont_state * cont_state * (real array) list)
-         | EventStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> 
+         | EventStepper of (external_state * externalev_state * real * real * real * cont_state * cont_state) -> 
                            (cont_state * cont_state * (real array) list)
-         | ContStepper of (external_state * externalev_state * real * real * cont_state * cont_state) -> 
+         | ContStepper of (external_state * externalev_state * real * real * real * cont_state * cont_state) -> 
                           (cont_state * cont_state * (real array) list)
 
 datatype model_condition = 
@@ -218,19 +219,19 @@ fun vfoldi2 f init (v1,v2) =
 
 
 fun error_estimate (h, ys, es) =
-  Array.foldl (fn (e,ax) => (abs e) + ax) 0.0 es
+  Array.foldl (fn (e,ax) => max(abs e, ax)) 0.0 es
                                                          
 
-fun controller tol (h,ys,es,prev) =
+fun controller abstol (h,ys,es,prev) =
   let
       val safety = 0.9
       val p0     = ~0.25
       val p1     = ~0.2
-      val k      = Math.pow (10.0 / safety, 1.0 / p1)
+      val k      = Math.pow (5.0 / safety, 1.0 / p1)
       val fmax   = 2.0
       val fmin   = 0.1
       val r         = error_estimate (h, ys, es) 
-      val cerr      = r / tol
+      val cerr      = r / abstol
       val (cst_prev, h_prev, r_prev) =
           case prev of
               Left (h_prev, cst_prev, r_prev)  => (cst_prev, h_prev, r_prev)
@@ -260,7 +261,7 @@ fun controller tol (h,ys,es,prev) =
               val cerr_prev = cerr
 
               val _ = if controller_debug
-                      then Printf.printf `"controller: step accepted: r = "R `" tol = "R `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ r tol cerr ratio h_next
+                      then Printf.printf `"controller: step accepted: r = "R `" abstol = "R `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ r abstol cerr ratio h_next
                       else ()
           in
               Right (h_next, cerr_prev, r)
@@ -388,9 +389,9 @@ fun adaptive_regime_stepper stepper =
         if Int.<(iter,maxiter)
         then
             (let
-                val (ys',err,w) = stepper (d,r,ext,extev,h,x,ys,yout)
+                val (ys',err,w) = stepper (d,r,ext,extev,h,getOpt(!reltol,1.0),x,ys,yout)
             in
-                case !tol of
+                case !abstol of
                     SOME tolv =>
                     let
                         val cst' = controller tolv (h,ys',err,cst)
@@ -415,9 +416,9 @@ fun adaptive_stepper stepper =
             if Int.<(iter,maxiter)
             then 
                 (let
-                    val (ys',err,w) = stepper (ext,extev,h,x,ys,yout)
+                    val (ys',err,w) = stepper (ext,extev,h,getOpt(!reltol,1.0),x,ys,yout)
                 in
-                    case !tol of
+                    case !abstol of
                         SOME tolv =>
                         let
                             val cst' = controller tolv (h,ys',err,cst)
@@ -626,9 +627,9 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                          then Printf.printf `"RootAfter: x = "R `" y = "R `" e = "R `" x' = "R `" y' = "R  `" e' = "R `"\n" $ x (getindex(y,0)) (getindex(e,0)) x' (getindex(y',0)) (getindex(e',0))
                          else ()
                  val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,d,r,enext,SOME ei)
-                 val tol' = case (!tol) of
+                 val tol' = case (!abstol) of
                                 SOME v => v
-                             |  NONE => 1E~6
+                             |  NONE => 1E~3
                  val cst' = controller_scale_h (cst, max(0.01, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))
                  (*val _ = Printf.printf `"RootAfter: r = "R `" scale factor = "R  `"\n" $ (Math.pow(tol'/(controller_r cst), ~0.25)) (max(0.1, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))*)
              in
@@ -774,9 +775,9 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                                                 `" y' = "R `"\n" $ x' (getindex(e',0)) (getindex(y',0))
                              else ()
                    val rootval = frootval (hev,w,x,cx,y,e,x',cx',y',e',ext,extev,enext,SOME ei)
-                   val tol' = case (!tol) of
+                   val tol' = case (!abstol) of
                                 SOME v => v
-                             |  NONE => 1E~6
+                             |  NONE => 1E~3
                    val cst' = controller_scale_h (cst, max(0.01, min(0.5, Math.pow(tol'/(controller_r cst), ~0.25))))
                in
                    case rootval of

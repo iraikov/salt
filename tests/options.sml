@@ -7,13 +7,14 @@ structure G = GetOpt
 exception Error
 	      
 
-datatype flag =  Help | Time of real | Timestep of real | Tol of real
+datatype flag =  Help | Time of real | Timestep of real | AbsTol of real | RelTol of real
 
 
 fun showflag (Help)       = "Help"
   | showflag (Time x)     = ("Time " ^ (Real.toString x))
   | showflag (Timestep x) = ("Timestep " ^ (Real.toString x))
-  | showflag (Tol x)      = ("Tol " ^ (Real.toString x))
+  | showflag (AbsTol x)   = ("AbsTol " ^ (Real.toString x))
+  | showflag (RelTol x)   = ("RelTol " ^ (Real.toString x))
 		   
 
 val options = 
@@ -29,9 +30,14 @@ val options =
       help="simulation duration"},
 
      {short="",
-      long=["tol"],
-      desc=G.ReqArg (fn(x) => Tol (valOf(Real.fromString x)),"N"),
-      help="error tolerance"},
+      long=["abstol"],
+      desc=G.ReqArg (fn(x) => AbsTol (valOf(Real.fromString x)),"N"),
+      help="absolute error tolerance"},
+
+     {short="",
+      long=["reltol"],
+      desc=G.ReqArg (fn(x) => RelTol (valOf(Real.fromString x)),"N"),
+      help="relative error tolerance"},
 
      {short="",
       long=["timestep"],
@@ -53,23 +59,26 @@ fun getstate (opts) =
 
     let
 	val O_HELP       = ref false
-	val O_TOL        = ref NONE
+	val O_ABSTOL     = ref NONE
+	val O_RELTOL     = ref NONE
 	val O_TIME       = ref NONE
 	val O_TIMESTEP   = ref NONE
 
 	fun getstate' (opt) = 
 	    (case opt of 
 		 Help        => O_HELP := true	
-	       | Tol x         => O_TOL := SOME x
-	       | Time x       => O_TIME := SOME x
-	       | Timestep x    => O_TIMESTEP := SOME x
+	       | AbsTol x    => O_ABSTOL := SOME x
+	       | RelTol x    => O_RELTOL := SOME x
+	       | Time x      => O_TIME := SOME x
+	       | Timestep x  => O_TIMESTEP := SOME x
             )
 
 	val _ = app getstate' opts
 
     in {
         is_help=(!O_HELP), 
-        is_tol=(!O_TOL), 
+        is_abstol=(!O_ABSTOL), 
+        is_reltol=(!O_RELTOL), 
         is_time=(!O_TIME),
 	is_timestep=(!O_TIMESTEP)
        }
