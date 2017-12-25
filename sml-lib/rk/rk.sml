@@ -390,11 +390,11 @@ fun core3 (cl: real list, al: RCL list, bl: RCL, dl: RCL, wl: RCL list) =
                                           yscal),
                                      yscal)*)
                    val yscal = apply(fn(x) => 1.0/(x+1.0E~30),
-                                     scale(eps*h, apply(Real.abs, yp1, tysc), yscal),
+                                     scale(eps*h*1E3, apply(Real.abs, yp1, tysc), yscal),
                                      yscal)
-                   (*val _ = putStrLn("## yscal = " ^ (show yscal) ^ " yn1 = " ^ (show yn1) ^ " yp1 = " ^ (show yp1))*)
                                                                        
                    val err1 = mul(k_sum (h, dl, ks, (err,te1,te2)), yscal, err)
+                   (*val _ = putStrLn("## err1 = " ^ (show err1) ^ " yscal = " ^ (show yscal) ^ " yn1 = " ^ (show yn1) ^ " yp1 = " ^ (show yp1))*)
                in
                    (yn1, err1, ks)
                end
