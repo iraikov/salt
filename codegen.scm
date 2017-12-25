@@ -876,7 +876,7 @@
                    (cond
                     (has-regimes?
                      (V:Op 'RegimeStepper
-                           (list (V:Fn '(d r ext extev h eps x y yout) 
+                           (list (V:Fn '(d r ext extev h abstol reltol x y yout) 
                                        (E:Ret (V:Op 'stepfun
                                                     (list (V:Rcon
                                                            (random-vargs
@@ -888,7 +888,8 @@
                                                               (extev . ,(V:Var 'extev)))
                                                             libs))
                                                           (V:Var 'h)
-                                                          (V:Var 'eps)
+                                                          (V:Var 'abstol)
+                                                          (V:Var 'reltol)
                                                           (V:Var 'x)
                                                           (V:Var 'y)
                                                           (V:Var 'yout)
@@ -899,7 +900,7 @@
                     
                     (has-conds?
                      (V:Op 'EventStepper
-                           (list (V:Fn '(ext extev h eps x y yout) 
+                           (list (V:Fn '(ext extev h abstol reltol x y yout) 
                                        (E:Ret (V:Op 'stepfun
                                                      (list (V:Rcon
                                                             (random-vargs
@@ -909,7 +910,8 @@
                                                               (extev . ,(V:Var 'extev)))
                                                             libs))
                                                            (V:Var 'h)
-                                                           (V:Var 'eps)
+                                                           (V:Var 'abstol)
+                                                           (V:Var 'reltol)
                                                            (V:Var 'x)
                                                            (V:Var 'y)
                                                            (V:Var 'yout))
@@ -919,7 +921,7 @@
                     
                     (else
                      (V:Op 'ContStepper
-                           (list  (V:Fn '(ext extev h eps x y yout) 
+                           (list  (V:Fn '(ext extev h abstol reltol x y yout) 
                                         (E:Ret (V:Op 'stepfun
                                                      (list (V:Rcon
                                                             (random-vargs
@@ -929,7 +931,8 @@
                                                                (extev . ,(V:Var 'extev)))
                                                              libs))
                                                            (V:Var 'h)
-                                                           (V:Var 'eps)
+                                                           (V:Var 'abstol)
+                                                           (V:Var 'reltol)
                                                            (V:Var 'x)
                                                            (V:Var 'y)
                                                            (V:Var 'yout)))

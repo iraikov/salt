@@ -35,7 +35,8 @@ fun deriv (t,y,_) = con*y
 val t0 = 0.0
 val y0 = 1.75
 fun exact t = y0*Real.Math.exp(con*(t - t0))
-val eps = 1E~3
+val abstol = 1E~3
+val reltol = 1E~3
               
 val numit = 18
                               
@@ -94,7 +95,7 @@ fun do_case2 integrator n =
       val sep = if n <= 4 then "\t\t" else "\t"
   in
       putStr (String.concat [(showReal h), sep]);
-      gen_soln2 (integrator (eps,h),h,t0,y0)
+      gen_soln2 (integrator (abstol,reltol,h),h,t0,y0)
   end
 
 fun solver2 (integrator,stats) =
@@ -123,7 +124,7 @@ fun do_case3 (integrator, interp) n =
       val sep = if n <= 4 then "\t\t" else "\t"
   in
       putStr (String.concat [(showReal h), sep]);
-      gen_soln3 (integrator (eps,h),interp,h,t0,y0)
+      gen_soln3 (integrator (abstol,reltol,h),interp,h,t0,y0)
   end
 
 fun solver3 (integrator,stats,interp) =

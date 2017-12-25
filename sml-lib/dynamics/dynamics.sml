@@ -72,7 +72,7 @@ open Real
 open Math
 open SignalMath
 
-val controller_debug = false
+val controller_debug = true
 val debug = false
 
 val B = Printf.B       
@@ -89,7 +89,7 @@ type cont_state    = real array
 type external_state = real array
 type externalev_state = real array
 
-val maxiter = 25
+val maxiter = 100
 val abstol  = ref (SOME (1E~3))
 val reltol  = ref (SOME (1E~3))
 val maxstep = ref 0.5
@@ -148,12 +148,12 @@ datatype model_state =
 
 
 datatype model_stepper = 
-         RegimeStepper of dsc_state * regime_state * external_state * externalev_state *
-                          real * real * real * cont_state * cont_state -> 
+         RegimeStepper of (dsc_state * regime_state * external_state * externalev_state *
+                           real * real * real * real * cont_state * cont_state) -> 
                           (cont_state * cont_state * (real array) list)
-         | EventStepper of (external_state * externalev_state * real * real * real * cont_state * cont_state) -> 
+         | EventStepper of (external_state * externalev_state * real * real * real * real * cont_state * cont_state) -> 
                            (cont_state * cont_state * (real array) list)
-         | ContStepper of (external_state * externalev_state * real * real * real * cont_state * cont_state) -> 
+         | ContStepper of (external_state * externalev_state * real * real * real * real * cont_state * cont_state) -> 
                           (cont_state * cont_state * (real array) list)
 
 datatype model_condition = 
@@ -169,20 +169,6 @@ val update = Unsafe.Array.update
 
 val vfind = Array.find
 val vfindi = Array.findi
-                            
-fun vmap f v u = 
-    let
-        val n = Array.length v
-    in
-        (Array.appi (fn (i,x) => update (u, i, f x)) v; u)
-    end
-
-fun vmap2 f (v1,v2,a) = 
-    let 
-        val n = Array.length v1
-    in
-        (Array.appi (fn (i,x) => update (a, i, f (x, getindex (v2,i)))) v1; a)
-    end
 
 fun vfind2 f (v1,v2) = 
     let 
@@ -218,20 +204,23 @@ fun vfoldi2 f init (v1,v2) =
     end 
 
 
-fun error_estimate (h, ys, es) =
-  Array.foldl (fn (e,ax) => max(abs e, ax)) 0.0 es
-                                                         
-
-fun controller abstol (h,ys,es,prev) =
+fun error_norm (xs) =
+  let
+      val n = Array.length xs
+  in
+      if Int.>(n, 0)
+      then Math.sqrt((Array.foldl (fn (e,ax) => e*e + ax) 0.0 xs)/(Real.fromInt n))
+      else 0.0
+  end
+      
+fun controller (abstol,reltol) (h,ys,yps,es,prev) =
   let
       val safety = 0.9
       val p0     = ~0.25
       val p1     = ~0.2
-      val k      = Math.pow (5.0 / safety, 1.0 / p1)
       val fmax   = 2.0
       val fmin   = 0.1
-      val r         = error_estimate (h, ys, es) 
-      val cerr      = r / abstol
+      val cerr   = error_norm es
       val (cst_prev, h_prev, r_prev) =
           case prev of
               Left (h_prev, cst_prev, r_prev)  => (cst_prev, h_prev, r_prev)
@@ -248,23 +237,24 @@ fun controller abstol (h,ys,es,prev) =
               val cerr_prev = cerr
                                   
               val _ = if controller_debug
-                      then Printf.printf `"controller: step rejected: r = "R  `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ r cerr ratio h_next
+                      then Printf.printf `"controller: step rejected: cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ cerr ratio h_next
                       else ()
           in
-              Left (h_next, cerr_prev, r)
+              Left (h_next, cerr_prev, cerr)
           end
       else 
           (* step accepted *)
           (let
+              val k      = Math.pow (5.0 / safety, 1.0 / p1)
               val ratio  = if cerr > k then safety * Math.pow(cerr, p1) else fmax
               val h_next = max(min(ratio * h_prev, (!maxstep)), float_eps)
               val cerr_prev = cerr
 
               val _ = if controller_debug
-                      then Printf.printf `"controller: step accepted: r = "R `" abstol = "R `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ r abstol cerr ratio h_next
+                      then Printf.printf `"controller: step accepted: abstol = "R `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ abstol cerr ratio h_next
                       else ()
           in
-              Right (h_next, cerr_prev, r)
+              Right (h_next, cerr_prev, cerr)
           end)
   end
 
@@ -389,12 +379,12 @@ fun adaptive_regime_stepper stepper =
         if Int.<(iter,maxiter)
         then
             (let
-                val (ys',err,w) = stepper (d,r,ext,extev,h,getOpt(!reltol,1.0),x,ys,yout)
+                val (ys',err,w) = stepper (d,r,ext,extev,h,getOpt(!reltol,1.0),getOpt(!abstol,1.0),x,ys,yout)
             in
                 case !abstol of
                     SOME tolv =>
                     let
-                        val cst' = controller tolv (h,ys',err,cst)
+                        val cst' = controller (tolv, getOpt(!reltol,1.0)) (h,ys',w,err,cst)
                     in
                         case cst' of
                             Right (h',_,_) => 
@@ -416,12 +406,12 @@ fun adaptive_stepper stepper =
             if Int.<(iter,maxiter)
             then 
                 (let
-                    val (ys',err,w) = stepper (ext,extev,h,getOpt(!reltol,1.0),x,ys,yout)
+                    val (ys',err,w) = stepper (ext,extev,h,getOpt(!abstol,1.0),getOpt(!reltol,1.0),x,ys,yout)
                 in
                     case !abstol of
                         SOME tolv =>
                         let
-                            val cst' = controller tolv (h,ys',err,cst)
+                            val cst' = controller (tolv, getOpt(!reltol,1.0)) (h,ys',w,err,cst)
                         in
                             case cst' of
                                 Right (h',_,_) => 

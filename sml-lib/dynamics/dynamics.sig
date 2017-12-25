@@ -45,14 +45,14 @@ signature FUNCTIONAL_HYBRID_DYNAMICS =
     datatype model_stepper
       = ContStepper of external_state * externalev_state * real * real * 
                        cont_state * cont_state
-                       -> cont_state * cont_state * real array FunQueue.t
+                       -> cont_state * cont_state * (real array) list
       | EventStepper of external_state * externalev_state * real * real * 
                         cont_state * cont_state
-                        -> cont_state * cont_state * real array FunQueue.t
+                        -> cont_state * cont_state * (real array) list
       | RegimeStepper of dsc_state * regime_state * external_state * 
                          externalev_state * real * real * cont_state * 
                          cont_state
-                         -> cont_state * cont_state * real array FunQueue.t
+                         -> cont_state * cont_state * (real array) list
                                                            
     datatype model_condition
       = RegimeCondition of real * cont_state * event_state * dsc_state * 
@@ -141,7 +141,7 @@ signature FUNCTIONAL_HYBRID_DYNAMICS =
                                 option
     val subtract_h : real * real list -> real list
     val integral : model_stepper * 
-                   (real * real array FunQueue.t * real * cont_state
+                   (real * (real array) list * real * cont_state
                     -> real -> cont_state) * model_condition option * 
                    model_response option * model_response option * 
                    (real * cont_state * event_state * dsc_state -> dsc_state) 
