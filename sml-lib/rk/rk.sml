@@ -335,6 +335,7 @@ fun core2 (cl: real list, al: RCL list, bl: RCL, dl: RCL) =
       val err  = state()
       val yscal = state()
       val tysc  = state()
+                       
   in
       fn (der_fn: real * state * state -> state) =>
          fn (abstol: real, reltol: real, h: real) =>

@@ -72,7 +72,7 @@ open Real
 open Math
 open SignalMath
 
-val controller_debug = true
+val controller_debug = false
 val debug = false
 
 val B = Printf.B       
@@ -90,7 +90,7 @@ type external_state = real array
 type externalev_state = real array
 
 val maxiter = 100
-val abstol  = ref (SOME (1E~3))
+val abstol  = ref (SOME (1E~6))
 val reltol  = ref (SOME (1E~3))
 val maxstep = ref 0.5
     
@@ -602,8 +602,9 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val _ = if debug
                          then Printf.printf `"RootFound: x = "R `" e = "R `" y = "R` " y' = "R `" d = "R` " d' = "R `" r = "B` " r' = "B `"\n" $ x (getindex(e,0)) (getindex(y,0)) (getindex(y',0)) (getindex(d,0)) (getindex(d',0)) (getindex(r,0)) (getindex(r',0))
                          else ()
-                 val cst' = case cst of Left _ => cst 
-                                     |  Right v => Left v
+                 (*val cst' = case cst of Left _ => cst 
+                                     |  Right v => Left v*)
+                 val cst' = controller_scale_h (cst, max(0.01, min(0.5, vfoldi2 (fn(i,v1,v2,ax) => min((v1 + 1E~30)/(v2 + 1E~30),ax)) 0.0 (y,y'))))
              in
                  RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,cst',RootAfter (i,hs))
              end
