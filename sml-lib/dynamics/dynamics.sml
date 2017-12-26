@@ -744,9 +744,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                    val _   = if debug
                              then Printf.printf `"RootFound: x = "R `" e = "R `" y' = "R `"\n" $ x (getindex(e,0)) (getindex(y',0))
                              else ()
-                   val cst' = case cst of Left _ => cst 
-                                       |  Right v => Left v
-
+                   val cst' = controller_scale_h (cst, max(0.01, min(0.5, vfoldi2 (fn(i,v1,v2,ax) => min((v1 + 1E~30)/(v2 + 1E~30),ax)) 0.0 (y,y'))))
                in
                    EventState(x,cx,y',e,ext,extev,y,ynext,enext,cst',RootAfter (i,hs))
                end
