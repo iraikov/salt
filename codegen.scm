@@ -1596,7 +1596,7 @@ EOF
                     "    val clos = alloc_closure(size_closure_regime_rs)" ,nll
                     "    val err  = state()" ,nll
                     "in " ,nll
-                    "fn({p,fld,d,r,ext,extev,rs,rszt as (ki,ke,wi,fi,we,fe)},h,x,y,yout) => solver (update_closure_regime_rs (p, fld, d, r, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout, err)" ,nll
+                    "fn({p,fld,d,r,ext,extev,rs,rszt as (ki,ke,wi,fi,we,fe)},h,abstol,reltol,x,y,yout) => solver (update_closure_regime_rs (p, fld, d, r, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, abstol, reltol, x, y, yout, err)" ,nll
                     "end" ,nll)
                    ("fun make_stepper (deriv: clos -> real * real array * real array -> real array) = " ,nll
                     "let " ,nll
@@ -1604,7 +1604,7 @@ EOF
                     "    val clos = alloc_closure(size_closure_cont_rs)" ,nll
                     "    val err  = state()" ,nll
                     "in " ,nll
-                    "fn({p,fld,ext,extev,rs,rszt as (ki,ke,wi,fi,we,fe)},h,x,y,yout) => solver (update_closure_cont_rs (p, fld, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, x, y, yout,err)" ,nll
+                    "fn({p,fld,ext,extev,rs,rszt as (ki,ke,wi,fi,we,fe)},h,abstol,reltol,x,y,yout) => solver (update_closure_cont_rs (p, fld, ext, extev, rs, ki, ke, wi, fi, we, fe, clos), h, abstol, reltol, x, y, yout,err)" ,nll
                     "end" ,nll))
                  `(("type regime_clos = {p: real array,fld: real array,d: real array,r: bool array,ext: real array,extev: real array}" ,nll
                     "type clos = {p: real array,fld: real array,ext: real array,extev: real array}" ,nll
@@ -1614,7 +1614,7 @@ EOF
                     "    val clos = alloc_closure(size_closure_regime)" ,nll
                     "    val err  = state()" ,nll
                     "in " ,nll
-                    "fn({p,fld,d,r,ext,extev},h,x,y,yout) => solver (update_closure_regime (p, fld, d, r, ext, extev, clos), h, x, y, yout, err)" ,nll
+                    "fn({p,fld,d,r,ext,extev},h,abstol,reltol,x,y,yout) => solver (update_closure_regime (p, fld, d, r, ext, extev, clos), h, abstol, reltol, x, y, yout, err)" ,nll
                     "end" ,nll)
                    ("fun make_stepper (deriv: clos -> real * real array * real array -> real array) = " ,nll
                     "let " ,nll
@@ -1622,7 +1622,7 @@ EOF
                     "    val clos = alloc_closure(size_closure_cont)" ,nll
                     "    val err  = state()" ,nll
                     "in " ,nll
-                    "fn({p,fld,ext,extev},h,x,y,yout) => solver (update_closure_cont (p, fld, ext, extev, clos), h, x, y, yout, err)" ,nll
+                    "fn({p,fld,ext,extev},h,abstol,reltol,x,y,yout) => solver (update_closure_cont (p, fld, ext, extev, clos), h, abstol, reltol, x, y, yout, err)" ,nll
                     "end" ,nll)))
            (,nll)
            ))

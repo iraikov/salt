@@ -8,7 +8,22 @@
 
 #include "crk_common.h"
 
+int scale_error(int n, double abstol, double reltol, double *err, double *yscal, double *yp, double *t1, double *t2)
+{
+  for (size_t i=0; i<n; i++)
+    {
+      t1[i] = fabs(yp[i]);
+    }
+  vector_scale(n, reltol, t1, t2);
+  for (size_t i=0; i<n; i++)
+    {
+      yscal[i] = 1.0/(abstol + t2[i] + 1.0E-30);
+    }
 
+  vector_mul(n, err, yscal, err);
+  
+  return 0;
+}
 
 // Dormand-Prince 5(4):
 //
@@ -24,8 +39,8 @@
 //         <142464, [12985,0,64000,92750,~45927,18656]>
 
 int Dormand_Prince_5_4(int, void (*f)(double,double*,double*,void**), 
-                       void **clos,
-                       double *y, double x, double h, double *yout, double *err,
+                       void **clos, double abstol, double reltol, 
+                       double *y, double x, double h, double *yout, double *err, double *yscal, 
                        double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, double *k7, 
                        double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, 
                        double *t10, double *t11, double *t12);
@@ -72,8 +87,8 @@ int Dormand_Prince_5_4_hinterp(int n, double theta,
 ////////////////////////////////////////////////////////////////////////////////
 
 int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,void **), 
-                       void **clos,
-                       double *y, double x0, double h, double *yout, double *err, 
+                       void **clos, double abstol, double reltol, 
+                       double *y, double x0, double h, double *yout, double *err, double *yscal, 
                        double *k1, double *k2, double *k3, double *k4, double *k5, double *k6, double *k7, 
                        double *t1, double *t2, double *t3, double *t4, double *t5, double *t6, double *t7, double *t8, double *t9, double *t10, 
                        double *t11, double *t12)
@@ -173,7 +188,10 @@ int Dormand_Prince_5_4(int n, void (*f)(double,double *,double *,void **),
   vector_sum(n, t1, t3, t8); vector_sum(n, t4, t5, t9); vector_sum(n, t6, t7, t10); vector_sum(n, t8, t9, t11); 
   vector_sum(n, t10, t11, t12); 
   vector_scale(n, h/21369600.0, t12, err);  
-
+  
+  double *yp = k7;
+  scale_error(n, abstol, reltol, err, yscal, yp, t1, t2);
+  
   //printf("c: xn = %g err[0] = %g\n", x0+h, err[0]);
   
   return 0;

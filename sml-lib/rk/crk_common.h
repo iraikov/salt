@@ -97,6 +97,15 @@ static void vector_sum (int n, double *x, double *y, double *result)
     }
 }
 
+static void vector_mul (int n, double *x, double *y, double *result) 
+{
+  int i;
+  for (i = 0; i<n; i++) 
+    {
+      result[i] = x[i] * y[i];
+    }
+}
+
 static void vector_scale (int n, double k, double *x, double *result)
 {
   int i;
