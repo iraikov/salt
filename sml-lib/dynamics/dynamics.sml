@@ -97,37 +97,32 @@ val maxstep = ref 0.5
 datatype ('a, 'b) either = Left of 'a | Right of 'b
 datatype ('a, 'b, 'c) ternary = Near of 'a | Mid of 'b | Far of 'c
 
-type controller_state = ((real * real * real), (real * real * real)) either
+type controller_state' = {h: real, cst: real, r: real, tevent: real}
+type controller_state = (controller_state', controller_state') either
 
-fun controller_h (Left (h,_,_)) = h
-  | controller_h (Right (h,_,_)) = h
+fun controller_h (x: controller_state as Left {h,...}) = h
+  | controller_h (x: controller_state as Right {h,...}) = h
 
-fun controller_r (Left (_,_,r)) = r
-  | controller_r (Right (_,_,r)) = r
+fun controller_r (x: controller_state as Left {r,...}) = r
+  | controller_r (x: controller_state as Right {r,...}) = r
 
-fun controller_cst (Left (_,cst,_)) = cst
-  | controller_cst (Right (_,cst,_)) = cst
+fun controller_cst (x: controller_state as Left {cst,...}) = cst
+  | controller_cst (x: controller_state as Right {cst,...}) = cst
 
-fun controller_update_h (Left (h,cst,r),h') =
+fun controller_tevent (x: controller_state as Left {tevent,...}) = tevent
+  | controller_tevent (x: controller_state as Right {tevent,...}) = tevent
+
+
+
+fun controller_update_h (Left {h,cst,r,tevent},h') =
   (if h' < float_eps
    then raise Fail ("controller_update_h: new h = (" ^ (Real.toString h') ^ ") < float_eps")
-   else Left(h',cst,r))
-  | controller_update_h (Right (h,cst,r),h') = 
+   else Left {h=min(h,h'),cst=cst,r=r,tevent=tevent})
+  | controller_update_h (Right {h,cst,r,tevent},h') = 
     (if h' < float_eps
      then raise Fail ("controller_update_h: new h (" ^ (Real.toString h') ^ ") < float_eps")
-     else Right(h',cst,r))
+     else Right {h=min(h,h'),cst=cst,r=r,tevent=tevent})
 
-fun controller_scale_h (Left (h,cst,r),x) =
-  let val h' = max(h*x, 2.0*float_eps)
-  in
-      Left(h',cst,r)
-  end
-  | controller_scale_h (Right (h,cst,r),x) =
-    let val h' = max(h*x, 2.0*float_eps)
-    in
-        Right(h',cst,r)
-    end
-        
 
 
 exception ConvergenceError
@@ -202,7 +197,25 @@ fun vfoldi2 f init (v1,v2) =
     in
       recur (0, init)
     end 
-
+        
+        
+fun controller_update_event (st, ev, ev') =
+  let
+      val tevent'  = vfoldi2 (fn(i,a,b,ax) => let val d = a-b
+                                              in
+                                                  if d > 0.0 then min(abs(a-b),ax) else ax
+                                              end)
+                             posInf (ev, ev')
+      val h  = controller_h st
+      val h' = max(min(0.5*tevent',h),float_eps)
+      val _ = if debug then Printf.printf `"controller_update_event: tevent' = "R `" h' = "R `"\n" $ tevent' h' else ()
+  in
+      case st of
+          Left {h,cst,r,tevent} =>
+          Left{h=h',cst=cst,r=r,tevent=tevent'}
+        | Right {h,cst,r,tevent} =>
+          Right{h=h',cst=cst,r=r,tevent=tevent'}
+  end
 
 fun error_norm (xs) =
   let
@@ -221,10 +234,10 @@ fun controller (abstol,reltol) (h,ys,yps,es,prev) =
       val fmax   = 2.0
       val fmin   = 0.1
       val cerr   = error_norm es
-      val (cst_prev, h_prev, r_prev) =
+      val (cst_prev, h_prev, r_prev, tevent_prev) =
           case prev of
-              Left (h_prev, cst_prev, r_prev)  => (cst_prev, h_prev, r_prev)
-           |  Right (h_prev, cst_prev, r_prev) => (cst_prev, h_prev, r_prev)
+              Left {h=h_prev, cst=cst_prev, r=r_prev, tevent=tevent_prev}  => (cst_prev, h_prev, r_prev, tevent_prev)
+           |  Right {h=h_prev, cst=cst_prev, r=r_prev, tevent=tevent_prev} => (cst_prev, h_prev, r_prev, tevent_prev)
   in
       if cerr > 1.0
       then
@@ -240,7 +253,7 @@ fun controller (abstol,reltol) (h,ys,yps,es,prev) =
                       then Printf.printf `"controller: step rejected: cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ cerr ratio h_next
                       else ()
           in
-              Left (h_next, cerr_prev, cerr)
+              Left {h=h_next, cst=cerr_prev, r=cerr, tevent=tevent_prev}
           end
       else 
           (* step accepted *)
@@ -254,7 +267,7 @@ fun controller (abstol,reltol) (h,ys,yps,es,prev) =
                       then Printf.printf `"controller: step accepted: abstol = "R `" cerr = "R `" ratio = "R `" h_next = "R  `"\n" $ abstol cerr ratio h_next
                       else ()
           in
-              Right (h_next, cerr_prev, cerr)
+              Right {h=h_next, cst=cerr_prev, r=cerr, tevent=tevent_prev}
           end)
   end
 
@@ -387,9 +400,9 @@ fun adaptive_regime_stepper stepper =
                         val cst' = controller (tolv, getOpt(!reltol,1.0)) (h,ys',w,err,cst)
                     in
                         case cst' of
-                            Right (h',_,_) => 
+                            Right {h=h',...} => 
                             (ys',h',cst',w)
-                          | Left (h',_,_)  => 
+                          | Left {h=h',...}  => 
                             f (Int.+(iter,1)) (d,r,ext,extev,h',x,ys,yout,cst')
                     end
                   | NONE => (ys',h,cst,w)
@@ -414,9 +427,9 @@ fun adaptive_stepper stepper =
                             val cst' = controller (tolv, getOpt(!reltol,1.0)) (h,ys',w,err,cst)
                         in
                             case cst' of
-                                Right (h',_,_) => 
+                                Right {h=h',...} => 
                                 (ys',h',cst',w)
-                              | Left (h',_,_)  => 
+                              | Left {h=h',...}  => 
                                 f (Int.+(iter,1)) (ext,extev,h',x,ys,yout,cst')
                         end
                      |  NONE =>
@@ -602,9 +615,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                  val _ = if debug
                          then Printf.printf `"RootFound: x = "R `" e = "R `" y = "R` " y' = "R `" d = "R` " d' = "R `" r = "B` " r' = "B `"\n" $ x (getindex(e,0)) (getindex(y,0)) (getindex(y',0)) (getindex(d,0)) (getindex(d',0)) (getindex(r,0)) (getindex(r',0))
                          else ()
-                 (*val cst' = case cst of Left _ => cst 
-                                     |  Right v => Left v*)
-                 val cst' = controller_scale_h (cst, max(0.01, min(0.5, vfoldi2 (fn(i,v1,v2,ax) => min((v1 + 1E~30)/(v2 + 1E~30),ax)) 0.0 (y,y'))))
+                 val cst'  = controller_update_event (cst, enext, e)
              in
                  RegimeState(x,cx,y',e,d',r',ext,extev,y,ynext,enext,cst',RootAfter (i,hs))
              end
@@ -744,7 +755,7 @@ fun integral (RegimeStepper stepper,finterp,SOME (RegimeCondition fcond),
                    val _   = if debug
                              then Printf.printf `"RootFound: x = "R `" e = "R `" y' = "R `"\n" $ x (getindex(e,0)) (getindex(y',0))
                              else ()
-                   val cst' = controller_scale_h (cst, max(0.01, min(0.5, vfoldi2 (fn(i,v1,v2,ax) => min((v1 + 1E~30)/(v2 + 1E~30),ax)) 0.0 (y,y'))))
+                   val cst'  = controller_update_event (cst, enext, e)
                in
                    EventState(x,cx,y',e,ext,extev,y,ynext,enext,cst',RootAfter (i,hs))
                end

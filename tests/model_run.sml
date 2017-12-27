@@ -61,7 +61,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
     in
 	printState (0.0, initial);
 	run (D.RegimeState (0.0, 0.0, initial, evinitial, dinitial, rinitial, extinitial, extevinitial, ynext, rsp, evnext,
-                            D.Right (h0,h0,err), D.RootBefore))
+                            D.Right {h=h0,cst=h0,r=err,tevent=Real.posInf}, D.RootBefore))
     end
 |  start (f,initial,SOME evinitial,NONE,NONE,extinitial,extevinitial,tmax,h0,ynext,rsp,err,SOME evnext) =
     let
@@ -77,7 +77,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
     in
 	printState (0.0, initial);
 	run (D.EventState (0.0, 0.0, initial, evinitial, extinitial, extevinitial, ynext, rsp, evnext,
-                           D.Right (h0,h0,err), D.RootBefore))
+                           D.Right {h=h0,cst=h0,r=err,tevent=Real.posInf}, D.RootBefore))
     end
 |  start (f,initial,NONE,NONE,NONE,ext,extev,tmax,h0,ynext,rsp,err,NONE) =
     let
@@ -92,7 +92,7 @@ fun start (f,initial,SOME evinitial,SOME dinitial,SOME rinitial,extinitial,extev
             | run _ = raise Fail "invalid state type"
     in
 	printState (0.0, initial);
-	run (D.ContState (0.0, 0.0, initial, ext, extev, ynext, D.Right (h0,h0,err)))
+	run (D.ContState (0.0, 0.0, initial, ext, extev, ynext, D.Right {h=h0,cst=h0,r=err,tevent=Real.posInf}))
     end
 |  start _ = raise Domain
 
