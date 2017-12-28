@@ -585,12 +585,13 @@
                             bucket-eqs))
 
         (regime-n (length regblocks))
+        (ext-n (length externals))
 
         (has-conds?     (> cond-n 0))
         (has-regimes?   (> regime-n 0))
         (has-fields?    (> (length fields) 0))
         (has-params?    (> (length params) 0))
-        (has-ext?       (> (length externals) 0))
+        (has-ext?       (> ext-n 0))
         )
 
     (let* (
@@ -1147,6 +1148,7 @@
         (ode-n  . ,ode-n)
         (cond-n . ,cond-n)
         (dsc-n  . ,dsc-n)
+        (ext-n  . ,ext-n)
         (regime-n . ,regime-n)
         (paramfun . ,paramfun)
         (fieldfun . ,fieldfun)
@@ -1506,10 +1508,11 @@
       (print-fragments
        (map (match-lambda
              ((name . def) (list (binding->ML (B:Val name def)) nll)))
-            `((n . ,(V:C (alist-ref 'ode-n sysdefs)))
-              (nev . ,(V:C (alist-ref 'cond-n sysdefs)))
+            `((n    . ,(V:C (alist-ref 'ode-n sysdefs)))
+              (nev  . ,(V:C (alist-ref 'cond-n sysdefs)))
               (nregime . ,(V:C (alist-ref 'regime-n sysdefs)))
-              (ndsc . ,(V:C (alist-ref 'dsc-n sysdefs)))
+              (ndsc    . ,(V:C (alist-ref 'dsc-n sysdefs)))
+              (next    . ,(V:C (alist-ref 'ext-n sysdefs)))
               ))
        out)
 
@@ -1523,6 +1526,7 @@
              (('cond-n . def)   (list))
              (('cond-n . def)   (list))
              (('dsc-n  . def)   (list))
+             (('ext-n  . def)   (list))
              (('regime-n . def) (list))
              ((name . def) (list (binding->ML (B:Val name def)) nll)))
             sysdefs)

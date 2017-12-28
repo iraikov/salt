@@ -22,6 +22,8 @@ sig
                       
     val ndsc: int
 
+    val next: int
+
     val make_real_state : int -> real array
     val make_bool_state : int -> bool array
 
