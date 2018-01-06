@@ -9,13 +9,14 @@
 
    ;; --- token definitions
    ( NUM ID LET IF THEN ELSE LPAREN RPAREN 
-        (left: + - * /)
-        (right: QUESTION COLON ) 
-        (left: < > = <= >= ==)
-        (left: uminus)
-        (right: ^) 
-        (left: COMMA)
-        )
+         (left: + -)
+         (left: * /)
+         (right: QUESTION COLON ) 
+         (left: < > = <= >= ==)
+         (left: uminus)
+         (right: ^) 
+         (left: COMMA)
+         )
 
 
    (expr     (NUM)                    : (exact->inexact $1)

@@ -495,32 +495,150 @@
     ))
   )
 
-(test-model/c 'vdp vdp)
+;; Intrinsic and Network Rhythmogenesis in a Reduced Traub Model for CA3 Neurons.
+;; J Comput Neurosci. 1994 Jun;1(1-2):39-60.
+;; Pinsky PF, Rinzel J.
 
-(test-model/c 'ml ml)
+(define (pr_Soma V I)
+  (parse
+  `(
+    (define INa  = unknown 0.0) ;; Current
+    (define IKdr = unknown 0.0) ;; Current
+    
+    (define h   = unknown 0.25)
+    (define n   = unknown 0.2)
 
-(test-model/c 'iaf iaf)
+    (define gLs   = parameter 0.1)
+    (define gNa   = parameter 30)
+    (define gKdr  = parameter 15)
 
-(test-model/c 'iafrefr iafrefr)
+    (fun (alphans v) = 0.016 * (-24.9 - v) / (exp((-24.9 - v) / 5.0) - 1.0))
+    (fun (betans v) = 0.25 * exp(-1.0 - (0.025 * v)))
 
-(test-model/c 'izhfs izhfs)
+    (fun (alphahs v) = 0.128 * exp((-43.0 - v) / 18.0))
+    (fun (betahs v) = 4.0 / (1.0 + exp((-20.0 - v) / 5.0)))
 
-(test-model 'vdp vdp compile: #t)
+    (fun (alphams v) = 0.32 * (-46.9 - v) / (exp((-46.9 - v) / 4.0) - 1.0))
+    (fun (betams v) = 0.28 * (v + 19.9) / (exp((v + 19.9) / 5.0) - 1.0))
+    (fun (Minfs v) = alphams(v) / (alphams(v) + betams(v)))
 
-(test-model 'ml ml compile: #t)
+    ((der (,V)) = (((- gLs) * (,V - VL)) - INa - IKdr + ,I + (J / As)) / Cm)
+    ((der (h)) = alphahs(,V) - (alphahs(,V) + betahs(,V)) * h)
+    ((der (n)) = alphans(,V) - (alphans(,V) + betans(,V)) * n)
 
-(test-model 'izhfs izhfs compile: #t)
+    (INa = gNa * (Minfs(,V) ^ 2) * h * (,V - VNa))
+    (IKdr = gKdr * n * (,V - VK))
+    )
+  ))
 
-(test-model 'iaf iaf compile: #t)
+(define (pr_Dendrite V I)
+  (parse
+   `(
+     
+    (define ICad  = unknown 0.0)
+    (define IKahp = unknown 0.0);; Current
+    (define IK    = unknown 0.0);; Current
+    
+    (define s     = unknown 0.01)
+    (define c     = unknown 0.08)
+    (define q     = unknown 0.01)
 
-(test-model 'iafrefr iafrefr  compile: #t)
+    (define Cad   = unknown 1e-6)
+    
+    (define chid  = unknown 0.0)
+    (define alphaqd = unknown 0.0)
 
-(test-model 'adex adex compile: #t);
+    (define betaqd =  parameter 0.001)
+    (define gLd   = parameter 0.1)
+    (define gCa   = parameter 10)
+    (define gKahp = parameter 0.8)
+    (define gKC   = parameter 15)
+    (define VCa   = parameter 80)
 
-(test-model 'hr hr compile: #t)
+    (fun (alphasd v) = 1.6 / (1.0 + exp(-0.072 * (v - 5.0))))
+    (fun (betasd v) = 0.02 * (v + 8.9) / (exp((v + 8.9) / 5.0) - 1.0))
+    (fun (heav x) = if (x > 0.0) then 1.0 else 0.0)
 
-(test-model 'wb wb compile: #t)
+    (fun (alphacd v) = (1.0 - heav(v + 10.0)) * exp(((v + 50.0) / 11) - ((v + 53.5) / 27)) / 18.975 + (heav(v + 10.0) * 2.0 * exp((-53.5 - v) / 27.0)))
+    (fun (betacd v) = (1.0 - heav(v + 10.0)) * ((2.0 * exp((-53.5 - v) / 27.0)) - alphacd(v)))
 
-(test-model 'iafalpha iafalpha)
+    ((der (,V))  = (((- gLd) * (,V - VL)) - ICad - IKahp - IK + ,I) / Cm)
+    ((der (s))  = alphasd(,V) - (alphasd(,V) + betasd(,V)) * s)
+    ((der (c))  = alphacd(,V) - (alphacd(,V) + betacd(,V)) * c)
+    ((der (q))  = alphaqd - (alphaqd + betaqd) * q)
+    ((der (Cad)) = (-0.13 * ICad) - (0.075 * Cad))
+    
+    (ICad     = gCa * s * s * (,V - VCa))
+    (IKahp    = gKahp * q * (,V - VK))
+    (IK       = gKC * c * chid * (,V - VK))
+    (alphaqd  = min((0.00002 * Cad) ~ 0.01))
+    (chid     = min((Cad / 250.0) ~ 1.0))
+    ))
+  )
 
-(test-model 'iafdelta iafdelta)
+(define (Connect I g n1 n2)
+  `(,I = (,n2 - ,n1) / ,g))
+
+
+(define pr
+  (parse
+   `(
+     (define J     = parameter 0.75)
+     (define VL    = parameter -60)
+     (define VNa   = parameter 60)
+     (define VK    = parameter -75)
+     (define Vsyn  = parameter 0.0)
+
+
+     (define gc = parameter 2.1)
+     (define As = parameter 0.5)
+     (define Ad = parameter 1.0 - As)
+     (define Cm = parameter 3)
+
+     (define Is  = unknown 0.0) ;Current
+     (define Id  = unknown 0.0) ;Current
+     (define Vs  = unknown -60.0) ;Voltage
+     (define Vd  = unknown -60.0) ;Voltage
+
+     ,(pr_Soma 'Vs 'Is)
+     ,(pr_Dendrite 'Vd 'Id)
+     ,(Connect 'Is '(As / gc) 'Vs 'Vd)
+     ,(Connect 'Id '(Ad / gc) 'Vd 'Vs)
+     ))
+  )
+
+
+
+;; (test-model/c 'vdp vdp)
+
+;; (test-model/c 'ml ml)
+
+;; (test-model/c 'iaf iaf)
+
+;; (test-model/c 'iafrefr iafrefr)
+
+;; (test-model/c 'izhfs izhfs)
+
+;; (test-model 'vdp vdp compile: #t)
+
+;; (test-model 'ml ml compile: #t)
+
+;; (test-model 'izhfs izhfs compile: #t)
+
+;; (test-model 'iaf iaf compile: #t)
+
+;; (test-model 'iafrefr iafrefr  compile: #t)
+
+;; (test-model 'adex adex compile: #t);
+
+;; (test-model 'hr hr compile: #t)
+
+;; (test-model 'wb wb compile: #t)
+
+;; (test-model 'iafalpha iafalpha)
+
+;; (test-model 'iafdelta iafdelta)
+
+(test-model 'pr pr compile: #t)
+
+

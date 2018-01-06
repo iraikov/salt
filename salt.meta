@@ -15,7 +15,7 @@
 
  (category data)
 
- ; A list of eggs hmodl depends on.
+ ; A list of eggs salt depends on.
 
  (needs make mathh lalr datatype matchable datatype unitconv fmt)
 
