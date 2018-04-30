@@ -1,4 +1,4 @@
-(use setup-api extras salt)
+(use setup-api extras salt posix)
 
 (define (installation-chicken-home)
   (if (not (installation-prefix)) (chicken-home)
@@ -24,7 +24,7 @@
     ((_ exp ...)
      (run:execute* (list `exp ...)))))
 
-(define (test-model name model #!key (solver 'rkdp) (compile #f) (dir "tests"))
+(define (test-model name model #!key (solver 'rkdp) (compile #f) (dir ""))
   (pp model)
 
   (define elab (elaborate model))
@@ -35,8 +35,8 @@
   (pp sim)
   (pp (codegen-ODE sim))
   (let* (
-         (sml-path (make-pathname dir (string-append (->string name) ".sml")))
-         (mlb-path (make-pathname dir (string-append (->string name) "_run.mlb")))
+         (sml-path (make-pathname (make-pathname (current-directory) dir) (string-append (->string name) ".sml")))
+         (mlb-path (make-pathname (make-pathname (current-directory) dir) (string-append (->string name) "_run.mlb")))
          (sml-port (open-output-file sml-path))
          )
     (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver)
@@ -54,7 +54,7 @@
 
   )
 
-(define (test-model/c name model #!key (solver 'rkdp) (dir "tests"))
+(define (test-model/c name model #!key (solver 'rkdp) (dir ""))
   (pp model)
 
   (define elab (elaborate model))
@@ -65,11 +65,12 @@
   (pp sim)
   (pp (codegen-ODE sim))
   (let* (
-         (c-path   (make-pathname dir (string-append (->string name) ".c")))
+         (c-path   (make-pathname (make-pathname (current-directory) dir) (string-append (->string name) ".c")))
          (c-port   (open-output-file c-path))
-         (sml-path (make-pathname dir (string-append (->string name) ".sml")))
-         (mlb-path (make-pathname dir (string-append (->string name) "_run.mlb")))
+         (sml-path (make-pathname (make-pathname (current-directory) dir) (string-append (->string name) ".sml")))
+         (mlb-path (make-pathname (make-pathname (current-directory) dir) (string-append (->string name) "_run.mlb")))
          (sml-port (open-output-file sml-path))
+         (output-path (make-pathname (make-pathname (current-directory) dir) (sprintf "~A_run_c" name)))
          )
     (codegen-ODE/C name sim out: c-port libs: '())
     (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver csysname: (->string name))
@@ -82,7 +83,7 @@
           -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
           -mlb-path-var "'SALT_LIB $(SALT_HOME)/sml-lib'"
           -mlb-path-map ,(sprintf "~A/sml-lib/mlb-path-map" SALT-DIR)
-          -output ,(sprintf "~A/~A_run_c" dir name)
+          -output ,output-path
           ,mlb-path
           ,(sprintf "~A/sml-lib/rk/crklib.c" SALT-DIR)
           ,c-path
