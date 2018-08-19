@@ -636,7 +636,8 @@
   )
 
 (define (parse-definition env args)
-  
+  (d 'parse-definition "env = ~A args = ~A~%" env args)
+
   (if (pair? args)
       (let ((pattern (car args))
             (exp-or-body (cdr args)))

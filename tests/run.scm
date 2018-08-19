@@ -1,12 +1,15 @@
-(use setup-api extras salt posix)
+(import scheme (chicken base) (chicken process) (chicken process-context)  (chicken platform)
+        (chicken pretty-print) (chicken string) (chicken format)
+        (chicken pathname) salt)
 
 (define (installation-chicken-home)
-  (if (not (installation-prefix)) (chicken-home)
-    (make-pathname `(,(installation-prefix) "share") "chicken") ) )
+  (if (not (installation-repository))
+      (chicken-home)
+      (make-pathname `(,(installation-prefix) "share") "chicken") ) )
 
 
-(define SHARED-DIR (installation-chicken-home))
-(define SALT-DIR (make-pathname SHARED-DIR "salt"))
+(define SHARED-DIR (chicken-home))
+(define SALT-DIR SHARED-DIR)
 
 
 (define (run:execute* explist)
@@ -15,7 +18,7 @@
       (string-intersperse (cons (car slst) (cdr slst)) " ")))
   (for-each (lambda (cmd)
 	      (printf "  ~A~%~!" cmd)
-	      (system* "~a" cmd))
+	      (system* (sprintf "~a" cmd)))
 	    (map smooth explist)))
 
 
@@ -47,8 +50,8 @@
               ;-const "'Exn.keepHistory true'"
               -default-ann "'allowFFI true'"
               -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
-              -mlb-path-var "'SALT_LIB $(SALT_HOME)/sml-lib'"
-              -mlb-path-map ,(sprintf "~A/sml-lib/mlb-path-map" SALT-DIR)
+              -mlb-path-var "'SALT_LIB $(SALT_HOME)'"
+              -mlb-path-map ,(sprintf "~A/mlb-path-map" SALT-DIR)
               ,mlb-path
               ))))
 
@@ -81,11 +84,11 @@
           -const "'Exn.keepHistory true'"
           -default-ann "'allowFFI true'"
           -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
-          -mlb-path-var "'SALT_LIB $(SALT_HOME)/sml-lib'"
-          -mlb-path-map ,(sprintf "~A/sml-lib/mlb-path-map" SALT-DIR)
+          -mlb-path-var "'SALT_LIB $(SALT_HOME)'"
+          -mlb-path-map ,(sprintf "~A/mlb-path-map" SALT-DIR)
           -output ,output-path
           ,mlb-path
-          ,(sprintf "~A/sml-lib/rk/crklib.c" SALT-DIR)
+          ,(sprintf "~A/crklib.c" SALT-DIR)
           ,c-path
           ))
     ))
@@ -93,6 +96,7 @@
 
 ;(verbose 1)
 ;(add-trace 'codegen-ODE)
+;(add-trace 'resolve)
 
 ;; Van der Pol oscillator
 (define vdp 

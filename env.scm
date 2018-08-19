@@ -175,7 +175,7 @@
 
 (define (push-env-stack e es) 
   (if (env? e) (EnvStack e es)
-      (else (error 'push-env-stack "invalid environment" e))))
+      (error 'push-env-stack "invalid environment" e)))
       
 
 (define (peek-env-stack es) 

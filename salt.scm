@@ -75,20 +75,21 @@
          model-time
 	 )
 
-	(import scheme chicken)
-        
-	(require-extension matchable datatype lalr-driver mathh unitconv with-units fmt fmt-c)
-	(require-library data-structures extras srfi-1 srfi-4 srfi-13)
-	(import (only srfi-1 first last zip fold fold-right filter filter-map list-tabulate concatenate every delete-duplicates drop-right lset-union)
+	(import scheme (chicken base)
+                matchable datatype lalr-driver mathh unitconv with-units fmt fmt-c mathh-consts
+                (only srfi-1 first last zip fold fold-right filter filter-map list-tabulate concatenate every delete-duplicates drop-right lset-union)
                 (only srfi-4 list->s32vector)
                 (only srfi-13 string-null? string-concatenate string-map string<)
-		(only data-structures ->string alist-ref conc intersperse compose sort topological-sort)
-                (only extras pp fprintf)
-                (only ports with-output-to-port)
+		(only (chicken string) ->string conc)
+                (only (chicken sort) sort topological-sort)
+                (only (chicken format) fprintf sprintf)
+                (only (chicken pretty-print) pp)
+                (only (chicken port) with-output-to-port port-position port-name)
+                (only (chicken condition) print-error-message)
+                (chicken memory representation)
 		)
 
 
-(include "mathh-constants.scm")
 (include "units.scm")
 (include "parser.scm")
 (include "env.scm")
@@ -643,10 +644,10 @@
           1/LNPHI EULER E^EULER SIN1 COS1 ZETA3)
         (cons (constant 'number 0.0 'unitbottom)
               (map (lambda (x) (constant 'number x unitless))
-                   (list E 1/E E^2 E^PI/4 LOG2E LOG10E LN2 LN3 LNPI LN10 1/LN2 1/LN10 PI PI/2
-                         PI/4 1/PI 2/PI 2/SQRTPI SQRTPI PI^2 DEGREE SQRT2 1/SQRT2 SQRT3 SQRT5
-                         SQRT10 CUBERT2 CUBERT3 4THRT2 GAMMA1/2 GAMMA1/3 GAMMA2/3 PHI LNPHI
-                         1/LNPHI EULER E^EULER SIN1 COS1 ZETA3)))
+                   (list e 1/e e^2 e^pi/4 log2e log10e ln2 ln3 lnpi ln10 1/ln2 1/ln10 pi pi/2
+                         pi/4 1/pi 2/pi 2/sqrtpi sqrtpi pi^2 degree sqrt2 1/sqrt2 sqrt3 sqrt5
+                         sqrt10 cubert2 cubert3 4thrt2 gamma1/2 gamma1/3 gamma2/3 phi lnphi
+                         1/lnphi euler e^euler sin1 cos1 zeta3)))
         ))
      
 
@@ -835,9 +836,9 @@
 (define (map-equations f eqs)
   (map 
    (match-lambda*
-    [($ initial-equation s expr) 
+    [($ salt#initial-equation s expr) 
      (init s (f expr))]
-    [($ equation s expr) 
+    [($ salt#equation s expr) 
      (eq s (f expr))]
     [eqn (error 'map-equation "unknown equation type" eqn)])
    eqs))
@@ -1048,7 +1049,7 @@
 ;; equations with the requisite conditionals.
 (define (merge-regime-eq name regime-eq equations env-stack)
   (d 'merge-regime-eq "regime-eq = ~A~%equations = ~A~%" regime-eq equations)
-  (match-let ((($ equation s expr) regime-eq))
+  (match-let ((($ salt#equation s expr) regime-eq))
              (let (
                    (equations1
                     (let ((s1 (resolve s env-stack))
@@ -1115,31 +1116,31 @@
                 (recur (append decl (cdr decls)) ax)
                 
                 (match decl  
-                       (($ discrete-variable name label value dim)
+                       (($ salt#discrete-variable name label value dim)
                         (let ((decl1 (make-discrete-variable (gensym 'dvar) label value dim)))
                           (recur (cdr decls) (cons decl1 ax))
                           ))
-                       (($ variable name label value has-history dim)
+                       (($ salt#variable name label value has-history dim)
                         (let ((decl1 (make-variable (gensym 'var) label value has-history dim)))
                           (recur (cdr decls) (cons decl1 ax))))
-                       (($ parameter name label value dim)
+                       (($ salt#parameter name label value dim)
                         (let ((decl1 (parameter (gensym 'p) label value dim)))
                           (recur (cdr decls) (cons decl1 ax))))
-                       (($ field name label value dim)
+                       (($ salt#field name label value dim)
                         (let ((decl1 (field (gensym 'fld) label value dim)))
                           (recur (cdr decls) (cons decl1 ax))))
-                       (($ external name label initial dim order)
+                       (($ salt#external name label initial dim order)
                         (let ((decl1 (external (gensym 'ext) label initial dim order)))
                           (recur (cdr decls) (cons decl1 ax))))
-                       (($ externalev name label initial dim order link)
+                       (($ salt#externalev name label initial dim order link)
                         (let ((decl1 (externalev (gensym 'extev) label initial dim order link)))
                           (recur (cdr decls) (cons decl1 ax))))
-                       (($ function name formals expr)
+                       (($ salt#function name formals expr)
                         (recur (cdr decls) (cons decl ax)))
-                       (($ structural-event name label regime transition)
+                       (($ salt#structural-event name label regime transition)
                         (let ((decl1 (make-structural-event (gensym 'sevn) label regime transition)))
                           (recur (cdr decls) (cons decl1 ax))))
-                       (($ event name condition pos neg)
+                       (($ salt#event name condition pos neg)
                         (let ((decl1 (make-event (gensym 'evn) condition pos neg)))
                           (recur (cdr decls) (cons decl1 ax))))
                        (else (recur (cdr decls) (cons decl ax)))
@@ -1161,43 +1162,43 @@
                 (recur (append decl (cdr decls)) env)
                 
                 (match decl  
-                       (($ discrete-variable name label value dim)
+                       (($ salt#discrete-variable name label value dim)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
-                       (($ variable name label value has-history dim)
+                       (($ salt#variable name label value has-history dim)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
-                       (($ parameter name label value dim)
+                       (($ salt#parameter name label value dim)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
-                       (($ declared-constant label content)
+                       (($ salt#declared-constant label content)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label content))
                                ))
-                       (($ field name label value dim)
+                       (($ salt#field name label value dim)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
-                       (($ external name label initial dim order)
+                       (($ salt#external name label initial dim order)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
-                       (($ externalev name label initial dim order link)
+                       (($ salt#externalev name label initial dim order link)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label decl))
                                ))
-                       (($ function name formals expr)
+                       (($ salt#function name formals expr)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding name decl))
                                ))
-                       (($ structural-event name label regime transition)
+                       (($ salt#structural-event name label regime transition)
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label (make-regime-variable name)))
                                ))
-                       (($ unit name dims factor abbrevs)
+                       (($ salt#unit name dims factor abbrevs)
                         (let* ((dimsval (eval-dim-expr dims #f (model-quantities)))
                                (factorval (eval-unit-factor factor (model-units)))
                                (factordim (dim-unit-factor factor (model-units)))
@@ -1289,7 +1290,7 @@
                                )
                         ))
 
-                     (($ variable name label value has-history dim)
+                     (($ salt#variable name label value has-history dim)
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (make-variable name label resolved-value has-history dim)))
                         (trace 'elaborate "variable: name = ~A label = ~A value = ~A~%" name label value)
@@ -1304,7 +1305,7 @@
                                )
                         ))
 
-                     (($ discrete-variable name label value dim)
+                     (($ salt#discrete-variable name label value dim)
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (make-discrete-variable name label resolved-value dim)))
                         (recur (cdr entries) env-stack
@@ -1318,7 +1319,7 @@
                                )
                         ))
 
-                     (($ parameter name label value dim)
+                     (($ salt#parameter name label value dim)
                       (trace 'elaborate "parameter: label = ~A value = ~A~%" label value)
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (parameter name label resolved-value dim)))
@@ -1333,7 +1334,7 @@
                                )
                         ))
 
-                     (($ declared-constant label content)
+                     (($ salt#declared-constant label content)
                       (recur (cdr entries) env-stack
                              definitions discrete-definitions
                              parameters fields externals externalevs
@@ -1345,7 +1346,7 @@
                              )
                       )
 
-                     (($ field name label value dim)
+                     (($ salt#field name label value dim)
                       (trace 'elaborate "field: label = ~A value = ~A~%" label value)
                       (let* ((resolved-value (resolve value env-stack))
                              (en1 (field name label resolved-value dim)))
@@ -1360,7 +1361,7 @@
                                )
                         ))
 
-                     (($ external name label initial-value dim order)
+                     (($ salt#external name label initial-value dim order)
                       (trace 'elaborate "external: label = ~A initial-value = ~A~%" label initial-value)
                       (let* ((resolved-initial (resolve initial-value env-stack))
                              (en1 (external name label resolved-initial dim order)))
@@ -1375,7 +1376,7 @@
                                )
                         ))
 
-                     (($ externalev name label initial-value dim order link)
+                     (($ salt#externalev name label initial-value dim order link)
                       (trace 'elaborate "externalev: label = ~A initial-value = ~A~%" label initial-value)
                       (let* ((resolved-initial (resolve initial-value env-stack))
                              (resolved-link (if (not link) #f
@@ -1393,7 +1394,7 @@
                                )
                         ))
 
-                     (($ equation s expr)
+                     (($ salt#equation s expr)
                       (trace 'elaborate "equation: unresolved s = ~A~%" s)
                       (trace 'elaborate "equation: unresolved rhs = ~A~%" expr)
                       (trace 'elaborate "equation: resolved rhs = ~A~%" (resolve expr env-stack))
@@ -1405,7 +1406,7 @@
                              functions nodemap regimemap dimenv
                              )
                       )
-                     (($ initial-equation s expr)
+                     (($ salt#initial-equation s expr)
                       (recur (cdr entries) env-stack
                              definitions discrete-definitions parameters fields  externals externalevs
                              equations (cons (cons s (resolve expr env-stack)) initial) 
@@ -1413,7 +1414,7 @@
                              functions nodemap regimemap dimenv
                              )
                       )
-                     (($ structural-event name label regime ($ transition event target condition pos))
+                     (($ salt#structural-event name label regime ($ salt#transition event target condition pos))
                       (let (
                             (condition-index (length conditions))
                             (regime-index (env-size regimemap))
@@ -1443,7 +1444,7 @@
                                dimenv
                                ))
                       )
-                     (($ event name condition pos neg)
+                     (($ salt#event name condition pos neg)
                       (recur (cdr entries) env-stack
                              definitions discrete-definitions parameters fields externals externalevs
                              equations initial 
@@ -1457,7 +1458,7 @@
                                  neg-responses)
                              functions nodemap regimemap dimenv
                              ))
-                     (($ function name formals expr)
+                     (($ salt#function name formals expr)
                       (recur (cdr entries) env-stack
                              definitions discrete-definitions parameters fields externals externalevs
                              equations initial conditions pos-responses neg-responses 
@@ -1483,10 +1484,10 @@
 (define (function-formal-env formals env)
   (d 'function-formal-env "formals = ~A~%" formals)
   (match formals
-         (($ pair-formal x rst)
+         (($ salt#pair-formal x rst)
           (let ((b (gen-binding (var-def-sym x) x)))
             (function-formal-env rst (extend-env-with-binding env b))))
-         (($ null-formal)
+         (($ salt#null-formal)
           env)
          ))
 
@@ -1494,18 +1495,18 @@
 (define (function-call-env formals args env)
   (d 'function-call-env "formals = ~A args = ~A~%" formals args)
   (match formals
-         (($ pair-formal x frst)
+         (($ salt#pair-formal x frst)
           (match args
-                 ((or ($ pair-arg xv arst) (xv . arst))
+                 ((or ($ salt#pair-arg xv arst) (xv . arst))
                   (let ((b (gen-binding (var-def-sym x) xv)))
                     (function-call-env frst arst (extend-env-with-binding env b))))
-                 ((or ($ null-arg) ())
+                 ((or ($ salt#null-arg) ())
                   (error 'function-call-env
                          "function arity mismatch"))
                  ))
-         (($ null-formal)
+         (($ salt#null-formal)
           (match args
-                 ((or ($ null-arg) ()) env)
+                 ((or ($ salt#null-arg) ()) env)
                  (else 
                   (error 'function-call-env
                          "function arity mismatch"))
@@ -1554,10 +1555,10 @@
 
 (define (subst-pair-arg arg env-stack)
   (match arg
-         (($ pair-arg fst snd)
+         (($ salt#pair-arg fst snd)
           (cons (subst-expr fst env-stack)
                 (subst-pair-arg snd env-stack)))
-         (($ null-arg)
+         (($ salt#null-arg)
           (list))))
 
 
@@ -1566,7 +1567,7 @@
   (if (symbol? f)
       (let ((args (subst-pair-arg arg env-stack)))
         `(signal.primop ,f . ,args))
-      (match f (($ function name formals body)
+      (match f (($ salt#function name formals body)
                 (let ((args (subst-pair-arg arg env-stack)))
                   (let ((fenv (function-call-env formals args empty-env)))
                     (trace 'subst-function-call "fenv = ~A~%" (map car (env->list fenv)))
@@ -1574,7 +1575,7 @@
                       (trace 'subst-function-call "expr1 = ~A~%" expr1)
                       expr1))
                   ))
-             (($ free-variable name)
+             (($ salt#free-variable name)
               (error 'subst-function-call "undefined function" name))
              (else
               (error 'subst-function-call "unknown callable object" f))
@@ -1671,10 +1672,10 @@
 
 (define (units-pair-arg arg env)
   (match arg
-         (($ pair-arg fst snd)
+         (($ salt#pair-arg fst snd)
           (cons (expr-units fst env)
                 (expr-units snd env)))
-         (($ null-arg)
+         (($ salt#null-arg)
           (list))))
 
 
@@ -1708,7 +1709,7 @@
         (trace 'units-function-call "units-args = ~A~%" units-args)
         (units-primop f arg units-args))
       (match-let
-       ((($ function name formals body) f))
+       ((($ salt#function name formals body) f))
        (let ((fenv (function-call-env formals arg empty-env)))
          (trace 'units-function-call "fenv = ~A~%" fenv)
          (let ((u (expr-units 
@@ -1798,19 +1799,19 @@
   (d 'reduce-expr "expr = ~A~%" expr)
   (match expr
 
-         (($ pair-arg fst snd)
+         (($ salt#pair-arg fst snd)
           (make-pair-arg
            (reduce-expr fst indexmaps)
            (reduce-expr snd indexmaps)))
 
-         (($ derivative-variable y)
+         (($ salt#derivative-variable y)
           (let ((yindex (env-lookup (variable-name y) cindexmap)))
             (if (not yindex)
                 (error 'reduce-expr "variable not in index" y)
                 `(getindex dy ,(cdr yindex)))
             ))
          
-         (($ left-var y)
+         (($ salt#left-var y)
           (cond ((variable? y)
                  (let ((yindex (env-lookup (variable-name y) cindexmap)))
                    (if (not yindex)
@@ -1833,7 +1834,7 @@
                  (error 'reduce-expr "unknown left variable type" expr))
                 ))
          
-         (($ variable name label value has-history dim)
+         (($ salt#variable name label value has-history dim)
           (let ((yindex (env-lookup name cindexmap)))
             (if (not yindex)
                 (if (equal? name (variable-name model-time))
@@ -1842,7 +1843,7 @@
                 `(getindex y ,(cdr yindex)))
             ))
 
-         (($ reduce-variable op y)
+         (($ salt#reduce-variable op y)
           (cond 
            ((variable? y)
             (let ((yindex (env-lookup (variable-name y) cindexmap)))
@@ -1860,21 +1861,21 @@
             (error 'reduce-expr "unsupported reduce variable type" y))
            ))
          
-         (($ discrete-variable name label value dim)
+         (($ salt#discrete-variable name label value dim)
           (let ((dindex (env-lookup name dindexmap)))
             (if (not dindex)
                 (error 'reduce-expr "discrete variable not in index" name)
                 `(getindex d ,(cdr dindex)))
             ))
 
-         (($ regime-variable name)
+         (($ salt#regime-variable name)
           (let ((rindex (env-lookup name rindexmap)))
             (if (not rindex)
                 (error 'reduce-expr "regime variable not in index" name)
                 `(getindex r ,(car (cdr rindex))))
             ))
 
-         (($ parameter name label value dim)
+         (($ salt#parameter name label value dim)
           (let ((yindex (env-lookup name pindexmap)))
             (trace 'reduce-expr "pindexmap = ~A~%" pindexmap)
             (if (not yindex)
@@ -1882,7 +1883,7 @@
                 `(getindex p ,(cdr yindex)))
             ))
 
-         (($ field name label value dim)
+         (($ salt#field name label value dim)
           (let ((yindex (env-lookup name pindexmap)))
             (trace 'reduce-expr "pindexmap = ~A~%" pindexmap)
             (if (not yindex)
@@ -1890,7 +1891,7 @@
                 `(getindex fld ,(cdr yindex)))
             ))
 
-         (($ external name label initial dim order)
+         (($ salt#external name label initial dim order)
           (let ((yindex (env-lookup name extindexmap)))
             (trace 'reduce-expr "extindexmap = ~A~%" extindexmap)
             (if (not yindex)
@@ -1898,7 +1899,7 @@
                 `(getindex yext ,(cdr yindex)))
             ))
 
-         (($ externalev name label initial dim order link)
+         (($ salt#externalev name label initial dim order link)
           (let ((yindex (env-lookup name extevindexmap)))
             (trace 'reduce-expr "extevindexmap = ~A~%" (env->list extevindexmap))
             (if (not yindex)
@@ -1961,18 +1962,18 @@
   (d 'reduce-constant-expr "expr = ~A~%" expr)
   (match expr
 
-         (($ pair-arg fst snd)
+         (($ salt#pair-arg fst snd)
           (make-pair-arg
            (reduce-constant-expr fst indexmaps)
            (reduce-constant-expr snd indexmaps)))
 
-         (($ variable name label value has-history dim)
+         (($ salt#variable name label value has-history dim)
           (reduce-constant-expr value indexmaps))
 
-         (($ parameter name label value dim)
+         (($ salt#parameter name label value dim)
           (reduce-constant-expr value indexmaps))
 
-         (($ field name label value dim)
+         (($ salt#field name label value dim)
           (reduce-constant-expr value indexmaps))
 
          (('signal.let lbnds body)
@@ -2015,7 +2016,7 @@
 
     (match eq
 
-           ((($ derivative-variable y) rhs)
+           ((($ salt#derivative-variable y) rhs)
             (let ((yindex (env-lookup (variable-name y) cindexmap))
                   (dim (variable-dim y)))
               (if (not yindex)
@@ -2035,7 +2036,7 @@
               ))
            )
            
-           ((($ variable name label value has-history dim) rhs)
+           ((($ salt#variable name label value has-history dim) rhs)
             (let ((yindex (env-lookup name cindexmap)))
               (if (not yindex)
                   (error 'reduce-eq "variable not in index" name)
@@ -2053,7 +2054,7 @@
                     ))
               )
 
-           ((($ reduce-variable op y) rhs)
+           ((($ salt#reduce-variable op y) rhs)
             (cond
              ((variable? y)
               (let ((yindex (env-lookup (variable-name y) cindexmap))
@@ -2094,7 +2095,7 @@
              ))
 
            
-           (($ extevlink src dst)
+           (($ salt#extevlink src dst)
             (let ((src-index (env-lookup (externalev-name src) extevindexmap))
                   (dst-index (env-lookup (externalev-name dst) extevindexmap)))
                 (if (not src-index)
@@ -2107,7 +2108,7 @@
                                                   ))
                 ))
            
-           (($ evcondition name rhs)
+           (($ salt#evcondition name rhs)
             (let ((evindex (env-lookup name evindexmap))
                   (expr (reduce-expr rhs indexmaps)))
               (if (not evindex)
@@ -2120,10 +2121,10 @@
               ))
 
            
-           (($ evresponse name rhs)
+           (($ salt#evresponse name rhs)
             (trace 'reduce-eq "evresponse name = ~A rhs = ~A~%" name rhs)
             (let ((y (match rhs
-                            (('signal.reinit e ($ left-var u) yindex . rest) u)
+                            (('signal.reinit e ($ salt#left-var u) yindex . rest) u)
                             (error 'reduce-eq "unknown event response equation" eq))))
               (cond
                ((variable? y)
