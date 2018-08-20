@@ -1,0 +1,63 @@
+;;;; -*- Scheme -*-
+
+((synopsis "Hybrid dynamical systems modeling.")
+ (license "GPL-3")
+ (category data)
+ (dependencies datatype matchable make mathh lalr datatype unitconv fmt)
+ (test-dependencies test)
+ (author "Ivan Raikov")
+ (components
+  (generated-source-file expr-parser 
+                         (source "expr.grm.scm")
+                         (custom-build "gen-expr-parser"))
+  (extension salt
+             (component-dependencies expr-parser))
+  (data salt-lib
+        (files
+         "sml-lib/mlb-path-map"
+
+         "sml-lib/rk/rk.sml"
+         "sml-lib/rk/rk.mlb"
+         "sml-lib/rk/crk.sml"
+         "sml-lib/rk/crk.mlb"
+         "sml-lib/rk/crklib.c"
+         "sml-lib/rk/crk_common.h"
+         
+         "sml-lib/dynamics/dynamics.sig"
+         "sml-lib/dynamics/dynamics.sml"
+         "sml-lib/dynamics/dynamics.mlb"
+         
+         "sml-lib/queue/fun-queue.sig"
+         "sml-lib/queue/fun-queue.sml"
+         "sml-lib/queue/fun-queue.mlb"
+         
+         "sml-lib/prioq/SkewBinomialHeap.sml"
+         "sml-lib/prioq/prioq.sml"
+         "sml-lib/prioq/prioq.mlb"
+
+         "sml-lib/lininterp/lininterp.sml"
+         "sml-lib/lininterp/lininterp.mlb"
+         
+         "sml-lib/randmtzig/randmtzig.sml"
+         "sml-lib/randmtzig/randmtziglib.c"
+         "sml-lib/randmtzig/randmtzig.mlb"
+         
+         "sml-lib/findroot/findroot.sml"
+         "sml-lib/findroot/findroot.mlb"
+         
+         "sml-lib/printf/printf.sml"
+         "sml-lib/printf/printf.mlb"
+         
+         "sml-lib/state/state.sml"
+         "sml-lib/state/state.mlb"
+         
+         "sml-lib/model/model.sig"
+         "sml-lib/model/model-randmtzig.sig"
+         "sml-lib/model/prelude.sml"
+         "sml-lib/model/options.sml"
+         "sml-lib/model/model_run.sml"
+         "sml-lib/model/random.sml")
+
+  )
+
+ ))
