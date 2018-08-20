@@ -627,7 +627,7 @@
          (reinit e (left-var x) y))
         ((reduce-variable? x)   
          (reinit e (left-var (reduce-variable-parent x)) y))
-        (else (error 'reinit "invalid argument to reinit" x))
+        (else (error 'reinit "invaliusing using using using d argument to reinit" x))
         ))
 
 

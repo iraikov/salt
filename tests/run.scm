@@ -27,6 +27,48 @@
     ((_ exp ...)
      (run:execute* (list `exp ...)))))
 
+(define (mlb-template model-name)
+  (sprintf #<<EOF
+$(SML_LIB)/basis/basis.mlb
+$(SML_LIB)/smlnj-lib/Util/smlnj-lib.mlb
+$(SML_LIB)/basis/unsafe.mlb
+$(RK_LIB)/rk.mlb
+$(RK_LIB)/crk.mlb
+$(DYNAMICS_LIB)/dynamics.mlb
+$(PRIOQ_LIB)/prioq.mlb
+
+structure Dynamics = FunctionalHybridDynamics
+
+local
+        $(STATE_LIB)/state.sml
+in
+        structure BoolArrayState
+        structure RealArrayState
+end
+
+local
+        $(MODEL_LIB)/model.sig
+        $(MODEL_LIB)/prelude.sml
+in
+        signature MODEL
+        functor ModelPreludeFn
+end
+
+local
+        options.sml
+in
+	structure Options
+end
+
+local
+	~A.sml
+in
+	structure Model
+end
+model_run.sml
+EOF
+model-name))
+
 (define (test-model name model #!key (solver 'rkdp) (compile #f) (dir ""))
   (pp model)
 
@@ -40,10 +82,14 @@
   (let* (
          (sml-path (make-pathname (make-pathname (current-directory) dir) (string-append (->string name) ".sml")))
          (mlb-path (make-pathname (make-pathname (current-directory) dir) (string-append (->string name) "_run.mlb")))
-         (sml-port (open-output-file sml-path))
+         
          )
-    (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver)
-    (close-output-port sml-port)
+    (let ((sml-port (open-output-file sml-path)))
+      (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver)
+      (close-output-port sml-port))
+    (let ((mlb-port (open-output-file mlb-path)))
+      (fprintf mlb-port (mlb-template name))
+      (close-output-port mlb-port))
     (if compile
         (run (mlton 
               -profile alloc
@@ -69,16 +115,20 @@
   (pp (codegen-ODE sim))
   (let* (
          (c-path   (make-pathname (make-pathname (current-directory) dir) (string-append (->string name) ".c")))
-         (c-port   (open-output-file c-path))
+         
          (sml-path (make-pathname (make-pathname (current-directory) dir) (string-append (->string name) ".sml")))
          (mlb-path (make-pathname (make-pathname (current-directory) dir) (string-append (->string name) "_run.mlb")))
-         (sml-port (open-output-file sml-path))
          (output-path (make-pathname (make-pathname (current-directory) dir) (sprintf "~A_run_c" name)))
          )
-    (codegen-ODE/C name sim out: c-port libs: '())
-    (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver csysname: (->string name))
-    (close-output-port sml-port)
-    (close-output-port c-port)
+    (let ((c-port   (open-output-file c-path)))
+      (codegen-ODE/C name sim out: c-port libs: '())
+      (close-output-port c-port))
+    (let ((sml-port (open-output-file sml-path)))
+      (codegen-ODE/ML name sim out: sml-port libs: '() solver: solver csysname: (->string name))
+      (close-output-port sml-port))
+    (let ((mlb-port (open-output-file mlb-path)))
+      (fprintf mlb-port (mlb-template name))
+      (close-output-port mlb-port))
     (run (mlton 
           ;-profile alloc
           -const "'Exn.keepHistory true'"
