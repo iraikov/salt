@@ -1,0 +1,6 @@
+;; -*- scheme -*-
+(repo git "git://github.com/iraikov/{egg-name}.git")
+(uri targz "https://github.com/iraikov/{egg-name}/tarball/{egg-release}")
+(uri files-list "http://code.call-cc.org/files-list?egg={egg-name};release={egg-release}" old-uri)
+
+(release "0.26")
