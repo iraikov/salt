@@ -33,6 +33,7 @@
 ;; General Public License for more details.
 ;;
 ;; A full copy of the GPL license can be found at
+
 ;; <http://www.gnu.org/licenses/>.
 ;;
 
@@ -1198,7 +1199,7 @@
                         (recur (cdr decls)
                                (extend-env-with-binding env (gen-binding label (make-regime-variable name)))
                                ))
-                       (($ salt#unit name dims factor abbrevs)
+                       (($ unitconv#unit name dims factor abbrevs)
                         (let* ((dimsval (eval-dim-expr dims #f (model-quantities)))
                                (factorval (eval-unit-factor factor (model-units)))
                                (factordim (dim-unit-factor factor (model-units)))
@@ -1722,7 +1723,7 @@
 
 
 (define (expr-units e env)
-  (d 'expr-units "e = ~A~%" e)
+  (d 'expr-units "e = ~A env = ~A~%" e (env->list env))
   (cond ((symbol? e)
          (let ((u (assv e (model-units))))
            (trace 'expr-units "(symbol? e) => e = ~A u = ~A dims(u) = ~A~%" e u (and (unit? u) (quantity-int (unit-dims u))))

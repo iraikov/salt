@@ -55,7 +55,7 @@ in
 end
 
 local
-        options.sml
+        $(MODEL_LIB)/options.sml
 in
 	structure Options
 end
@@ -65,7 +65,7 @@ local
 in
 	structure Model
 end
-model_run.sml
+$(MODEL_LIB)/model_run.sml
 EOF
 model-name))
 
@@ -146,7 +146,7 @@ model-name))
 
 ;(verbose 1)
 ;(add-trace 'codegen-ODE)
-;(add-trace 'resolve)
+
 
 ;; Van der Pol oscillator
 (define vdp 
@@ -228,7 +228,7 @@ model-name))
      (define Iext = parameter (dim Current) 400.0 * nA)
 
      (define k     = parameter 1.0)
-     (define Vinit = parameter (dim Potential)  -65.0 * millivolt)
+     (define Vinit = parameter (dim Potential)  -65.0 * mV)
      (define Vpeak = parameter (dim Potential)   25.0 * mV)
      (define Vt    = parameter (dim Potential)  -55.0 * mV)
      (define Vr    = parameter (dim Potential)  -40.0 * mV)
@@ -245,6 +245,7 @@ model-name))
      (define s  = unknown (dim Current) 0.0 * nA)
 
      ((der(v)) = (((k * (v - Vr) * (v - Vt) / millivolt) + (((- u) + Iext) * megaohm)) / Cm) / megaohm)
+
      ((der(u)) = (FS_a * (s - u)) / ms)
      ((s) = FS_b * ((v - Vb) / mV) ^ 3)
 
@@ -664,6 +665,8 @@ model-name))
 
 
 
+(test-model/c 'izhfs izhfs)
+
 (test-model/c 'vdp vdp)
 
 (test-model/c 'ml ml)
@@ -672,7 +675,6 @@ model-name))
 
 (test-model/c 'iafrefr iafrefr)
 
-(test-model/c 'izhfs izhfs)
 
 (test-model 'vdp vdp compile: #t)
 

@@ -2,7 +2,7 @@
 
 $(SML_LIB)/basis/basis.mlb
 $(SML_LIB)/basis/unsafe.mlb
-$(SALT_LIB)/state/state.mlb
+$(STATE_LIB)/state.mlb
 $(FINDROOT_LIB)/findroot.mlb
 $(PRINTF_LIB)/printf.mlb
 
