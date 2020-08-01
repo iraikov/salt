@@ -200,6 +200,7 @@ Equations serve to define differential and algebraic equations.
 
 ## Version history
 
+- 0.22-0.28 : Various refactorings in support of CHICKEN 5
 - 0.21 : Added step size controller
 - 0.20 : Support for precise event time interpolation and adaptive solvers
 - 0.5 : Support for using assigned quantities in external init equations 
@@ -208,7 +209,7 @@ Equations serve to define differential and algebraic equations.
 ## License
 
 >
-> Copyright 2015-2017 Ivan Raikov
+> Copyright 2015-2020 Ivan Raikov
 > 
 > This program is free software: you can redistribute it and/or modify
 > it under the terms of the GNU General Public License as published by
