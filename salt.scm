@@ -47,7 +47,6 @@
          model-quantities model-units
          verbose add-trace clear-trace
 
-         constant
          empty-env env-lookup extend-env-with-binding env->list
          gen-binding binding-key binding-value
 
@@ -70,6 +69,8 @@
          equation-set-regimemap
          equation-set-dimenv
 
+         constant parameter
+         
          codegen-primop codegen-expr codegen-const-expr codegen-ODE
          name/ML binding->ML stmt->ML value->ML codegen-ODE/ML
 
@@ -267,7 +268,7 @@
 
 
 (define-record-type parameter
-  (parameter name label value dim)
+  (make-system-parameter name label value dim)
   parameter?
   (name parameter-name)
   (label parameter-label)
@@ -277,16 +278,16 @@
 
 
 (define-record-printer (parameter x out)
-  (fprintf out "#(parameter ~S (~A) [~A] = ~A)"
-	   (parameter-name x)
-	   (parameter-dim x)
-	   (parameter-label x)
-	   (parameter-value x)
+   (fprintf out "#(parameter ~S (~A) [~A] = ~A)"
+ 	   (parameter-name x)
+ 	   (parameter-dim x)
+ 	   (parameter-label x)
+ 	   (parameter-value x)
            ))
 
 
 (define-record-type field
-  (field name label value dim)
+  (make-field name label value dim)
   field?
   (name field-name)
   (label field-label)
@@ -305,7 +306,7 @@
 
 
 (define-record-type declared-constant
-  (declared-constant label content)
+  (make-declared-constant label content)
   declared-constant?
   (label declared-constant-label)
   (content declared-constant-content)
@@ -313,7 +314,7 @@
 
 
 (define-record-type constant
-  (constant type value unit)
+  (make-constant type value unit)
   constant?
   (type constant-type)
   (value constant-value)
@@ -336,7 +337,7 @@
 
 
 (define-record-type external
-  (external name label initial dim order)
+  (make-external name label initial dim order)
   external?
   (name external-name)
   (label external-label)
@@ -357,7 +358,7 @@
 
 
 (define-record-type externalev
-  (externalev name label initial dim order link)
+  (make-externalev name label initial dim order link)
   externalev?
   (name externalev-name)
   (label externalev-label)
@@ -380,7 +381,7 @@
 
 
 (define-record-type left-var
-  (left-var u )
+  (make-left-var u )
   left-var?
   (u left-var-u)
   )
@@ -393,7 +394,7 @@
 
 
 (define-record-type ref-var
-  (make-ref-var  u idx )
+  (make-make-ref-var  u idx )
   ref-var?
   (u        ref-var-u)
   (idx      ref-var-idx)
@@ -462,7 +463,7 @@
 
 
 (define-record-type function
-  (function name formals body)
+  (make-function name formals body)
   function?
   (name    function-name)
   (formals function-formals)
@@ -478,7 +479,7 @@
 
 
 (define-record-type equation
-  (eq pattern rhs)
+  (make-eq pattern rhs)
   equation?
   (pattern equation-pattern)
   (rhs     equation-rhs))
@@ -492,7 +493,7 @@
 
 
 (define-record-type initial-equation
-  (init variable expr)
+  (make-init variable expr)
   initial-equation?
   (variable equation-variable)
   (expr   equation-expr))
@@ -618,16 +619,16 @@
 
 (define (reinit e x y)
   (cond ((left-var? x) `(signal.reinit ,e ,x ,y))
-        ((variable? x)  (reinit e (left-var x) y))
-        ((ref-var? x)   (reinit e (left-var x) y))
+        ((variable? x)  (reinit e (make-left-var x) y))
+        ((ref-var? x)   (reinit e (make-left-var x) y))
         ((derivative-variable? x)   
-         (reinit e (left-var (derivative-variable-parent x)) y))
+         (reinit e (make-left-var (derivative-variable-parent x)) y))
         ((discrete-variable? x)   
-         (reinit e (left-var x) y))
+         (reinit e (make-left-var x) y))
         ((regime-variable? x)   
-         (reinit e (left-var x) y))
+         (reinit e (make-left-var x) y))
         ((reduce-variable? x)   
-         (reinit e (left-var (reduce-variable-parent x)) y))
+         (reinit e (make-left-var (reduce-variable-parent x)) y))
         (else (error 'reinit "invaliusing using using using d argument to reinit" x))
         ))
 
@@ -643,8 +644,8 @@
           PI/4 1/PI 2/PI 2/SQRTPI SQRTPI PI^2 DEGREE SQRT2 1/SQRT2 SQRT3 SQRT5
           SQRT10 CUBERT2 CUBERT3 4THRT2 GAMMA1/2 GAMMA1/3 GAMMA2/3 PHI LNPHI
           1/LNPHI EULER E^EULER SIN1 COS1 ZETA3)
-        (cons (constant 'number 0.0 'unitbottom)
-              (map (lambda (x) (constant 'number x unitless))
+        (cons (make-constant 'number 0.0 'unitbottom)
+              (map (lambda (x) (make-constant 'number x unitless))
                    (list e 1/e e^2 e^pi/4 log2e log10e ln2 ln3 lnpi ln10 1/ln2 1/ln10 pi pi/2
                          pi/4 1/pi 2/pi 2/sqrtpi sqrtpi pi^2 degree sqrt2 1/sqrt2 sqrt3 sqrt5
                          sqrt10 cubert2 cubert3 4thrt2 gamma1/2 gamma1/3 gamma2/3 phi lnphi
@@ -664,10 +665,11 @@
           empty-env
           function-names
           (map (lambda (f fn)
-                 (function (make-free-variable f)
-                           (make-pair-formal (make-var-def 'a) (make-pair-formal (make-var-def 'b) (make-null-formal)))
-                           `(signal.call ,fn ,(make-pair-arg (make-var-def 'a) (make-pair-arg (make-var-def 'b) (make-null-arg))))
-                           ))
+                 (make-function
+                  (make-free-variable f)
+                  (make-pair-formal (make-var-def 'a) (make-pair-formal (make-var-def 'b) (make-null-formal)))
+                  `(signal.call ,fn ,(make-pair-arg (make-var-def 'a) (make-pair-arg (make-var-def 'b) (make-null-arg))))
+                  ))
                function-names 
                op-names))
     ))
@@ -692,9 +694,9 @@
           empty-env
           function-names
           (map (lambda (f fn)
-                 (function (make-free-variable f)
-                           (make-pair-formal (make-var-def 'a) (make-null-formal))
-                           `(signal.call ,fn ,(make-pair-arg (make-var-def 'a) (make-null-arg))))
+                 (make-function (make-free-variable f)
+                                (make-pair-formal (make-var-def 'a) (make-null-formal))
+                                `(signal.call ,fn ,(make-pair-arg (make-var-def 'a) (make-null-arg))))
                  )
                function-names
                op-names)
@@ -713,9 +715,9 @@
           empty-env
           function-names
           (map (lambda (f fn)
-                 (function (make-free-variable f)
-                           (make-null-formal)
-                           `(signal.call ,fn ,(make-null-arg)))
+                 (make-function (make-free-variable f)
+                                (make-null-formal)
+                                `(signal.call ,fn ,(make-null-arg)))
                  )
                function-names
                op-names)
@@ -831,16 +833,16 @@
     (pp `(ast . ,(astdecls-decls x)) out))
 
 
-(define model-time (unknown (constant 'number 0.0 millisecond) 't millisecond))
+(define model-time (unknown (make-constant 'number 0.0 millisecond) 't millisecond))
 
 
 (define (map-equations f eqs)
   (map 
    (match-lambda*
     [($ salt#initial-equation s expr) 
-     (init s (f expr))]
+     (make-init s (f expr))]
     [($ salt#equation s expr) 
-     (eq s (f expr))]
+     (make-eq s (f expr))]
     [eqn (error 'map-equation "unknown equation type" eqn)])
    eqs))
       
@@ -907,7 +909,7 @@
             (let ((assoc-unit (assv (free-variable-name e) (model-units))))
               (trace 'resolve "free-var: e = ~A assoc-unit = ~A~%" (free-variable-name e) assoc-unit)
               (if assoc-unit
-                  (constant 'number 1.0 (cdr assoc-unit))
+                  (make-constant 'number 1.0 (cdr assoc-unit))
                   e)))
         ))
 
@@ -943,7 +945,7 @@
                          (if (equal? resval resval1) resval
                              (recur resval1)))))
             (dim     (parameter-dim e)))
-        (parameter name label value dim)))
+        (make-system-parameter name label value dim)))
 
      ((field? e)
       (let ((name    (field-name e))
@@ -953,7 +955,7 @@
                          (if (equal? resval resval1) resval
                              (recur resval1)))))
             (dim     (field-dim e)))
-        (field name label value dim)))
+        (make-field name label value dim)))
 
      ((reduce-variable? e)
       (make-reduce-variable
@@ -969,7 +971,7 @@
                              (recur resval1)))))
             (dim     (external-dim e))
             (order   (external-order e)))
-        (external name label initial dim order)))
+        (make-external name label initial dim order)))
 
      ((externalev? e)
       (let ((name    (externalev-name e))
@@ -982,7 +984,7 @@
             (order   (externalev-order e))
             (link    (externalev-link e))
             )
-        (externalev name label initial dim order link)))
+        (make-externalev name label initial dim order link)))
 
      ((pair-arg? e)
       (make-pair-arg (recur (pair-arg-fst e))
@@ -998,7 +1000,7 @@
                (body1 (resolve body env-stack1)))
           (d 'resolve "function: name = ~A body = ~A~%" name body)
           (d 'resolve "function: body1 = ~A~%" body1)
-          (function name formals body1)
+          (make-function name formals body1)
           ))
       )
 
@@ -1058,7 +1060,7 @@
                       (trace 'merge-regime-eq "s1 = ~A~%expr1 = ~A~%" s1 expr1) 
                       (if (null? equations)
                           (list (list s1 `(signal.if ,(make-regime-variable name) 
-                                                     ,expr1 ,(constant 'number 0.0 'unitbottom))))
+                                                     ,expr1 ,(make-constant 'number 0.0 'unitbottom))))
                           (match-let
                            (((equations1 found?)
                              (fold (match-lambda* 
@@ -1078,7 +1080,7 @@
                            (if found? 
                                equations1 
                                (cons (list s1 `(signal.if ,(make-regime-variable name) 
-                                                          ,expr1 ,(constant 'number 0.0 'unitbottom)))
+                                                          ,expr1 ,(make-constant 'number 0.0 'unitbottom)))
                                      equations1))
                            ))
                       ))
@@ -1125,16 +1127,16 @@
                         (let ((decl1 (make-variable (gensym 'var) label value has-history dim)))
                           (recur (cdr decls) (cons decl1 ax))))
                        (($ salt#parameter name label value dim)
-                        (let ((decl1 (parameter (gensym 'p) label value dim)))
+                        (let ((decl1 (make-system-parameter (gensym 'p) label value dim)))
                           (recur (cdr decls) (cons decl1 ax))))
                        (($ salt#field name label value dim)
-                        (let ((decl1 (field (gensym 'fld) label value dim)))
+                        (let ((decl1 (make-field (gensym 'fld) label value dim)))
                           (recur (cdr decls) (cons decl1 ax))))
                        (($ salt#external name label initial dim order)
-                        (let ((decl1 (external (gensym 'ext) label initial dim order)))
+                        (let ((decl1 (make-external (gensym 'ext) label initial dim order)))
                           (recur (cdr decls) (cons decl1 ax))))
                        (($ salt#externalev name label initial dim order link)
-                        (let ((decl1 (externalev (gensym 'extev) label initial dim order link)))
+                        (let ((decl1 (make-externalev (gensym 'extev) label initial dim order link)))
                           (recur (cdr decls) (cons decl1 ax))))
                        (($ salt#function name formals expr)
                         (recur (cdr decls) (cons decl ax)))
@@ -1323,7 +1325,7 @@
                      (($ salt#parameter name label value dim)
                       (trace 'elaborate "parameter: label = ~A value = ~A~%" label value)
                       (let* ((resolved-value (resolve value env-stack))
-                             (en1 (parameter name label resolved-value dim)))
+                             (en1 (make-system-parameter name label resolved-value dim)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
                                (cons (cons name resolved-value) parameters) fields externals externalevs
@@ -1350,7 +1352,7 @@
                      (($ salt#field name label value dim)
                       (trace 'elaborate "field: label = ~A value = ~A~%" label value)
                       (let* ((resolved-value (resolve value env-stack))
-                             (en1 (field name label resolved-value dim)))
+                             (en1 (make-field name label resolved-value dim)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
                                parameters (cons (cons name resolved-value) fields) externals externalevs
@@ -1365,7 +1367,7 @@
                      (($ salt#external name label initial-value dim order)
                       (trace 'elaborate "external: label = ~A initial-value = ~A~%" label initial-value)
                       (let* ((resolved-initial (resolve initial-value env-stack))
-                             (en1 (external name label resolved-initial dim order)))
+                             (en1 (make-external name label resolved-initial dim order)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
                                parameters fields (cons (cons name resolved-initial) externals) externalevs
@@ -1383,7 +1385,7 @@
                              (resolved-link (if (not link) #f
                                                 (make-extevlink (resolve (extevlink-src link) env-stack)
                                                                 (resolve (extevlink-dst link) env-stack))))
-                             (en1 (externalev name label resolved-initial dim order resolved-link)))
+                             (en1 (make-externalev name label resolved-initial dim order resolved-link)))
                         (recur (cdr entries) env-stack
                                definitions discrete-definitions
                                parameters fields externals (cons (cons name resolved-initial) externalevs)
@@ -1427,7 +1429,7 @@
                                (fold (lambda (eq ax) (merge-regime-eq name eq ax env-stack)) equations regime) initial
                                ;;(cons (make-evcondition event (resolve condition env-stack)) conditions)
                                (let ((cond-eq `(signal.if ,(make-regime-variable name) 
-                                                          ,(resolve condition env-stack) ,(constant 'number -1.0 'unitbottom))))
+                                                          ,(resolve condition env-stack) ,(make-constant 'number -1.0 'unitbottom))))
                                  (cons (make-evcondition event cond-eq) conditions))
                                (append (cons
                                         (make-evresponse event (resolve-reinit event `(reinit ,(make-regime-variable name) #f)))

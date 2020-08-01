@@ -799,7 +799,7 @@
 
 
            (linkextevfun  
-            (let* ((dflt   (constant 'number +inf.0 'unitbottom))
+            (let* ((dflt   (make-constant 'number +inf.0 'unitbottom))
                    (blocks (fold-reinit-blocks/priority ode-inds extevlink-blocks dflt))
                    (stmts  (codegen-set-stmts/index (compose codegen-expr1 cdr) blocks (map car blocks) 'extev_out)))
               (V:Fn '(extev extev_out) 

@@ -103,7 +103,7 @@ model-name))
 
   )
 
-(define (test-model/c name model #!key (solver 'rkdp) (dir ""))
+(define (test-model/c name model #!key (solver 'rkdp) (dir "") (compile #f))
   (pp model)
 
   (define elab (elaborate model))
@@ -129,7 +129,8 @@ model-name))
     (let ((mlb-port (open-output-file mlb-path)))
       (fprintf mlb-port (mlb-template name))
       (close-output-port mlb-port))
-    (run (mlton 
+    (if compile
+        (run (mlton 
           ;-profile alloc
           -const "'Exn.keepHistory true'"
           -default-ann "'allowFFI true'"
@@ -141,6 +142,7 @@ model-name))
           ,(sprintf "~A/crklib.c" SALT-DIR)
           ,c-path
           ))
+        )
     ))
 
 
@@ -663,7 +665,7 @@ model-name))
      ))
   )
 
-
+(define compile #f)
 
 (test-model/c 'izhfs izhfs)
 
@@ -676,26 +678,26 @@ model-name))
 (test-model/c 'iafrefr iafrefr)
 
 
-(test-model 'vdp vdp compile: #t)
+(test-model 'vdp vdp compile: compile)
 
-(test-model 'ml ml compile: #t)
+(test-model 'ml ml compile: compile)
 
-(test-model 'izhfs izhfs compile: #t)
+(test-model 'izhfs izhfs compile: compile)
 
-(test-model 'iaf iaf compile: #t)
+(test-model 'iaf iaf compile: compile)
 
-(test-model 'iafrefr iafrefr  compile: #t)
+(test-model 'iafrefr iafrefr  compile: compile)
 
-(test-model 'adex adex compile: #t);
+(test-model 'adex adex compile: compile);
 
-(test-model 'hr hr compile: #t)
+(test-model 'hr hr compile: compile)
 
-(test-model 'wb wb compile: #t)
+(test-model 'wb wb compile: compile)
 
 (test-model 'iafalpha iafalpha)
 
 (test-model 'iafdelta iafdelta)
 
-(test-model 'pr pr compile: #t)
+(test-model 'pr pr compile: compile)
 
 

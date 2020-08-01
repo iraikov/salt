@@ -257,10 +257,10 @@
 
 (define (parse-datum e)
   (cond
-   ((boolean? e) (constant 'boolean e unitless))
-   ((number? e)  (constant 'number e unitless))
-   ((symbol? e)  (constant 'symbol e unitless))
-   ((vector? e)  (constant 'vector (vector->list e) unitless))
+   ((boolean? e) (make-constant 'boolean e unitless))
+   ((number? e)  (make-constant 'number e unitless))
+   ((symbol? e)  (make-constant 'symbol e unitless))
+   ((vector? e)  (make-constant 'vector (vector->list e) unitless))
    (else (salt:error 'parse-datum "Unknown datum: " e))
    ))
 
@@ -536,7 +536,7 @@
             (d 'parse-function "formals-ast = ~A formals-env = ~A~%" formals-ast formals-env)
             (match exp-or-body
                    (('= . expr)
-                    (function
+                    (make-function
                      (free-variable-name 
                       (parse-variable env function-name))
                      formals-ast
@@ -561,6 +561,7 @@
         )))
   
 (define (parse-define-unit pattern rhs env)
+  (d 'parse-define-unit "pattern = ~A rhs = ~A~%" pattern rhs)
   (match rhs 
          ((('dim-vector . dims) factor-expr)
           (make-unit (free-variable-name (parse-variable env pattern))
@@ -569,7 +570,7 @@
          ((dim-expr factor-expr)
           (d 'parse-define-unit "dim-expr = ~A~%" dim-expr)
           (make-unit (free-variable-name (parse-variable env pattern))
-                     (parse-sym-infix-expr dim-expr)
+                     (parse-dim pattern (parse-sym-infix-expr dim-expr))
                      (parse-sym-infix-expr factor-expr) '()))
          (else
           (salt:error 'parse-define-unit "Not a valid unit definition: " rhs))
@@ -595,7 +596,7 @@
             (recur rst dim num))
            
            (else
-            (external
+            (make-external
              (gensym 'ext)
              (free-variable-name 
               (parse-variable env pattern))
@@ -620,7 +621,7 @@
             (recur rst dim order sym))
            
            (else
-            (externalev
+            (make-externalev
              (gensym 'extev)
              (free-variable-name 
               (parse-variable env pattern))
@@ -674,7 +675,7 @@
                    Unity))
                  (('= 'parameter ('dim u) . expr)
                   (let ((dim-val (parse-dim pattern u)))
-                    (parameter
+                    (make-system-parameter
                      (gensym 'p)
                      (free-variable-name 
                       (parse-variable env pattern))
@@ -682,7 +683,7 @@
                      dim-val)
                     ))
                  (('= 'parameter . expr)
-                  (parameter
+                  (make-system-parameter
                    (gensym 'p)
                    (free-variable-name 
                     (parse-variable env pattern))
@@ -702,7 +703,7 @@
                     (declared-constant
                      (free-variable-name
                       (parse-variable env pattern))
-                     (constant
+                     (make-constant
                       'number
                       (constant-value cvalue)
                       (cdr unit-assoc))
@@ -729,7 +730,7 @@
         (d 'parse-equations "pattern = ~A~%rhs = ~A~%" pattern rhs)
         (match rhs 
                (('= . rhs)
-                (eq (parse-variable env pattern)
+                (make-eq (parse-variable env pattern)
                     (parse-expression env (parse-sym-infix-expr rhs))))
                (else
                 (salt:error 'parse-equation "Not a valid rhs: " rhs))
