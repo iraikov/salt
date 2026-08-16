@@ -77,7 +77,7 @@
          model-time
 	 )
 
-	(import scheme (chicken base)
+	(import scheme scheme.base (chicken base)
                 matchable datatype lalr-driver mathh unitconv with-units fmt fmt-c mathh-consts
                 (only srfi-1 first last zip fold fold-right filter filter-map list-tabulate concatenate every delete-duplicates drop-right lset-union)
                 (only srfi-4 list->s32vector)
@@ -177,14 +177,14 @@
   )
 
 
-(define-record-printer (variable x out)
+(set-record-printer! variable (lambda (x out)
   (fprintf out "#(variable ~S label=~S value=~S history=~S dim=~A)"
 	   (variable-name x)
 	   (variable-label x)
 	   (variable-value x)
 	   (variable-history x)
 	   (variable-dim x)
-           ))
+           )))
 
 
 (define (unknown value label dim)
@@ -198,10 +198,10 @@
   )
 
 
-(define-record-printer (free-variable x out)
+(set-record-printer! free-variable (lambda (x out)
   (fprintf out "#(free ~S)"
 	   (free-variable-name x)
-           ))
+           )))
 
 
 (define-record-type derivative-variable
@@ -211,10 +211,10 @@
   )
 
 
-(define-record-printer (derivative-variable x out)
+(set-record-printer! derivative-variable (lambda (x out)
   (fprintf out "#(deriv ~S)"
 	   (derivative-variable-parent x)
-           ))
+           )))
 
 
 
@@ -231,13 +231,13 @@
   (make-discrete-variable (gensym 'd) label value dim))
 
 
-(define-record-printer (discrete-variable x out)
+(set-record-printer! discrete-variable (lambda (x out)
   (fprintf out "#(discrete ~S (~a) [~A] = ~A)"
 	   (discrete-variable-name x)
 	   (discrete-variable-label x)
 	   (discrete-variable-dim x)
 	   (discrete-variable-value x)
-           ))
+           )))
 
 
 (define-record-type regime-variable
@@ -246,10 +246,10 @@
   (name       regime-variable-name)
   )
 
-(define-record-printer (regime-variable x out)
+(set-record-printer! regime-variable (lambda (x out)
   (fprintf out "#(regime-variable ~S)"
 	   (regime-variable-name x)
-           ))
+           )))
 
 
 (define-record-type reduce-variable
@@ -260,11 +260,11 @@
   )
 
 
-(define-record-printer (reduce-variable x out)
+(set-record-printer! reduce-variable (lambda (x out)
   (fprintf out "#(reduce ~S ~S)"
 	   (reduce-variable-op x)
 	   (reduce-variable-parent x)
-           ))
+           )))
 
 
 (define-record-type parameter
@@ -277,13 +277,13 @@
   )
 
 
-(define-record-printer (parameter x out)
+(set-record-printer! parameter (lambda (x out)
    (fprintf out "#(parameter ~S (~A) [~A] = ~A)"
  	   (parameter-name x)
  	   (parameter-dim x)
  	   (parameter-label x)
  	   (parameter-value x)
-           ))
+           )))
 
 
 (define-record-type field
@@ -296,13 +296,13 @@
   )
 
 
-(define-record-printer (field x out)
+(set-record-printer! field (lambda (x out)
   (fprintf out "#(field ~S (~A) [~A] = ~A)"
 	   (field-name x)
 	   (field-dim x)
 	   (field-label x)
 	   (field-value x)
-           ))
+           )))
 
 
 (define-record-type declared-constant
@@ -323,7 +323,7 @@
 
 
 
-(define-record-printer (constant x out)
+(set-record-printer! constant (lambda (x out)
   (if (constant-unit x)
       (fprintf out "#(constant ~S = ~A ~A)"
                (constant-type x)
@@ -333,7 +333,7 @@
       (fprintf out "#(constant ~S = ~A)"
                (constant-type x)
                (constant-value x)
-               )))
+               ))))
 
 
 (define-record-type external
@@ -347,14 +347,14 @@
   )
 
 
-(define-record-printer (external x out)
+(set-record-printer! external (lambda (x out)
   (fprintf out "#(external ~S (~A) [~A] = ~A order: ~A)"
 	   (external-name x)
 	   (external-dim x)
 	   (external-label x)
 	   (external-initial x)
 	   (or (external-order x) "none")
-           ))
+           )))
 
 
 (define-record-type externalev
@@ -369,7 +369,7 @@
   )
 
 
-(define-record-printer (externalev x out)
+(set-record-printer! externalev (lambda (x out)
   (fprintf out "#(externalev ~S (~A) [~A] = ~A order: ~A link: ~A)"
 	   (externalev-name x)
 	   (externalev-label x)
@@ -377,7 +377,7 @@
 	   (externalev-initial x)
 	   (externalev-order x)
 	   (or (externalev-link x) "none")
-           ))
+           )))
 
 
 (define-record-type left-var
@@ -387,10 +387,10 @@
   )
 
 
-(define-record-printer (left-var x out)
+(set-record-printer! left-var (lambda (x out)
   (fprintf out "#(left-var ~S)"
 	   (left-var-u x)
-           ))
+           )))
 
 
 (define-record-type ref-var
@@ -401,11 +401,11 @@
   )
 
 
-(define-record-printer (ref-var x out)
+(set-record-printer! ref-var (lambda (x out)
   (fprintf out "#(ref-var ~S [~A])"
 	   (ref-var-u x)
 	   (ref-var-idx x)
-           ))
+           )))
 
 
 (define-record-type pair-arg
@@ -421,11 +421,11 @@
   )
 
 
-(define-record-printer (pair-arg x out)
+(set-record-printer! pair-arg (lambda (x out)
   (fprintf out "(~A . ~A)"
 	   (pair-arg-fst x)
 	   (pair-arg-snd x)
-           ))
+           )))
 
 
 (define-record-type pair-formal
@@ -436,11 +436,11 @@
   )
 
 
-(define-record-printer (pair-formal x out)
+(set-record-printer! pair-formal (lambda (x out)
   (fprintf out "<~A . ~A>"
 	   (pair-formal-fst x)
 	   (pair-formal-snd x)
-           ))
+           )))
 
 
 (define-record-type null-formal
@@ -456,10 +456,10 @@
   )
 
 
-(define-record-printer (var-def x out)
+(set-record-printer! var-def (lambda (x out)
   (fprintf out "#(var-def ~S)"
 	   (var-def-sym x)
-           ))
+           )))
 
 
 (define-record-type function
@@ -470,12 +470,12 @@
   (body    function-body))
 
 
-(define-record-printer (function x out)
+(set-record-printer! function (lambda (x out)
   (fprintf out "#(function ~S (~S) = ~S)"
 	   (function-name x)
 	   (function-formals x)
 	   (function-body x)
-           ))
+           )))
 
 
 (define-record-type equation
@@ -485,11 +485,11 @@
   (rhs     equation-rhs))
 
 
-(define-record-printer (equation x out)
+(set-record-printer! equation (lambda (x out)
   (fprintf out "#(equation ~S = ~A)"
 	   (equation-pattern x)
 	   (equation-rhs x)
-           ))
+           )))
 
 
 (define-record-type initial-equation
@@ -507,7 +507,7 @@
   (pos event-pos)
   (neg event-neg))
 
-(define-record-printer (event x out)
+(set-record-printer! event (lambda (x out)
   (fprintf out "#")
   (pp
    `(event
@@ -516,7 +516,7 @@
     (pos=,(event-pos x))
     (neg=,(event-neg x))
     )
-   out))
+   out)))
 
 
 (define-record-type evcondition
@@ -525,14 +525,14 @@
   (name evcondition-name)
   (expr evcondition-expr))
 
-(define-record-printer (evcondition x out)
+(set-record-printer! evcondition (lambda (x out)
   (fprintf out "#")
   (pp
    `(evcondition
     (name=,(evcondition-name x))
     (expr=,(evcondition-expr x))
     )
-   out))
+   out)))
 
 (define-record-type evresponse
   (make-evresponse name expr)
@@ -540,14 +540,14 @@
   (name evresponse-name)
   (expr evresponse-expr))
 
-(define-record-printer (evresponse x out)
+(set-record-printer! evresponse (lambda (x out)
   (fprintf out "#")
   (pp
    `(evresponse
     (name=,(evresponse-name x))
     (expr=,(evresponse-expr x))
     )
-   out))
+   out)))
 
 
 (define-record-type extevlink
@@ -557,14 +557,14 @@
   (dst extevlink-dst))
 
 
-(define-record-printer (extevlink x out)
+(set-record-printer! extevlink (lambda (x out)
   (fprintf out "#")
   (pp
    `(extevlink
     (src=,(extevlink-src x))
     (dst=,(extevlink-dst x))
     )
-   out))
+   out)))
 
 (define-record-type transition 
   (make-transition event target condition response)
@@ -759,7 +759,7 @@
   )
 
 
-(define-record-printer (equation-set x out)
+(set-record-printer! equation-set (lambda (x out)
   (fprintf out "#")
   (pp
    `(equation-set
@@ -776,7 +776,7 @@
     (neg-responses=,(equation-set-neg-responses x))
     (nodemap=,(equation-set-nodemap x))
     (regimemap=,(equation-set-regimemap x)))
-   out))
+   out)))
 
 
 ;; runtime representation of a simulation object
@@ -806,7 +806,7 @@
   )
 
 
-(define-record-printer (simruntime x out)
+(set-record-printer! simruntime (lambda (x out)
     (fprintf out "#")
     (pp `(simruntime 
           (cindexmap=,(simruntime-cindexmap x))
@@ -826,11 +826,11 @@
           (negresp=,(simruntime-negresp x))
           )
         out)
-    )
+    ))
     
-(define-record-printer (astdecls x out)
+(set-record-printer! astdecls (lambda (x out)
     (fprintf out "#")
-    (pp `(ast . ,(astdecls-decls x)) out))
+    (pp `(ast . ,(astdecls-decls x)) out)))
 
 
 (define model-time (unknown (make-constant 'number 0.0 millisecond) 't millisecond))

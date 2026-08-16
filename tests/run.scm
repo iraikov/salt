@@ -97,7 +97,7 @@ model-name))
               -default-ann "'allowFFI true'"
               -mlb-path-var ,(sprintf "'SALT_HOME ~A'" SALT-DIR)
               -mlb-path-var "'SALT_LIB $(SALT_HOME)'"
-              -mlb-path-map ,(sprintf "~A/mlb-path-map" SALT-DIR)
+              -mlb-path-map ,(sprintf "~A/sml-lib/mlb-path-map" SALT-DIR)
               ,mlb-path
               ))))
 
@@ -692,7 +692,7 @@ model-name))
 
 (test-model 'hr hr compile: compile)
 
-(test-model 'wb wb compile: compile)
+(test-model 'wb wb compile: #t)
 
 (test-model 'iafalpha iafalpha)
 

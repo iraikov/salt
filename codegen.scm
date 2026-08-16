@@ -32,7 +32,7 @@
   )
 
   
-(define-record-printer (value x out)
+(set-record-printer! value (lambda (x out)
   (fprintf out "~A"
 	   (cases value x
 		  (V:C  (v)      (sprintf "(V:C ~A)" v))
@@ -44,7 +44,7 @@
 		  (V:Rcon (args) (sprintf "(V:Rcon ~A)" args))
 		  (V:Rsel (v fld) (sprintf "(V:Rsel ~A ~A)" v fld))
                   ))
-  )
+  ))
 		  
 (define (symbol-or-pair? v)
   (or (symbol? v) (and (pair? v) (symbol? (car v)))))
@@ -54,11 +54,11 @@
   )
 
   
-(define-record-printer (binding x out)
+(set-record-printer! binding (lambda (x out)
   (fprintf out "~A"
 	   (cases binding x
 		  (B:Val (name v)       (sprintf "B:Val ~A = ~A" name v))
-		  )))
+		  ))))
 
 
 (define-datatype stmt stmt?
@@ -71,7 +71,7 @@
   )
 
   
-(define-record-printer (stmt x out)
+(set-record-printer! stmt (lambda (x out)
   (fprintf out "~A"
 	   (cases stmt x
 		  (E:Ife (test ift iff) (sprintf "E:Ife ~A ~A ~A" test ift iff))
@@ -80,7 +80,7 @@
                   (E:Set  (v i x)    (sprintf "(E:Set ~A ~A ~A)" v i x))
                   (E:Ret (v)         (sprintf "E:Ret ~A" v))
 		  (E:Noop ()         (sprintf "E:Noop"))
-		  )))
+		  ))))
 
 (define (filter-assoc key alst)
   (filter-map (lambda (x) (and (equal? key (car x)) x)) alst))
