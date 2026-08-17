@@ -692,7 +692,7 @@ model-name))
 
 (test-model 'hr hr compile: compile)
 
-(test-model 'wb wb compile: #t)
+(test-model 'wb wb compile: compile)
 
 (test-model 'iafalpha iafalpha)
 
